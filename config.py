@@ -33,8 +33,10 @@ EMOJI = {
     "door": "5873147866364514353",
 }
 
-def e(emoji_id: str, fallback: str = "✨") -> str:
-    return f'<tg-emoji emoji-id="{emoji_id}">{fallback}</tg-emoji>'
+def e(emoji_id: str, fallback: str = "") -> str:
+    if fallback:
+        return f'<tg-emoji emoji-id="{emoji_id}">{fallback}</tg-emoji>'
+    return f'<tg-emoji emoji-id="{emoji_id}">🐱</tg-emoji>'
 
 # Информация о сервере
 SERVER = {
