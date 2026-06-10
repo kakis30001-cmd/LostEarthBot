@@ -1,10 +1,8 @@
-# config.py
 import os
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-ADMIN_IDS = [int(x) for x in os.getenv("ADMIN_IDS", "123456789").split(",")]
 
-# ТВОИ ЭМОДЗИ (работают как в примере)
+# ТВОИ ЭМОДЗИ (те же самые ID)
 EMOJI = {
     "cat_up": "5269698007724499331",
     "cat_ok": "5269476765369144234",
@@ -26,15 +24,16 @@ EMOJI = {
     "cross": "5870657884844462243",
     "document": "5875206779196935950",
     "person": "5879770735999717115",
-    "back": "5875082500023258804",
+    "arrow_back": "5875082500023258804",
     "door": "5873147866364514353",
     "joystick": "5870717606364713020",
+    "crown": "5807868868886009920",
+    "magic": "5474144592817318927",
 }
 
 def emoji(sticker_id: str, fallback: str = "") -> str:
     return f'<tg-emoji emoji-id="{sticker_id}">{fallback}</tg-emoji>'
 
-# Сервер
 SERVER = {
     "name": "LostEarth",
     "mode": "Мирный режим по заявкам!",
