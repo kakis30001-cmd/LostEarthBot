@@ -4,7 +4,9 @@ import struct
 import json
 from datetime import datetime
 import os
+from threading import Thread
 
+from flask import Flask, send_from_directory
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import CommandStart, Command
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
@@ -14,29 +16,36 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
+flask_app = Flask(__name__, static_folder='static')
 
-# Эмодзи (рабочие ID из твоего примера)
+@flask_app.route('/')
+def index():
+    return send_from_directory('static', 'rules.html')
+
+@flask_app.route('/<path:path>')
+def static_files(path):
+    return send_from_directory('static', path)
+
+def run_flask():
+    flask_app.run(host='0.0.0.0', port=int(os.getenv('PORT', 8080)))
+
+# Эмодзи (только премиум - котики, аниме, зайцы)
 EMOJI = {
-    "cat_up": "5269698007724499331",
+    "cat_dance": "5359444458930718519",
     "cat_ok": "5269476765369144234",
     "cat_glasses": "5267088110717544191",
-    "rabbit_smile": "5219869124301199449",
+    "cat_up": "5269698007724499331",
+    "cat_kiss": "6325462176660195024",
     "rabbit_fly": "5217576088506505749",
     "anime_dance": "6325682031741109665",
-    "cat_kiss": "6325462176660195024",
-    "cat_surprised": "5242261773817492813",
-    "cat_dance": "5359444458930718519",
     "house": "5873147866364514353",
-    "microphone": "5870831513192369918",
-    "start": "5870921127685001066",
     "note": "5870930744116776638",
     "check": "5870633910337015697",
-    "cross": "5870657884844462243",
     "back": "5875082500023258804",
     "door": "5873147866364514353",
     "joystick": "5870717606364713020",
     "crown": "5807868868886009920",
-    "magic": "5474144592817318927",
+    "start": "5870921127685001066",
 }
 
 def emoji(sticker_id: str, fallback: str = "") -> str:
@@ -53,8 +62,9 @@ SERVER = {
     "bedrock_port": 19132,
 }
 
-# Ссылка на сайт с правилами (ЗАМЕНИ НА СВОЮ!)
-RULES_URL = "https://your-username.github.io/rules/rules.html"
+# URL для WebApp (будет доступен по адресу твоего Railway)
+RAILWAY_URL = os.getenv("RAILWAY_PUBLIC_DOMAIN", "https://lostearthbot.up.railway.app")
+RULES_URL = f"{RAILWAY_URL}/"
 
 online_cache = {}
 last_update = {}
@@ -119,26 +129,26 @@ def get_main_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(
-                text="🌐 IP И ОНЛАЙН", 
+                text=f"{emoji(EMOJI['door'], '🌐')} IP И ОНЛАЙН", 
                 callback_data="menu_ip",
                 icon_custom_emoji_id=EMOJI["door"]
             )
         ],
         [
             InlineKeyboardButton(
-                text="📜 ПРАВИЛА", 
+                text=f"{emoji(EMOJI['note'], '📜')} ПРАВИЛА", 
                 web_app=WebAppInfo(url=RULES_URL),
                 icon_custom_emoji_id=EMOJI["note"]
             ),
             InlineKeyboardButton(
-                text="✉️ ПОДАТЬ ЗАЯВКУ", 
+                text=f"{emoji(EMOJI['rabbit_fly'], '✉️')} ЗАЯВКА", 
                 callback_data="menu_apply",
                 icon_custom_emoji_id=EMOJI["rabbit_fly"]
             )
         ],
         [
             InlineKeyboardButton(
-                text="💎 ПРЕМИУМ", 
+                text=f"{emoji(EMOJI['cat_dance'], '💎')} ПРЕМИУМ", 
                 callback_data="menu_premium",
                 icon_custom_emoji_id=EMOJI["cat_dance"]
             )
@@ -149,14 +159,14 @@ def get_ip_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(
-                text="🔄 ОБНОВИТЬ", 
+                text=f"{emoji(EMOJI['check'], '🔄')} ОБНОВИТЬ", 
                 callback_data="refresh_online",
                 icon_custom_emoji_id=EMOJI["check"]
             )
         ],
         [
             InlineKeyboardButton(
-                text="◀️ НАЗАД", 
+                text=f"{emoji(EMOJI['back'], '◀️')} НАЗАД", 
                 callback_data="menu_main",
                 icon_custom_emoji_id=EMOJI["back"]
             )
@@ -166,22 +176,22 @@ def get_ip_keyboard():
 @dp.message(CommandStart())
 async def start_cmd(message: Message):
     text = (
-        f"{emoji(EMOJI['start'], '🎮')} <b>Добро пожаловать на {SERVER['name']}</b>\n\n"
+        f"{emoji(EMOJI['start'], '✨')} <b>Добро пожаловать на {SERVER['name']}</b>\n\n"
         f"{emoji(EMOJI['house'], '🏠')} <b>{SERVER['mode']}</b>\n\n"
-        f"{emoji(EMOJI['cat_ok'], '🤙')} <b>Для просмотра информации используйте кнопки ниже</b>"
+        f"{emoji(EMOJI['cat_ok'], '🐱')} <i>Используй кнопки ниже</i>"
     )
     await message.answer(text, parse_mode="HTML", reply_markup=get_main_keyboard())
 
 @dp.callback_query(lambda c: c.data == "menu_main")
 async def menu_main(callback: CallbackQuery):
-    text = f"{emoji(EMOJI['magic'], '✨')} <b>Главное меню</b>\n\nВыберите действие:"
+    text = f"{emoji(EMOJI['cat_dance'], '✨')} <b>Главное меню</b>"
     await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_main_keyboard())
     await callback.answer()
 
 @dp.callback_query(lambda c: c.data == "menu_ip")
 async def menu_ip(callback: CallbackQuery):
     await callback.message.edit_text(
-        f"{emoji(EMOJI['cat_glasses'], '🔄')} <i>Получаю информацию...</i>",
+        f"{emoji(EMOJI['cat_glasses'], '🔄')} <i>Загрузка...</i>",
         parse_mode="HTML"
     )
     
@@ -189,10 +199,11 @@ async def menu_ip(callback: CallbackQuery):
     java_online = online.get("java", {}).get("online", 0)
     java_max = online.get("java", {}).get("max", 0)
     
-    status = "🟢 РАБОТАЕТ" if java_online > 0 else "🔴 ОФФЛАЙН"
+    status = "🟢 ONLINE" if java_online > 0 else "🔴 OFFLINE"
     
     text = f"""
-{emoji(EMOJI['crown'], '👑')} <b>{SERVER['name']}</b> {status}
+{emoji(EMOJI['crown'], '👑')} <b>LOSTEARTH</b> | {status}
+
 {emoji(EMOJI['house'], '🏠')} <i>{SERVER['mode']}</i>
 
 {emoji(EMOJI['joystick'], '💻')} <b>JAVA EDITION</b>
@@ -205,7 +216,7 @@ async def menu_ip(callback: CallbackQuery):
 ├ IP: <code>{SERVER['bedrock_ip']}</code>
 └ Порт: <code>{SERVER['bedrock_port']}</code>
 
-{emoji(EMOJI['rabbit_fly'], '🐰')} <i>Приятной игры на LostEarth!</i>
+{emoji(EMOJI['rabbit_fly'], '✨')} <i>Приятной игры!</i>
 """
     await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_ip_keyboard())
     await callback.answer()
@@ -219,10 +230,11 @@ async def refresh_online(callback: CallbackQuery):
     java_online = online.get("java", {}).get("online", 0)
     java_max = online.get("java", {}).get("max", 0)
     
-    status = "🟢 РАБОТАЕТ" if java_online > 0 else "🔴 ОФФЛАЙН"
+    status = "🟢 ONLINE" if java_online > 0 else "🔴 OFFLINE"
     
     text = f"""
-{emoji(EMOJI['crown'], '👑')} <b>{SERVER['name']}</b> {status}
+{emoji(EMOJI['crown'], '👑')} <b>LOSTEARTH</b> | {status}
+
 {emoji(EMOJI['house'], '🏠')} <i>{SERVER['mode']}</i>
 
 {emoji(EMOJI['joystick'], '💻')} <b>JAVA EDITION</b>
@@ -235,21 +247,21 @@ async def refresh_online(callback: CallbackQuery):
 ├ IP: <code>{SERVER['bedrock_ip']}</code>
 └ Порт: <code>{SERVER['bedrock_port']}</code>
 
-{emoji(EMOJI['rabbit_fly'], '🐰')} <i>Приятной игры на LostEarth!</i>
+{emoji(EMOJI['rabbit_fly'], '✨')} <i>Приятной игры!</i>
 """
     await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_ip_keyboard())
-    await callback.answer(f"{emoji(EMOJI['check'], '✅')} Онлайн обновлён!")
+    await callback.answer(f"{emoji(EMOJI['check'], '✅')} Обновлено!")
 
 @dp.callback_query(lambda c: c.data == "menu_apply")
 async def menu_apply(callback: CallbackQuery):
     text = f"""
-{emoji(EMOJI['door'], '🚪')} <b>ПОЛУЧЕНИЕ ДОСТУПА</b>
+{emoji(EMOJI['door'], '🚪')} <b>ДОСТУП К МИРНОМУ</b>
 
-{emoji(EMOJI['cat_ok'], '🤙')} <b>Как попасть на сервер:</b>
+{emoji(EMOJI['cat_ok'], '🤙')} <b>Как попасть:</b>
 
-1️⃣ Напиши заявку: @pelmewki379
-2️⃣ Расскажи немного о себе
-3️⃣ Дождись ответа администратора
+1️⃣ Напиши @pelmewki379
+2️⃣ Расскажи о себе
+3️⃣ Жди ответа
 
 {emoji(EMOJI['rabbit_fly'], '🐰')} <b>Подать заявку:</b> @pelmewki379
 """
@@ -257,7 +269,7 @@ async def menu_apply(callback: CallbackQuery):
         text, 
         parse_mode="HTML", 
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="menu_main", icon_custom_emoji_id=EMOJI["back"])]
+            [InlineKeyboardButton(text=f"{emoji(EMOJI['back'], '◀️')} НАЗАД", callback_data="menu_main", icon_custom_emoji_id=EMOJI["back"])]
         ])
     )
     await callback.answer()
@@ -265,25 +277,25 @@ async def menu_apply(callback: CallbackQuery):
 @dp.callback_query(lambda c: c.data == "menu_premium")
 async def menu_premium(callback: CallbackQuery):
     text = f"""
-{emoji(EMOJI['cat_dance'], '🐱')}{emoji(EMOJI['anime_dance'], '💃')}{emoji(EMOJI['rabbit_fly'], '🐰')} <b>ПРЕМИУМ ДОСТУП</b>
+{emoji(EMOJI['cat_dance'], '🐱')}{emoji(EMOJI['anime_dance'], '💃')}{emoji(EMOJI['rabbit_fly'], '🐰')} <b>PREMIUM</b>
 
-{emoji(EMOJI['crown'], '👑')} <b>Преимущества:</b>
+{emoji(EMOJI['crown'], '👑')} <b>Привилегии:</b>
 • Эксклюзивные ивенты
-• Кастомные эмоции в чате
+• Кастомные эмоции
 • Приоритетная поддержка
 • Уникальный префикс
 
-{emoji(EMOJI['check'], '✅')} <b>Цена: 299₽ / месяц</b>
+{emoji(EMOJI['check'], '✅')} <b>Цена:</b> 299₽ / месяц
 
-{emoji(EMOJI['cat_kiss'], '😘')} <b>Оплата:</b> Карта / СБП / Криптовалюта
+{emoji(EMOJI['cat_kiss'], '😘')} <b>Оплата:</b> Карта / СБП / Крипта
 
-{emoji(EMOJI['rabbit_smile'], '🐰')} <i>Для покупки: @pelmewki379</i>
+{emoji(EMOJI['rabbit_fly'], '🐰')} <i>Приобрести: @pelmewki379</i>
 """
     await callback.message.edit_text(
         text, 
         parse_mode="HTML", 
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="menu_main", icon_custom_emoji_id=EMOJI["back"])]
+            [InlineKeyboardButton(text=f"{emoji(EMOJI['back'], '◀️')} НАЗАД", callback_data="menu_main", icon_custom_emoji_id=EMOJI["back"])]
         ])
     )
     await callback.answer()
@@ -300,7 +312,12 @@ async def cmd_online(message: Message):
     )
 
 async def main():
+    # Запускаем Flask в отдельном потоке
+    thread = Thread(target=run_flask)
+    thread.start()
+    
     print("🚀 Бот LostEarth запущен!")
+    print(f"📱 WebApp доступен по адресу: {RULES_URL}")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
