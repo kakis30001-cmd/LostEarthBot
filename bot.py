@@ -307,9 +307,7 @@ async def menu_premium(callback: CallbackQuery):
 └ /fly, /ptime, /heal, /feed, /ec, /wb, /anvil, /kit serafim, 3 точки дома
 
 ━━━━━━━━━━━━━━━━━━━━
-{emoji(EMOJI['check'], '✅')} <b>Оплата:</b> Карта / СБП / Криптовалюта
-
-{emoji(EMOJI['rabbit_fly'], '🐰')} <b>Приобрести:</b> @pelmewki379
+{emoji(EMOJI['rabbit_fly'], '🐰')} <b>По всем вопросам:</b> @pelmewki379
 
 {emoji(EMOJI['cat_kiss'], '😘')} <i>Спасибо за поддержку сервера!</i>
 """
