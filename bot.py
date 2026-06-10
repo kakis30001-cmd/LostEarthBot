@@ -1,4 +1,3 @@
-# bot.py
 import asyncio
 import socket
 import struct
@@ -102,67 +101,57 @@ async def get_server_online():
     last_update["java"] = now
     return online_cache
 
+# ========== КНОПКИ КАК В ТВОЁМ ПРИМЕРЕ ==========
+
 def get_main_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(
-            text=f"{emoji(EMOJI['door'], '🚪')} IP И ОНЛАЙН", 
-            callback_data="menu_ip"
-        )],
         [
             InlineKeyboardButton(
-                text=f"{emoji(EMOJI['note'], '📜')} ПРАВИЛА", 
-                callback_data="menu_rules"
-            ),
-            InlineKeyboardButton(
-                text=f"{emoji(EMOJI['rabbit_fly'], '🐰')} ПОДАТЬ ЗАЯВКУ", 
-                callback_data="menu_apply"
+                text="IP И ОНЛАЙН", 
+                callback_data="menu_ip",
+                icon_custom_emoji_id=EMOJI["door"]
             )
         ],
-        [InlineKeyboardButton(
-            text=f"{emoji(EMOJI['cat_dance'], '🐱')}{emoji(EMOJI['anime_dance'], '💃')}{emoji(EMOJI['rabbit_fly'], '🐰')} ПРЕМИУМ {emoji(EMOJI['rabbit_fly'], '🐰')}{emoji(EMOJI['anime_dance'], '💃')}{emoji(EMOJI['cat_dance'], '🐱')}", 
-            callback_data="menu_premium"
-        )]
+        [
+            InlineKeyboardButton(
+                text="ПРАВИЛА", 
+                callback_data="menu_rules",
+                icon_custom_emoji_id=EMOJI["note"]
+            ),
+            InlineKeyboardButton(
+                text="ПОДАТЬ ЗАЯВКУ", 
+                callback_data="menu_apply",
+                icon_custom_emoji_id=EMOJI["rabbit_fly"]
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="ПРЕМИУМ", 
+                callback_data="menu_premium",
+                icon_custom_emoji_id=EMOJI["cat_dance"]
+            )
+        ]
     ])
 
 def get_ip_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(
-            text=f"{emoji(EMOJI['check'], '✅')} ОБНОВИТЬ ОНЛАЙН", 
-            callback_data="refresh_online"
-        )],
-        [InlineKeyboardButton(
-            text=f"{emoji(EMOJI['back'], '◀️')} НАЗАД", 
-            callback_data="menu_main"
-        )]
+        [
+            InlineKeyboardButton(
+                text="ОБНОВИТЬ ОНЛАЙН", 
+                callback_data="refresh_online",
+                icon_custom_emoji_id=EMOJI["check"]
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="НАЗАД", 
+                callback_data="menu_main",
+                icon_custom_emoji_id=EMOJI["arrow_back"]
+            )
+        ]
     ])
 
-def get_premium_keyboard():
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(
-                text=f"{emoji(EMOJI['cat_dance'], '🐱')} КОТИК СТАЙЛ", 
-                callback_data="premium_cat"
-            ),
-            InlineKeyboardButton(
-                text=f"{emoji(EMOJI['anime_dance'], '💃')} АНИМЕ СТАЙЛ", 
-                callback_data="premium_anime"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=f"{emoji(EMOJI['rabbit_fly'], '🐰')} ЗАЙЧИК СТАЙЛ", 
-                callback_data="premium_rabbit"
-            ),
-            InlineKeyboardButton(
-                text=f"{emoji(EMOJI['cat_dance'], '🐱')}{emoji(EMOJI['anime_dance'], '💃')}{emoji(EMOJI['rabbit_fly'], '🐰')} ПРЕМИУМ ВСЁ", 
-                callback_data="premium_all"
-            )
-        ],
-        [InlineKeyboardButton(
-            text=f"{emoji(EMOJI['back'], '◀️')} НАЗАД", 
-            callback_data="menu_main"
-        )]
-    ])
+# ========== ХЕНДЛЕРЫ ==========
 
 @dp.message(CommandStart())
 async def start_cmd(message: Message):
@@ -175,7 +164,7 @@ async def start_cmd(message: Message):
 
 @dp.callback_query(lambda c: c.data == "menu_main")
 async def menu_main(callback: CallbackQuery):
-    text = f"{emoji(EMOJI['start'], '🎮')} <b>Главное меню</b>\n\nВыберите действие:"
+    text = f"{emoji(EMOJI['magic'], '✨')} <b>Главное меню</b>\n\nВыберите действие:"
     await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_main_keyboard())
     await callback.answer()
 
@@ -271,9 +260,13 @@ async def menu_rules(callback: CallbackQuery):
 
 {emoji(EMOJI['anime_dance'], '💃')} <i>Приятной игры!</i>
 """
-    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=f"{emoji(EMOJI['back'], '◀️')} НАЗАД", callback_data="menu_main")]
-    ]))
+    await callback.message.edit_text(
+        text, 
+        parse_mode="HTML", 
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="НАЗАД", callback_data="menu_main", icon_custom_emoji_id=EMOJI["arrow_back"])]
+        ])
+    )
     await callback.answer()
 
 @dp.callback_query(lambda c: c.data == "menu_apply")
@@ -289,9 +282,13 @@ async def menu_apply(callback: CallbackQuery):
 
 {emoji(EMOJI['rabbit_fly'], '🐰')} <b>Подать заявку:</b> @nikita1055
 """
-    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=f"{emoji(EMOJI['back'], '◀️')} НАЗАД", callback_data="menu_main")]
-    ]))
+    await callback.message.edit_text(
+        text, 
+        parse_mode="HTML", 
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="НАЗАД", callback_data="menu_main", icon_custom_emoji_id=EMOJI["arrow_back"])]
+        ])
+    )
     await callback.answer()
 
 @dp.callback_query(lambda c: c.data == "menu_premium")
@@ -311,9 +308,13 @@ async def menu_premium(callback: CallbackQuery):
 
 {emoji(EMOJI['rabbit_smile'], '🐰')} <i>Для покупки: @nikita1055</i>
 """
-    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=f"{emoji(EMOJI['back'], '◀️')} НАЗАД", callback_data="menu_main")]
-    ]))
+    await callback.message.edit_text(
+        text, 
+        parse_mode="HTML", 
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="НАЗАД", callback_data="menu_main", icon_custom_emoji_id=EMOJI["arrow_back"])]
+        ])
+    )
     await callback.answer()
 
 @dp.message(Command("online"))
