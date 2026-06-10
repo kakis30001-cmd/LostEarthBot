@@ -62,9 +62,8 @@ SERVER = {
     "bedrock_port": 19132,
 }
 
-# URL для WebApp (будет доступен по адресу твоего Railway)
-RAILWAY_URL = os.getenv("RAILWAY_PUBLIC_DOMAIN", "https://lostearthbot.up.railway.app")
-RULES_URL = f"{RAILWAY_URL}/"
+# ПРАВИЛЬНАЯ HTTPS ССЫЛКА
+RULES_URL = "https://lostearthbot-production.up.railway.app/"
 
 online_cache = {}
 last_update = {}
