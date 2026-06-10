@@ -1,25 +1,165 @@
 # bot.py
 import asyncio
+import socket
+import struct
+import json
 from datetime import datetime
 from typing import Dict
+import os
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import CommandStart, Command
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.storage.memory import MemoryStorage
 
-from config import BOT_TOKEN, ADMIN_IDS, EMOJI, e, SERVER, RULES_TEXT, APPLY_TEXT
-from minecraft_api import get_bedrock_status, get_java_status
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
-# Кэш для онлайна
-online_cache: Dict[str, Dict] = {}
-last_update: Dict[str, float] = {}
+# Информация о сервере
+SERVER = {
+    "name": "LostEarth",
+    "mode": "Мирный режим по заявкам!",
+    "java_ip": "150.241.85.40",
+    "java_port": 25565,
+    "java_versions": "1.21—1.26+",
+    "bedrock_ip": "150.241.85.40",
+    "bedrock_port": 19132,
+}
 
-async def get_server_online() -> Dict:
-    """Получение онлайна сервера с кэшем"""
+# Простые текстовые эмодзи (без кастомных ID)
+E = {
+    "cat_up": "👍",
+    "cat_ok": "🤙",
+    "cat_glasses": "😎",
+    "rabbit_smile": "🐰",
+    "rabbit_fly": "🐰✈️",
+    "anime_dance": "💃",
+    "cat_kiss": "😘",
+    "cat_surprised": "😲",
+    "cat_dance": "🐱💃",
+    "cat_laugh": "😂",
+    "house": "🏠",
+    "microphone": "🎤",
+    "notification": "🔔",
+    "start": "🎮",
+    "down": "👇",
+    "note": "📝",
+    "check": "✅",
+    "cross": "❌",
+    "analytics": "📊",
+    "premium": "💎",
+    "crown": "👑",
+    "joystick": "🎮",
+    "globe": "🌐",
+    "back": "◀️",
+    "door": "🚪",
+}
+
+# Кэш для онлайна
+online_cache = {}
+last_update = {}
+
+async def get_bedrock_status(ip: str, port: int = 19132, timeout: int = 3):
+    """Получение онлайн Bedrock сервера"""
+    try:
+        reader, writer = await asyncio.wait_for(
+            asyncio.open_connection(ip, port),
+            timeout=timeout
+        )
+        
+        ping_data = bytearray(b'\x01')
+        ping_data += b'\x00' * 15
+        ping_data += struct.pack('<Q', 0)
+        ping_data += struct.pack('<Q', 0)
+        
+        writer.write(ping_data)
+        await writer.drain()
+        
+        response = await asyncio.wait_for(reader.read(2048), timeout=timeout)
+        writer.close()
+        await writer.wait_closed()
+        
+        if len(response) > 35:
+            offset = 35
+            name_length = response[offset]
+            offset += 1
+            server_name = response[offset:offset+name_length].decode('utf-8', errors='ignore')
+            offset += name_length
+            
+            offset += 4
+            offset += response[offset] + 1
+            
+            online = struct.unpack('<i', response[offset:offset+4])[0]
+            offset += 4
+            max_players = struct.unpack('<i', response[offset:offset+4])[0]
+            
+            return {"online": online, "max": max_players, "name": server_name}
+    except:
+        pass
+    return {"online": 0, "max": 0, "name": "Оффлайн"}
+
+async def get_java_status(ip: str, port: int = 25565, timeout: int = 3):
+    """Получение онлайн Java сервера"""
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(timeout)
+        sock.connect((ip, port))
+        
+        handshake = bytearray()
+        handshake += b'\x00'
+        handshake += b'\x04\x00\x00\x00'
+        host_bytes = ip.encode('utf-8')
+        handshake += bytes([len(host_bytes)]) + host_bytes
+        handshake += struct.pack('>H', port)
+        handshake += b'\x01'
+        
+        # send_varint
+        value = len(handshake)
+        while True:
+            if value & ~0x7F == 0:
+                sock.send(bytes([value]))
+                break
+            sock.send(bytes([(value & 0x7F) | 0x80]))
+            value >>= 7
+        
+        sock.send(handshake)
+        
+        # send request
+        sock.send(b'\x00\x00')
+        
+        # read response
+        result = 0
+        shift = 0
+        while True:
+            byte = sock.recv(1)[0]
+            result |= (byte & 0x7F) << shift
+            shift += 7
+            if not (byte & 0x80):
+                length = result
+                break
+        
+        data = b''
+        while len(data) < length:
+            data += sock.recv(1024)
+        
+        sock.close()
+        
+        data = data[1:]
+        json_data = json.loads(data.decode('utf-8'))
+        
+        players = json_data.get("players", {})
+        return {
+            "online": players.get("online", 0),
+            "max": players.get("max", 0),
+            "version": json_data.get("version", {}).get("name", "?"),
+            "motd": json_data.get("description", {}).get("text", "")
+        }
+    except Exception as e:
+        return {"online": 0, "max": 0, "version": "?", "motd": "Оффлайн"}
+
+async def get_server_online():
     now = datetime.now().timestamp()
     
     if "java" in last_update and now - last_update["java"] < 30:
@@ -35,85 +175,41 @@ async def get_server_online() -> Dict:
     
     return online_cache
 
-def get_main_keyboard() -> InlineKeyboardMarkup:
-    """Главная клавиатура"""
+def get_main_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=f"{E['door']} IP И ОНЛАЙН", callback_data="menu_ip")],
         [
-            InlineKeyboardButton(
-                text=f"{e(EMOJI['door'], '🚪')} IP И ОНЛАЙН", 
-                callback_data="menu_ip"
-            )
+            InlineKeyboardButton(text=f"{E['note']} ПРАВИЛА", callback_data="menu_rules"),
+            InlineKeyboardButton(text=f"{E['rabbit_fly']} ПОДАТЬ ЗАЯВКУ", callback_data="menu_apply")
         ],
-        [
-            InlineKeyboardButton(
-                text=f"{e(EMOJI['note'], '📜')} ПРАВИЛА", 
-                callback_data="menu_rules"
-            ),
-            InlineKeyboardButton(
-                text=f"{e(EMOJI['rabbit_fly'], '✉️')} ПОДАТЬ ЗАЯВКУ", 
-                callback_data="menu_apply"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=f"{e(EMOJI['premium'], '💎')} ПРЕМИУМ", 
-                callback_data="menu_premium"
-            )
-        ]
+        [InlineKeyboardButton(text=f"{E['premium']} ПРЕМИУМ", callback_data="menu_premium")]
     ])
 
-def get_ip_keyboard() -> InlineKeyboardMarkup:
+def get_ip_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(
-                text=f"{e(EMOJI['check'], '🔄')} ОБНОВИТЬ ОНЛАЙН", 
-                callback_data="refresh_online"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=f"{e(EMOJI['back'], '◀️')} НАЗАД", 
-                callback_data="menu_main"
-            )
-        ]
+        [InlineKeyboardButton(text=f"{E['check']} ОБНОВИТЬ ОНЛАЙН", callback_data="refresh_online")],
+        [InlineKeyboardButton(text=f"{E['back']} НАЗАД", callback_data="menu_main")]
     ])
 
-def get_premium_keyboard() -> InlineKeyboardMarkup:
+def get_premium_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(
-                text=f"{e(EMOJI['cat_dance'], '🐱')} КОТИК СТАЙЛ", 
-                callback_data="premium_cat"
-            ),
-            InlineKeyboardButton(
-                text=f"{e(EMOJI['anime_dance'], '🎌')} АНИМЕ СТАЙЛ", 
-                callback_data="premium_anime"
-            )
+            InlineKeyboardButton(text=f"🐱 КОТИК СТАЙЛ", callback_data="premium_cat"),
+            InlineKeyboardButton(text=f"💃 АНИМЕ СТАЙЛ", callback_data="premium_anime")
         ],
         [
-            InlineKeyboardButton(
-                text=f"{e(EMOJI['rabbit_fly'], '🐰')} ЗАЙЧИК СТАЙЛ", 
-                callback_data="premium_rabbit"
-            ),
-            InlineKeyboardButton(
-                text=f"{e(EMOJI['cat_kiss'], '💝')} ПРЕМИУМ ВСЁ", 
-                callback_data="premium_all"
-            )
+            InlineKeyboardButton(text=f"🐰 ЗАЙЧИК СТАЙЛ", callback_data="premium_rabbit"),
+            InlineKeyboardButton(text=f"💎 ПРЕМИУМ ВСЁ", callback_data="premium_all")
         ],
-        [
-            InlineKeyboardButton(
-                text=f"{e(EMOJI['back'], '◀️')} НАЗАД", 
-                callback_data="menu_main"
-            )
-        ]
+        [InlineKeyboardButton(text=f"{E['back']} НАЗАД", callback_data="menu_main")]
     ])
 
 @dp.message(CommandStart())
 async def start_cmd(message: Message):
     await message.answer(
-        f"{e(EMOJI['start'], '🎮')} <b>Добро пожаловать на {SERVER['name']}</b> {e(EMOJI['start'], '🎮')}\n\n"
-        f"{e(EMOJI['house'], '🏠')} <b>{SERVER['mode']}</b>\n\n"
-        f"{e(EMOJI['cat_ok'], '🐱')} <i>Выбери действие в меню ниже:</i>",
+        f"🎮 <b>Добро пожаловать на {SERVER['name']}</b> 🎮\n\n"
+        f"🏠 <b>{SERVER['mode']}</b>\n\n"
+        f"🤙 <i>Выбери действие в меню ниже:</i>",
         parse_mode="HTML",
         reply_markup=get_main_keyboard()
     )
@@ -121,9 +217,9 @@ async def start_cmd(message: Message):
 @dp.callback_query(lambda c: c.data == "menu_main")
 async def menu_main(callback: CallbackQuery):
     await callback.message.edit_text(
-        f"{e(EMOJI['start'], '🎮')} <b>Главное меню {SERVER['name']}</b> {e(EMOJI['start'], '🎮')}\n\n"
-        f"{e(EMOJI['house'], '🏠')} <b>{SERVER['mode']}</b>\n\n"
-        f"{e(EMOJI['cat_ok'], '🐱')} <i>Выбери действие:</i>",
+        f"🎮 <b>Главное меню {SERVER['name']}</b> 🎮\n\n"
+        f"🏠 <b>{SERVER['mode']}</b>\n\n"
+        f"🤙 <i>Выбери действие:</i>",
         parse_mode="HTML",
         reply_markup=get_main_keyboard()
     )
@@ -132,7 +228,7 @@ async def menu_main(callback: CallbackQuery):
 @dp.callback_query(lambda c: c.data == "menu_ip")
 async def menu_ip(callback: CallbackQuery):
     await callback.message.edit_text(
-        f"{e(EMOJI['cat_glasses'], '🔄')} <i>Получаю информацию о сервере...</i>",
+        f"😎 <i>Получаю информацию о сервере...</i>",
         parse_mode="HTML"
     )
     
@@ -145,25 +241,24 @@ async def menu_ip(callback: CallbackQuery):
     bedrock_online = bedrock.get("online", 0)
     bedrock_max = bedrock.get("max", 0)
     
-    status_emoji = e(EMOJI["cat_up"], "🟢") if java_online > 0 or bedrock_online > 0 else e(EMOJI["cat_surprised"], "🔴")
-    status_text = "РАБОТАЕТ" if java_online > 0 or bedrock_online > 0 else "ОФФЛАЙН"
+    status = "🟢 РАБОТАЕТ" if java_online > 0 or bedrock_online > 0 else "🔴 ОФФЛАЙН"
     
     text = f"""
-{status_emoji} <b>{SERVER['name']}</b> {status_emoji}
-{e(EMOJI['house'], '🏠')} <i>{SERVER['mode']}</i>
+<b>{SERVER['name']}</b> {status}
+🏠 <i>{SERVER['mode']}</i>
 
-{e(EMOJI['joystick'], '💻')} <b>JAVA EDITION</b>
+🎮 <b>JAVA EDITION</b>
 ├ IP: <code>{SERVER['java_ip']}</code>
 ├ Порт: <code>{SERVER['java_port']}</code>
 ├ Версия: <code>{SERVER['java_versions']}</code>
 └ Онлайн: <b>{java_online}/{java_max}</b>
 
-{e(EMOJI['joystick'], '📱')} <b>BEDROCK EDITION</b>
+📱 <b>BEDROCK EDITION</b>
 ├ IP: <code>{SERVER['bedrock_ip']}</code>
 ├ Порт: <code>{SERVER['bedrock_port']}</code>
 └ Онлайн: <b>{bedrock_online}/{bedrock_max}</b>
 
-{e(EMOJI['rabbit_fly'], '✨')} <i>Наслаждайся игрой на LostEarth!</i>
+🐰✈️ <i>Наслаждайся игрой на LostEarth!</i>
 """
     
     await callback.message.edit_text(
@@ -175,12 +270,11 @@ async def menu_ip(callback: CallbackQuery):
 
 @dp.callback_query(lambda c: c.data == "refresh_online")
 async def refresh_online(callback: CallbackQuery):
-    # Очищаем кэш
     online_cache.clear()
     last_update.clear()
     
     await callback.message.edit_text(
-        f"{e(EMOJI['cat_dance'], '🔄')} <i>Обновляю онлайн...</i>",
+        f"🐱💃 <i>Обновляю онлайн...</i>",
         parse_mode="HTML"
     )
     
@@ -193,25 +287,24 @@ async def refresh_online(callback: CallbackQuery):
     bedrock_online = bedrock.get("online", 0)
     bedrock_max = bedrock.get("max", 0)
     
-    status_emoji = e(EMOJI["cat_up"], "🟢") if java_online > 0 or bedrock_online > 0 else e(EMOJI["cat_surprised"], "🔴")
-    status_text = "РАБОТАЕТ" if java_online > 0 or bedrock_online > 0 else "ОФФЛАЙН"
+    status = "🟢 РАБОТАЕТ" if java_online > 0 or bedrock_online > 0 else "🔴 ОФФЛАЙН"
     
     text = f"""
-{status_emoji} <b>{SERVER['name']}</b> {status_emoji}
-{e(EMOJI['house'], '🏠')} <i>{SERVER['mode']}</i>
+<b>{SERVER['name']}</b> {status}
+🏠 <i>{SERVER['mode']}</i>
 
-{e(EMOJI['joystick'], '💻')} <b>JAVA EDITION</b>
+🎮 <b>JAVA EDITION</b>
 ├ IP: <code>{SERVER['java_ip']}</code>
 ├ Порт: <code>{SERVER['java_port']}</code>
 ├ Версия: <code>{SERVER['java_versions']}</code>
 └ Онлайн: <b>{java_online}/{java_max}</b>
 
-{e(EMOJI['joystick'], '📱')} <b>BEDROCK EDITION</b>
+📱 <b>BEDROCK EDITION</b>
 ├ IP: <code>{SERVER['bedrock_ip']}</code>
 ├ Порт: <code>{SERVER['bedrock_port']}</code>
 └ Онлайн: <b>{bedrock_online}/{bedrock_max}</b>
 
-{e(EMOJI['rabbit_fly'], '✨')} <i>Наслаждайся игрой на LostEarth!</i>
+🐰✈️ <i>Наслаждайся игрой на LostEarth!</i>
 """
     
     await callback.message.edit_text(
@@ -219,26 +312,56 @@ async def refresh_online(callback: CallbackQuery):
         parse_mode="HTML",
         reply_markup=get_ip_keyboard()
     )
-    await callback.answer(f"{e(EMOJI['cat_up'], '✅')} Онлайн обновлён!")
+    await callback.answer(f"👍 Онлайн обновлён!")
 
 @dp.callback_query(lambda c: c.data == "menu_rules")
 async def menu_rules(callback: CallbackQuery):
+    rules_text = f"""
+🏠 <b>ПРАВИЛА СЕРВЕРА LOSTEARTH</b> 🏠
+
+😎 <b>Общие правила:</b>
+1. 🤝 👍 Уважай других игроков
+2. 🚫 ❌ Запрещены читы и баги
+3. 💬 🎤 Без токсичности и оскорблений
+4. 🏠 🚪 Не гриферь чужие постройки
+5. 📝 📝 Администратор всегда прав
+
+🐰 <b>Мирный режим:</b>
+• ✅ ПВП только по согласию
+• ✅ Территории защищены
+• ✅ 🐰✈️ Доступ по заявкам!
+
+💃 <i>Приятной игры на LostEarth!</i>
+"""
     await callback.message.edit_text(
-        RULES_TEXT,
+        rules_text,
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=f"{e(EMOJI['back'], '◀️')} НАЗАД", callback_data="menu_main")]
+            [InlineKeyboardButton(text=f"{E['back']} НАЗАД", callback_data="menu_main")]
         ])
     )
     await callback.answer()
 
 @dp.callback_query(lambda c: c.data == "menu_apply")
 async def menu_apply(callback: CallbackQuery):
+    apply_text = f"""
+🚪 <b>ПОЛУЧЕНИЕ ДОСТУПА К МИРНОМУ РЕЖИМУ</b> 🚪
+
+🤙 <b>Как попасть на сервер:</b>
+
+1️⃣ 🎮 Напиши заявку в личные сообщения
+2️⃣ 📝 Расскажи немного о себе
+3️⃣ ✅ Дождись ответа администратора
+
+🐰✈️ <b>Подать заявку:</b> @nikita1055
+
+😘 <i>Добро пожаловать в LostEarth!</i>
+"""
     await callback.message.edit_text(
-        APPLY_TEXT,
+        apply_text,
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=f"{e(EMOJI['back'], '◀️')} НАЗАД", callback_data="menu_main")]
+            [InlineKeyboardButton(text=f"{E['back']} НАЗАД", callback_data="menu_main")]
         ])
     )
     await callback.answer()
@@ -246,15 +369,15 @@ async def menu_apply(callback: CallbackQuery):
 @dp.callback_query(lambda c: c.data == "menu_premium")
 async def menu_premium(callback: CallbackQuery):
     await callback.message.edit_text(
-        f"{e(EMOJI['premium'], '💎')} <b>ПРЕМИУМ ДОСТУП LOSTEARTH</b> {e(EMOJI['premium'], '💎')}\n\n"
-        f"{e(EMOJI['cat_dance'], '🐱')} <b>Преимущества:</b>\n"
-        f"• {e(EMOJI['crown'], '👑')} Эксклюзивный доступ к ивентам\n"
-        f"• {e(EMOJI['anime_dance'], '🎨')} Кастомные эмоции в чате\n"
-        f"• {e(EMOJI['rabbit_fly'], '🚀')} Приоритетная поддержка\n"
-        f"• {e(EMOJI['cat_kiss'], '💝')} Уникальный префикс в чате\n"
-        f"• {e(EMOJI['house'], '🏠')} Приватная территория\n\n"
-        f"{e(EMOJI['cat_up'], '👍')} <b>Цена: 299₽ / месяц</b>\n\n"
-        f"{e(EMOJI['rabbit_smile'], '🐰')} <i>Выбери стиль оформления премиума:</i>",
+        f"💎 <b>ПРЕМИУМ ДОСТУП LOSTEARTH</b> 💎\n\n"
+        f"🐱💃 <b>Преимущества:</b>\n"
+        f"• 👑 Эксклюзивный доступ к ивентам\n"
+        f"• 💃 Кастомные эмоции в чате\n"
+        f"• 🐰✈️ Приоритетная поддержка\n"
+        f"• 😘 Уникальный префикс в чате\n"
+        f"• 🏠 Приватная территория\n\n"
+        f"👍 <b>Цена: 299₽ / месяц</b>\n\n"
+        f"🐰 <i>Выбери стиль оформления премиума:</i>",
         parse_mode="HTML",
         reply_markup=get_premium_keyboard()
     )
@@ -264,44 +387,44 @@ async def menu_premium(callback: CallbackQuery):
 async def premium_style(callback: CallbackQuery):
     style = callback.data.split("_")[1]
     styles = {
-        "cat": f"{e(EMOJI['cat_dance'], '🐱🎵')} КОТИК СТАЙЛ {e(EMOJI['cat_dance'], '🐱🎵')}",
-        "anime": f"{e(EMOJI['anime_dance'], '🌸🎌')} АНИМЕ СТАЙЛ {e(EMOJI['anime_dance'], '🌸🎌')}",
-        "rabbit": f"{e(EMOJI['rabbit_fly'], '🐰✨')} ЗАЙЧИК СТАЙЛ {e(EMOJI['rabbit_fly'], '🐰✨')}",
-        "all": f"{e(EMOJI['cat_dance'], '🐱')}{e(EMOJI['anime_dance'], '🌸')}{e(EMOJI['rabbit_fly'], '🐰')} ПРЕМИУМ {e(EMOJI['rabbit_fly'], '🐰')}{e(EMOJI['anime_dance'], '🌸')}{e(EMOJI['cat_dance'], '🐱')}"
+        "cat": f"🐱💃 КОТИК СТАЙЛ 🐱💃",
+        "anime": f"💃 АНИМЕ СТАЙЛ 💃",
+        "rabbit": f"🐰✈️ ЗАЙЧИК СТАЙЛ 🐰✈️",
+        "all": f"🐱💃💃🐰✈️ ПРЕМИУМ 🐰✈️💃🐱💃"
     }
     
     await callback.message.edit_text(
         f"{styles[style]}\n\n"
-        f"{e(EMOJI['cat_kiss'], '💎')} <b>Оплата премиум доступа:</b>\n\n"
-        f"{e(EMOJI['check'], '✅')} Карта РФ\n"
-        f"{e(EMOJI['check'], '✅')} СБП\n"
-        f"{e(EMOJI['check'], '✅')} Криптовалюта\n\n"
-        f"{e(EMOJI['cat_ok'], '📝')} <i>Для покупки напиши:</i> @nikita1055\n\n"
-        f"{e(EMOJI['rabbit_smile'], '🐰')} <b>Твой стиль:</b> {styles[style]}",
+        f"😘 <b>Оплата премиум доступа:</b>\n\n"
+        f"✅ Карта РФ\n"
+        f"✅ СБП\n"
+        f"✅ Криптовалюта\n\n"
+        f"🤙 <i>Для покупки напиши:</i> @nikita1055\n\n"
+        f"🐰 <b>Твой стиль:</b> {styles[style]}",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=f"{e(EMOJI['back'], '◀️')} НАЗАД", callback_data="menu_premium")]
+            [InlineKeyboardButton(text=f"{E['back']} НАЗАД", callback_data="menu_premium")]
         ])
     )
     await callback.answer()
 
 @dp.message(Command("online"))
 async def cmd_online(message: Message):
-    await message.answer(f"{e(EMOJI['cat_dance'], '🔄')} <i>Получаю онлайн...</i>", parse_mode="HTML")
+    await message.answer(f"🐱💃 <i>Получаю онлайн...</i>", parse_mode="HTML")
     
     online = await get_server_online()
     java = online.get("java", {"online": 0, "max": 0})
     bedrock = online.get("bedrock", {"online": 0, "max": 0})
     
     await message.answer(
-        f"{e(EMOJI['joystick'], '📊')} <b>Онлайн {SERVER['name']}</b>\n\n"
+        f"🎮 <b>Онлайн {SERVER['name']}</b>\n\n"
         f"💻 Java: <b>{java.get('online', 0)}/{java.get('max', 0)}</b>\n"
         f"📱 Bedrock: <b>{bedrock.get('online', 0)}/{bedrock.get('max', 0)}</b>",
         parse_mode="HTML"
     )
 
 async def main():
-    print(f"{e(EMOJI['cat_dance'], '🐱')} Бот LostEarth запущен!")
+    print("🐱 Бот LostEarth запущен!")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
