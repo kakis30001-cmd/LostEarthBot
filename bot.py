@@ -22,19 +22,15 @@ flask_app = Flask(__name__, static_folder='static')
 def index():
     return send_from_directory('static', 'rules.html')
 
-@flask_app.route('/<path:path>')
-def static_files(path):
-    return send_from_directory('static', path)
-
 def run_flask():
     flask_app.run(host='0.0.0.0', port=int(os.getenv('PORT', 8080)))
 
-# Эмодзи (только премиум - котики, аниме, зайцы)
+# ТОЛЬКО ПРЕМИУМ ЭМОДЗИ (котики, аниме, зайцы) - КАК В ТВОЁМ ПРИМЕРЕ
 EMOJI = {
-    "cat_dance": "5359444458930718519",
+    "cat_up": "5269698007724499331",
     "cat_ok": "5269476765369144234",
     "cat_glasses": "5267088110717544191",
-    "cat_up": "5269698007724499331",
+    "cat_dance": "5359444458930718519",
     "cat_kiss": "6325462176660195024",
     "rabbit_fly": "5217576088506505749",
     "anime_dance": "6325682031741109665",
@@ -46,6 +42,8 @@ EMOJI = {
     "joystick": "5870717606364713020",
     "crown": "5807868868886009920",
     "start": "5870921127685001066",
+    "microphone": "5870831513192369918",
+    "cross": "5870657884844462243",
 }
 
 def emoji(sticker_id: str, fallback: str = "") -> str:
@@ -62,7 +60,6 @@ SERVER = {
     "bedrock_port": 19132,
 }
 
-# ПРАВИЛЬНАЯ HTTPS ССЫЛКА
 RULES_URL = "https://lostearthbot-production.up.railway.app/"
 
 online_cache = {}
@@ -124,30 +121,32 @@ async def get_server_online():
     last_update["java"] = now
     return online_cache
 
+# ========== КЛАВИАТУРЫ (ТОЛЬКО ПРЕМИУМ ЭМОДЗИ) ==========
+
 def get_main_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(
-                text=f"{emoji(EMOJI['door'], '🌐')} IP И ОНЛАЙН", 
+                text="IP И ОНЛАЙН", 
                 callback_data="menu_ip",
                 icon_custom_emoji_id=EMOJI["door"]
             )
         ],
         [
             InlineKeyboardButton(
-                text=f"{emoji(EMOJI['note'], '📜')} ПРАВИЛА", 
+                text="ПРАВИЛА", 
                 web_app=WebAppInfo(url=RULES_URL),
                 icon_custom_emoji_id=EMOJI["note"]
             ),
             InlineKeyboardButton(
-                text=f"{emoji(EMOJI['rabbit_fly'], '✉️')} ЗАЯВКА", 
+                text="ПОДАТЬ ЗАЯВКУ", 
                 callback_data="menu_apply",
                 icon_custom_emoji_id=EMOJI["rabbit_fly"]
             )
         ],
         [
             InlineKeyboardButton(
-                text=f"{emoji(EMOJI['cat_dance'], '💎')} ПРЕМИУМ", 
+                text="ПРЕМИУМ", 
                 callback_data="menu_premium",
                 icon_custom_emoji_id=EMOJI["cat_dance"]
             )
@@ -158,26 +157,75 @@ def get_ip_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(
-                text=f"{emoji(EMOJI['check'], '🔄')} ОБНОВИТЬ", 
+                text="ОБНОВИТЬ", 
                 callback_data="refresh_online",
                 icon_custom_emoji_id=EMOJI["check"]
             )
         ],
         [
             InlineKeyboardButton(
-                text=f"{emoji(EMOJI['back'], '◀️')} НАЗАД", 
+                text="НАЗАД", 
                 callback_data="menu_main",
                 icon_custom_emoji_id=EMOJI["back"]
             )
         ]
     ])
 
+def get_premium_keyboard():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="ДРУИД | 25₴ / 50₽", 
+                callback_data="donate_druid",
+                icon_custom_emoji_id=EMOJI["cat_ok"]
+            ),
+            InlineKeyboardButton(
+                text="ОРАКУЛ | 50₴ / 100₽", 
+                callback_data="donate_oracul",
+                icon_custom_emoji_id=EMOJI["cat_glasses"]
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="МОНАРХ | 100₴ / 200₽", 
+                callback_data="donate_monarh",
+                icon_custom_emoji_id=EMOJI["crown"]
+            ),
+            InlineKeyboardButton(
+                text="ХЕРУВИМ | 150₴ / 300₽", 
+                callback_data="donate_heruvim",
+                icon_custom_emoji_id=EMOJI["rabbit_fly"]
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="АРХОНТ | 200₴ / 400₽", 
+                callback_data="donate_arhont",
+                icon_custom_emoji_id=EMOJI["crown"]
+            ),
+            InlineKeyboardButton(
+                text="СЕРАФИМ | 300₴ / 600₽", 
+                callback_data="donate_serafim",
+                icon_custom_emoji_id=EMOJI["anime_dance"]
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="НАЗАД", 
+                callback_data="menu_main",
+                icon_custom_emoji_id=EMOJI["back"]
+            )
+        ]
+    ])
+
+# ========== ХЕНДЛЕРЫ ==========
+
 @dp.message(CommandStart())
 async def start_cmd(message: Message):
     text = (
         f"{emoji(EMOJI['start'], '✨')} <b>Добро пожаловать на {SERVER['name']}</b>\n\n"
         f"{emoji(EMOJI['house'], '🏠')} <b>{SERVER['mode']}</b>\n\n"
-        f"{emoji(EMOJI['cat_ok'], '🐱')} <i>Используй кнопки ниже</i>"
+        f"{emoji(EMOJI['cat_ok'], '🐱')} <b>Используйте кнопки ниже</b>"
     )
     await message.answer(text, parse_mode="HTML", reply_markup=get_main_keyboard())
 
@@ -254,21 +302,23 @@ async def refresh_online(callback: CallbackQuery):
 @dp.callback_query(lambda c: c.data == "menu_apply")
 async def menu_apply(callback: CallbackQuery):
     text = f"""
-{emoji(EMOJI['door'], '🚪')} <b>ДОСТУП К МИРНОМУ</b>
+{emoji(EMOJI['door'], '🚪')} <b>ДОСТУП К МИРНОМУ РЕЖИМУ</b>
 
 {emoji(EMOJI['cat_ok'], '🤙')} <b>Как попасть:</b>
 
-1️⃣ Напиши @pelmewki379
-2️⃣ Расскажи о себе
-3️⃣ Жди ответа
+1️⃣ Напишите заявку: @pelmewki379
+2️⃣ Расскажите немного о себе
+3️⃣ Дождитесь ответа администратора
 
 {emoji(EMOJI['rabbit_fly'], '🐰')} <b>Подать заявку:</b> @pelmewki379
+
+{emoji(EMOJI['cat_kiss'], '😘')} <i>Добро пожаловать на LostEarth!</i>
 """
     await callback.message.edit_text(
         text, 
         parse_mode="HTML", 
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=f"{emoji(EMOJI['back'], '◀️')} НАЗАД", callback_data="menu_main", icon_custom_emoji_id=EMOJI["back"])]
+            [InlineKeyboardButton(text="НАЗАД", callback_data="menu_main", icon_custom_emoji_id=EMOJI["back"])]
         ])
     )
     await callback.answer()
@@ -276,25 +326,58 @@ async def menu_apply(callback: CallbackQuery):
 @dp.callback_query(lambda c: c.data == "menu_premium")
 async def menu_premium(callback: CallbackQuery):
     text = f"""
-{emoji(EMOJI['cat_dance'], '🐱')}{emoji(EMOJI['anime_dance'], '💃')}{emoji(EMOJI['rabbit_fly'], '🐰')} <b>PREMIUM</b>
+{emoji(EMOJI['cat_dance'], '🐱')}{emoji(EMOJI['anime_dance'], '💃')}{emoji(EMOJI['rabbit_fly'], '🐰')} <b>ПРЕМИУМ ДОСТУП</b>
 
 {emoji(EMOJI['crown'], '👑')} <b>Привилегии:</b>
 • Эксклюзивные ивенты
-• Кастомные эмоции
+• Кастомные эмоции в чате
 • Приоритетная поддержка
 • Уникальный префикс
 
-{emoji(EMOJI['check'], '✅')} <b>Цена:</b> 299₽ / месяц
+{emoji(EMOJI['check'], '✅')} <b>Оплата:</b> Карта / СБП / Криптовалюта
 
-{emoji(EMOJI['cat_kiss'], '😘')} <b>Оплата:</b> Карта / СБП / Крипта
+{emoji(EMOJI['rabbit_fly'], '🐰')} <i>Для покупки: @pelmewki379</i>
 
-{emoji(EMOJI['rabbit_fly'], '🐰')} <i>Приобрести: @pelmewki379</i>
+{emoji(EMOJI['cat_glasses'], '📋')} <b>Выберите донат:</b>
+"""
+    await callback.message.edit_text(
+        text, 
+        parse_mode="HTML", 
+        reply_markup=get_premium_keyboard()
+    )
+    await callback.answer()
+
+# ДОНАТЫ
+@dp.callback_query(lambda c: c.data.startswith("donate_"))
+async def show_donate(callback: CallbackQuery):
+    donate = callback.data.split("_")[1]
+    
+    donates_info = {
+        "druid": {"name": "Друид", "price": "25₴ / 50₽", "emoji": "🌿", "features": "/anvil, /wb, /ec, /kit druid"},
+        "oracul": {"name": "Оракул", "price": "50₴ / 100₽", "emoji": "🔮", "features": "/heal, /feed, /anvil, /ec, /wb, /kit oracul, 2 точки дома"},
+        "monarh": {"name": "Монарх", "price": "100₴ / 200₽", "emoji": "👑", "features": "/heal, /feed, /anvil, /ec, /wb, /kit monarh, хил других, 2 точки дома"},
+        "heruvim": {"name": "Херувим", "price": "150₴ / 300₽", "emoji": "🪽", "features": "/fly, /ptime, /heal, /feed, /ec, /wb, /anvil, /kit heruvim, 2 точки дома"},
+        "arhont": {"name": "Архонт", "price": "200₴ / 400₽", "emoji": "🏛️", "features": "/fly, /ptime, /heal, /feed, /ec, /wb, /anvil, /kit arhont, 3 точки дома"},
+        "serafim": {"name": "Серафим", "price": "300₴ / 600₽", "emoji": "😇", "features": "/fly, /ptime, /heal, /feed, /ec, /wb, /anvil, /kit serafim, 3 точки дома"},
+    }
+    
+    d = donates_info.get(donate, donates_info["druid"])
+    
+    text = f"""
+{emoji(EMOJI['cat_dance'], '✨')} <b>{d['emoji']} {d['name']}</b>
+
+{emoji(EMOJI['cat_money'], '💰')} <b>Цена:</b> {d['price']}
+
+{emoji(EMOJI['check'], '✅')} <b>Возможности:</b>
+{d['features']}
+
+{emoji(EMOJI['rabbit_fly'], '🐰')} <b>Приобрести:</b> @pelmewki379
 """
     await callback.message.edit_text(
         text, 
         parse_mode="HTML", 
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=f"{emoji(EMOJI['back'], '◀️')} НАЗАД", callback_data="menu_main", icon_custom_emoji_id=EMOJI["back"])]
+            [InlineKeyboardButton(text="◀️ НАЗАД К ДОНАТАМ", callback_data="menu_premium", icon_custom_emoji_id=EMOJI["back"])]
         ])
     )
     await callback.answer()
@@ -311,12 +394,10 @@ async def cmd_online(message: Message):
     )
 
 async def main():
-    # Запускаем Flask в отдельном потоке
     thread = Thread(target=run_flask)
     thread.start()
     
     print("🚀 Бот LostEarth запущен!")
-    print(f"📱 WebApp доступен по адресу: {RULES_URL}")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
