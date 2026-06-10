@@ -7,15 +7,55 @@ import os
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import CommandStart, Command
-from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from aiogram.fsm.storage.memory import MemoryStorage
 
-from config import BOT_TOKEN, EMOJI, emoji, SERVER
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
-# Кэш для онлайна
+# Эмодзи (рабочие ID из твоего примера)
+EMOJI = {
+    "cat_up": "5269698007724499331",
+    "cat_ok": "5269476765369144234",
+    "cat_glasses": "5267088110717544191",
+    "rabbit_smile": "5219869124301199449",
+    "rabbit_fly": "5217576088506505749",
+    "anime_dance": "6325682031741109665",
+    "cat_kiss": "6325462176660195024",
+    "cat_surprised": "5242261773817492813",
+    "cat_dance": "5359444458930718519",
+    "house": "5873147866364514353",
+    "microphone": "5870831513192369918",
+    "start": "5870921127685001066",
+    "note": "5870930744116776638",
+    "check": "5870633910337015697",
+    "cross": "5870657884844462243",
+    "back": "5875082500023258804",
+    "door": "5873147866364514353",
+    "joystick": "5870717606364713020",
+    "crown": "5807868868886009920",
+    "magic": "5474144592817318927",
+}
+
+def emoji(sticker_id: str, fallback: str = "") -> str:
+    return f'<tg-emoji emoji-id="{sticker_id}">{fallback}</tg-emoji>'
+
+# Сервер
+SERVER = {
+    "name": "LostEarth",
+    "mode": "Мирный режим по заявкам!",
+    "java_ip": "150.241.85.40",
+    "java_port": 25565,
+    "java_versions": "1.21—1.26+",
+    "bedrock_ip": "150.241.85.40",
+    "bedrock_port": 19132,
+}
+
+# Ссылка на сайт с правилами (ЗАМЕНИ НА СВОЮ!)
+RULES_URL = "https://your-username.github.io/rules/rules.html"
+
 online_cache = {}
 last_update = {}
 
@@ -75,8 +115,6 @@ async def get_server_online():
     last_update["java"] = now
     return online_cache
 
-# ========== КНОПКИ КАК В ТВОЁМ ПРИМЕРЕ ==========
-
 def get_main_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
         [
@@ -89,7 +127,7 @@ def get_main_keyboard():
         [
             InlineKeyboardButton(
                 text="📜 ПРАВИЛА", 
-                callback_data="menu_rules",
+                web_app=WebAppInfo(url=RULES_URL),
                 icon_custom_emoji_id=EMOJI["note"]
             ),
             InlineKeyboardButton(
@@ -124,8 +162,6 @@ def get_ip_keyboard():
             )
         ]
     ])
-
-# ========== ХЕНДЛЕРЫ ==========
 
 @dp.message(CommandStart())
 async def start_cmd(message: Message):
@@ -204,33 +240,6 @@ async def refresh_online(callback: CallbackQuery):
     await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_ip_keyboard())
     await callback.answer(f"{emoji(EMOJI['check'], '✅')} Онлайн обновлён!")
 
-@dp.callback_query(lambda c: c.data == "menu_rules")
-async def menu_rules(callback: CallbackQuery):
-    text = f"""
-{emoji(EMOJI['house'], '🏠')} <b>ПРАВИЛА СЕРВЕРА LOSTEARTH</b>
-
-{emoji(EMOJI['cat_glasses'], '😎')} <b>Общие правила:</b>
-• {emoji(EMOJI['cat_up'], '👍')} Уважай других игроков
-• {emoji(EMOJI['cross'], '❌')} Запрещены читы и баги
-• {emoji(EMOJI['microphone'], '🎤')} Без токсичности и оскорблений
-• {emoji(EMOJI['door'], '🚪')} Не гриферь чужие постройки
-
-{emoji(EMOJI['rabbit_smile'], '🐰')} <b>Мирный режим:</b>
-• {emoji(EMOJI['check'], '✅')} ПВП только по согласию
-• {emoji(EMOJI['check'], '✅')} Территории защищены
-• {emoji(EMOJI['check'], '✅')} Доступ по заявкам!
-
-{emoji(EMOJI['anime_dance'], '💃')} <i>Приятной игры!</i>
-"""
-    await callback.message.edit_text(
-        text, 
-        parse_mode="HTML", 
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="menu_main", icon_custom_emoji_id=EMOJI["back"])]
-        ])
-    )
-    await callback.answer()
-
 @dp.callback_query(lambda c: c.data == "menu_apply")
 async def menu_apply(callback: CallbackQuery):
     text = f"""
@@ -243,8 +252,6 @@ async def menu_apply(callback: CallbackQuery):
 3️⃣ Дождись ответа администратора
 
 {emoji(EMOJI['rabbit_fly'], '🐰')} <b>Подать заявку:</b> @pelmewki379
-
-{emoji(EMOJI['cat_kiss'], '😘')} <i>Добро пожаловать!</i>
 """
     await callback.message.edit_text(
         text, 
@@ -266,7 +273,7 @@ async def menu_premium(callback: CallbackQuery):
 • Приоритетная поддержка
 • Уникальный префикс
 
-{emoji(EMOJI['cat_money'], '💰')} <b>Цена: 299₽ / месяц</b>
+{emoji(EMOJI['check'], '✅')} <b>Цена: 299₽ / месяц</b>
 
 {emoji(EMOJI['cat_kiss'], '😘')} <b>Оплата:</b> Карта / СБП / Криптовалюта
 
