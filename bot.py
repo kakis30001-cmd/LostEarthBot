@@ -25,7 +25,7 @@ def index():
 def run_flask():
     flask_app.run(host='0.0.0.0', port=int(os.getenv('PORT', 8080)))
 
-# ТОЛЬКО ПРЕМИУМ ЭМОДЗИ (котики, аниме, зайцы) - КАК В ТВОЁМ ПРИМЕРЕ
+# ТОЛЬКО ПРЕМИУМ ЭМОДЗИ
 EMOJI = {
     "cat_up": "5269698007724499331",
     "cat_ok": "5269476765369144234",
@@ -42,8 +42,6 @@ EMOJI = {
     "joystick": "5870717606364713020",
     "crown": "5807868868886009920",
     "start": "5870921127685001066",
-    "microphone": "5870831513192369918",
-    "cross": "5870657884844462243",
 }
 
 def emoji(sticker_id: str, fallback: str = "") -> str:
@@ -121,7 +119,7 @@ async def get_server_online():
     last_update["java"] = now
     return online_cache
 
-# ========== КЛАВИАТУРЫ (ТОЛЬКО ПРЕМИУМ ЭМОДЗИ) ==========
+# ========== КЛАВИАТУРЫ ==========
 
 def get_main_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -139,7 +137,7 @@ def get_main_keyboard():
                 icon_custom_emoji_id=EMOJI["note"]
             ),
             InlineKeyboardButton(
-                text="ПОДАТЬ ЗАЯВКУ", 
+                text="ЗАЯВКА", 
                 callback_data="menu_apply",
                 icon_custom_emoji_id=EMOJI["rabbit_fly"]
             )
@@ -160,53 +158,6 @@ def get_ip_keyboard():
                 text="ОБНОВИТЬ", 
                 callback_data="refresh_online",
                 icon_custom_emoji_id=EMOJI["check"]
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text="НАЗАД", 
-                callback_data="menu_main",
-                icon_custom_emoji_id=EMOJI["back"]
-            )
-        ]
-    ])
-
-def get_premium_keyboard():
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(
-                text="ДРУИД | 25₴ / 50₽", 
-                callback_data="donate_druid",
-                icon_custom_emoji_id=EMOJI["cat_ok"]
-            ),
-            InlineKeyboardButton(
-                text="ОРАКУЛ | 50₴ / 100₽", 
-                callback_data="donate_oracul",
-                icon_custom_emoji_id=EMOJI["cat_glasses"]
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text="МОНАРХ | 100₴ / 200₽", 
-                callback_data="donate_monarh",
-                icon_custom_emoji_id=EMOJI["crown"]
-            ),
-            InlineKeyboardButton(
-                text="ХЕРУВИМ | 150₴ / 300₽", 
-                callback_data="donate_heruvim",
-                icon_custom_emoji_id=EMOJI["rabbit_fly"]
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text="АРХОНТ | 200₴ / 400₽", 
-                callback_data="donate_arhont",
-                icon_custom_emoji_id=EMOJI["crown"]
-            ),
-            InlineKeyboardButton(
-                text="СЕРАФИМ | 300₴ / 600₽", 
-                callback_data="donate_serafim",
-                icon_custom_emoji_id=EMOJI["anime_dance"]
             )
         ],
         [
@@ -334,50 +285,39 @@ async def menu_premium(callback: CallbackQuery):
 • Приоритетная поддержка
 • Уникальный префикс
 
+━━━━━━━━━━━━━━━━━━━━
+{emoji(EMOJI['cat_ok'], '📋')} <b>ДОНАТЫ:</b>
+
+🌿 <b>Друид</b> — 25₴ / 50₽
+└ /anvil, /wb, /ec, /kit druid
+
+🔮 <b>Оракул</b> — 50₴ / 100₽
+└ /heal, /feed, /anvil, /ec, /wb, /kit oracul, 2 точки дома
+
+👑 <b>Монарх</b> — 100₴ / 200₽
+└ /heal, /feed, /anvil, /ec, /wb, /kit monarh, хил других, 2 точки дома
+
+🪽 <b>Херувим</b> — 150₴ / 300₽
+└ /fly, /ptime, /heal, /feed, /ec, /wb, /anvil, /kit heruvim, 2 точки дома
+
+🏛️ <b>Архонт</b> — 200₴ / 400₽
+└ /fly, /ptime, /heal, /feed, /ec, /wb, /anvil, /kit arhont, 3 точки дома
+
+😇 <b>Серафим</b> — 300₴ / 600₽
+└ /fly, /ptime, /heal, /feed, /ec, /wb, /anvil, /kit serafim, 3 точки дома
+
+━━━━━━━━━━━━━━━━━━━━
 {emoji(EMOJI['check'], '✅')} <b>Оплата:</b> Карта / СБП / Криптовалюта
 
-{emoji(EMOJI['rabbit_fly'], '🐰')} <i>Для покупки: @pelmewki379</i>
-
-{emoji(EMOJI['cat_glasses'], '📋')} <b>Выберите донат:</b>
-"""
-    await callback.message.edit_text(
-        text, 
-        parse_mode="HTML", 
-        reply_markup=get_premium_keyboard()
-    )
-    await callback.answer()
-
-# ДОНАТЫ
-@dp.callback_query(lambda c: c.data.startswith("donate_"))
-async def show_donate(callback: CallbackQuery):
-    donate = callback.data.split("_")[1]
-    
-    donates_info = {
-        "druid": {"name": "Друид", "price": "25₴ / 50₽", "emoji": "🌿", "features": "/anvil, /wb, /ec, /kit druid"},
-        "oracul": {"name": "Оракул", "price": "50₴ / 100₽", "emoji": "🔮", "features": "/heal, /feed, /anvil, /ec, /wb, /kit oracul, 2 точки дома"},
-        "monarh": {"name": "Монарх", "price": "100₴ / 200₽", "emoji": "👑", "features": "/heal, /feed, /anvil, /ec, /wb, /kit monarh, хил других, 2 точки дома"},
-        "heruvim": {"name": "Херувим", "price": "150₴ / 300₽", "emoji": "🪽", "features": "/fly, /ptime, /heal, /feed, /ec, /wb, /anvil, /kit heruvim, 2 точки дома"},
-        "arhont": {"name": "Архонт", "price": "200₴ / 400₽", "emoji": "🏛️", "features": "/fly, /ptime, /heal, /feed, /ec, /wb, /anvil, /kit arhont, 3 точки дома"},
-        "serafim": {"name": "Серафим", "price": "300₴ / 600₽", "emoji": "😇", "features": "/fly, /ptime, /heal, /feed, /ec, /wb, /anvil, /kit serafim, 3 точки дома"},
-    }
-    
-    d = donates_info.get(donate, donates_info["druid"])
-    
-    text = f"""
-{emoji(EMOJI['cat_dance'], '✨')} <b>{d['emoji']} {d['name']}</b>
-
-{emoji(EMOJI['cat_money'], '💰')} <b>Цена:</b> {d['price']}
-
-{emoji(EMOJI['check'], '✅')} <b>Возможности:</b>
-{d['features']}
-
 {emoji(EMOJI['rabbit_fly'], '🐰')} <b>Приобрести:</b> @pelmewki379
+
+{emoji(EMOJI['cat_kiss'], '😘')} <i>Спасибо за поддержку сервера!</i>
 """
     await callback.message.edit_text(
         text, 
         parse_mode="HTML", 
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="◀️ НАЗАД К ДОНАТАМ", callback_data="menu_premium", icon_custom_emoji_id=EMOJI["back"])]
+            [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="menu_main", icon_custom_emoji_id=EMOJI["back"])]
         ])
     )
     await callback.answer()
