@@ -12,6 +12,7 @@ from flask import Flask, send_from_directory
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import CommandStart, Command
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+from aiogram.utils.chat_action import ChatActionSender
 from aiogram.fsm.storage.memory import MemoryStorage
 from google import genai
 from google.genai import types as ai_types
@@ -26,10 +27,12 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not BOT_TOKEN:
     raise ValueError("❌ BOT_TOKEN не найден!")
 
-# ========== ПАМЯТЬ ЧАТА (50 сообщений) ==========
-chat_memory = deque(maxlen=500)
+# ========== ПАМЯТЬ ЧАТА ==========
+# Храним последние 20 сообщений из чата
+chat_memory = deque(maxlen=20)
 
 def add_to_memory(username: str, message: str):
+    """Добавляет сообщение в память чата"""
     chat_memory.append({
         "time": datetime.now().strftime("%H:%M:%S"),
         "username": username,
@@ -37,9 +40,13 @@ def add_to_memory(username: str, message: str):
     })
 
 def get_chat_context() -> str:
+    """Возвращает контекст последних сообщений чата"""
     if not chat_memory:
-        return ""
-    context = "\n".join([f"{msg['username']}: {msg['message']}" for msg in chat_memory])
+        return "Пока сообщений в чате не было."
+    
+    context = "Последние сообщения в чате:\n"
+    for msg in chat_memory:
+        context += f"[{msg['time']}] {msg['username']}: {msg['message']}\n"
     return context
 
 # ========== ИНИЦИАЛИЗАЦИЯ ==========
@@ -47,7 +54,7 @@ bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 flask_app = Flask(__name__, static_folder='static')
 
-# Gemini
+# Инициализация Gemini
 ai_client = None
 if GEMINI_API_KEY:
     try:
@@ -158,7 +165,8 @@ async def get_java_status(ip: str, port: int = 25565, timeout: int = 3):
         json_data = json.loads(data.decode('utf-8'))
         players = json_data.get("players", {})
         return {"online": players.get("online", 0), "max": players.get("max", 0)}
-    except:
+    except Exception as e:
+        print(f"Ошибка получения онлайна: {e}")
         return {"online": 0, "max": 0}
 
 async def get_server_online():
@@ -176,23 +184,26 @@ async def get_enderia_response(user_message, username):
         return None
     
     try:
+        current_time = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
         online = await get_server_online()
         java_online = online.get("java", {}).get("online", 0)
+        
+        # Получаем контекст чата
         chat_context = get_chat_context()
         
         full_instruction = f"""{ENDERIA_PROMPT}
 
+Текущая дата и время: {current_time}
 Сейчас на сервере онлайн: {java_online} игроков.
 
-Недавние сообщения в чате:
 {chat_context}
 
-Игрок {username} спросил: "{user_message}"
+Игрок {username} написал мне (Эндерии): "{user_message}"
 
-Ответь как Эндерия, коротко и мило, используй эмодзи:"""
+Ответь как Эндерия (мило, с премиум эмодзи, коротко). Ты знаешь, о чём говорили в чате до этого, но отвечаешь только когда к тебе обратились."""
 
         response = ai_client.models.generate_content(
-            model="gemini-2.0-flash-exp",
+            model="gemini-2.5-flash",
             contents=user_message,
             config=ai_types.GenerateContentConfig(
                 system_instruction=full_instruction,
@@ -212,7 +223,7 @@ def should_respond_to_enderia(message_text):
     if not message_text:
         return False
     text_lower = message_text.lower()
-    keywords = ["эндер", "эндерия", "энди", "ендер"]
+    keywords = ["эндер", "эндерия", "энди", "эндерка", "ендер", "энд"]
     return any(keyword in text_lower for keyword in keywords)
 
 # ========== КЛАВИАТУРЫ ==========
@@ -295,9 +306,9 @@ async def handle_message(message: Message):
     if not message.text:
         return
     
-    username = message.from_user.first_name or "Игрок"
+    username = message.from_user.first_name or message.from_user.username or "Игрок"
     
-    # Запоминаем сообщение
+    # Запоминаем все сообщения в чате (для контекста)
     add_to_memory(username, message.text)
     
     # Отвечаем только если обратились к Эндерии
@@ -307,6 +318,8 @@ async def handle_message(message: Message):
         
         if response:
             await message.reply(response, parse_mode="HTML")
+            # Добавляем ответ Эндерии в память чата
+            add_to_memory("Эндерия", response)
         else:
             await message.reply(
                 f"{emoji(EMOJI['cat_surprised'], '😲')} Телепортация сломалась... Попробуй ещё раз!",
@@ -339,16 +352,16 @@ async def menu_ip(callback: CallbackQuery):
 {emoji(EMOJI['house'], '🏠')} <i>{SERVER['mode']}</i>
 
 {emoji(EMOJI['joystick'], '💻')} <b>JAVA EDITION</b>
-├ IP: <code>{SERVER['java_ip']}</code>
-├ Порт: <code>{SERVER['java_port']}</code>
-├ Версия: <code>{SERVER['java_versions']}</code>
-└ Онлайн: <b>{java_online}/{java_max}</b>
+- IP: <code>{SERVER['java_ip']}</code>
+- Порт: <code>{SERVER['java_port']}</code>
+- Версия: <code>{SERVER['java_versions']}</code>
+- Онлайн: <b>{java_online}/{java_max}</b>
 
-📱 <b>BEDROCK EDITION</b>
-├ IP: <code>{SERVER['bedrock_ip']}</code>
-└ Порт: <code>{SERVER['bedrock_port']}</code>
+<b>BEDROCK EDITION</b>
+- IP: <code>{SERVER['bedrock_ip']}</code>
+- Порт: <code>{SERVER['bedrock_port']}</code>
 
-{emoji(EMOJI['rabbit_fly'], '🐰')} <i>Приятной игры!</i>
+{emoji(EMOJI['rabbit_fly'], '✨')} <i>Приятной игры!</i>
 """
     await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_ip_keyboard())
     await callback.answer()
@@ -370,16 +383,16 @@ async def refresh_online(callback: CallbackQuery):
 {emoji(EMOJI['house'], '🏠')} <i>{SERVER['mode']}</i>
 
 {emoji(EMOJI['joystick'], '💻')} <b>JAVA EDITION</b>
-├ IP: <code>{SERVER['java_ip']}</code>
-├ Порт: <code>{SERVER['java_port']}</code>
-├ Версия: <code>{SERVER['java_versions']}</code>
-└ Онлайн: <b>{java_online}/{java_max}</b>
+- IP: <code>{SERVER['java_ip']}</code>
+- Порт: <code>{SERVER['java_port']}</code>
+- Версия: <code>{SERVER['java_versions']}</code>
+- Онлайн: <b>{java_online}/{java_max}</b>
 
-📱 <b>BEDROCK EDITION</b>
-├ IP: <code>{SERVER['bedrock_ip']}</code>
-└ Порт: <code>{SERVER['bedrock_port']}</code>
+<b>BEDROCK EDITION</b>
+- IP: <code>{SERVER['bedrock_ip']}</code>
+- Порт: <code>{SERVER['bedrock_port']}</code>
 
-{emoji(EMOJI['rabbit_fly'], '🐰')} <i>Приятной игры!</i>
+{emoji(EMOJI['rabbit_fly'], '✨')} <i>Приятной игры!</i>
 """
     await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_ip_keyboard())
     await callback.answer(f"{emoji(EMOJI['check'], '✅')} Обновлено!")
@@ -390,10 +403,10 @@ async def menu_premium(callback: CallbackQuery):
 {emoji(EMOJI['cat_dance'], '🐱')}{emoji(EMOJI['anime_dance'], '💃')}{emoji(EMOJI['rabbit_fly'], '🐰')} <b>ПРЕМИУМ ДОСТУП</b>
 
 {emoji(EMOJI['crown'], '👑')} <b>Привилегии:</b>
-• Эксклюзивные ивенты
-• Кастомные эмоции в чате
-• Приоритетная поддержка
-• Уникальный префикс
+- Эксклюзивные ивенты
+- Кастомные эмоции в чате
+- Приоритетная поддержка
+- Уникальный префикс
 
 {emoji(EMOJI['cat_ok'], '📋')} <b>ДОНАТЫ:</b>
 
@@ -406,7 +419,7 @@ async def menu_premium(callback: CallbackQuery):
 
 {emoji(EMOJI['check'], '✅')} <b>Оплата:</b> Гривны / Рубли
 
-{emoji(EMOJI['rabbit_fly'], '🐰')} <b>По вопросам:</b> @pelmewki379
+{emoji(EMOJI['rabbit_fly'], '🐰')} <b>По всем вопросам:</b> @pelmewki379
 """
     await callback.message.edit_text(
         text, 
@@ -420,14 +433,14 @@ async def menu_premium(callback: CallbackQuery):
 @dp.callback_query(lambda c: c.data == "menu_enderia")
 async def menu_enderia(callback: CallbackQuery):
     text = f"""
-{emoji(EMOJI['cat_dance'], '💜')} <b>Эндерия</b>
+{emoji(EMOJI['cat_dance'], '💜')} <b>Кто такая Эндерия?</b>
 
-{emoji(EMOJI['cat_ok'], '🐱')} Я девушка-эндермен из LostEarth!
+{emoji(EMOJI['cat_ok'], '🐱')} Я девушка-эндермен, хранительница Края!
 
-💬 <b>Как ко мне обратиться:</b>
-Напиши: Эндер, Эндерия, Энди
+{emoji(EMOJI['cat_glasses'], '😎')} <b>Как ко мне обратиться:</b>
+Напиши: Эндер, Эндерия, Энди, Энд, Ендер
 
-{emoji(EMOJI['rabbit_fly'], '🐰')} <i>Просто позови меня по имени, и я отвечу!</i>
+{emoji(EMOJI['rabbit_fly'], '🐰')} <i>Я читаю чат и понимаю о чём вы говорите, но отвечаю только когда меня позовёте!</i>
 """
     await callback.message.edit_text(
         text, 
@@ -444,9 +457,10 @@ async def main():
     flask_thread.start()
     
     print("=" * 50)
-    print("🚀 БОТ LOSTEARTH ЗАПУЩЕН")
-    print(f"📱 Правила: {RULES_URL}")
-    print(f"📝 Заявка: {APPLY_URL}")
+    print("БОТ LOSTEARTH ЗАПУЩЕН")
+    print(f"Правила: {RULES_URL}")
+    print(f"Заявка: {APPLY_URL}")
+    print("Эндерия читает чат, но отвечает только когда её позовут!")
     print("=" * 50)
     
     await dp.start_polling(bot)
