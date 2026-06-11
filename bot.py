@@ -7,15 +7,14 @@ from aiogram.filters import CommandStart
 from dotenv import load_dotenv
 from flask import Flask
 from google import genai
-from google.genai import types as ai_types  # Правильный импорт для версии 1.0.0
+from google.genai import types as ai_types
 
-# Загружаем переменные
+# Загружаем переменные окружения
 load_dotenv()
-
-TELEGRAM_TOKEN = os.getenv("BOT_TOKEN")
+TELEGRAM_TOKEN = os.getenv("BOT_TOKEN")  # Ваша переменная на Railway
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# Инициализация Flask для Railway
+# Инициализация Flask для проверки портов (Health Check) Railway
 app = Flask(__name__)
 
 
@@ -29,25 +28,25 @@ def run_flask():
     app.run(host="0.0.0.0", port=port)
 
 
-# Инициализация ИИ и Telegram
+# Инициализация клиентов
 ai_client = genai.Client(api_key=GEMINI_API_KEY)
 bot = Bot(token=TELEGRAM_TOKEN)
 dp = Dispatcher()
 
-# Системный промпт
-SYSTEM_PROMPT = """
-Ты — дружелюбный и остроумный Telegram-бот по имени Джарвис. 
-Правила общения:
-1. Отвечай кратко, емко и по делу.
-2. Используй подходящие эмодзи для дружелюбия.
-3. Если пользователь обращается на "ты", общайся на "ты". Если на "вы" — общайся уважительно.
-4. Никогда не выдумывай факты.
-"""
+# Системный промпт (инструкция для роли Джарвиса)
+SYSTEM_PROMPT = (
+    "Ты — дружелюбный и остроумный Telegram-бот по имени Джарвис. "
+    "Отвечай кратко, емко и по делу. Используй подходящие эмодзи для дружелюбия. "
+    "Если пользователь обращается на 'ты', общайся на 'ты'. Если на 'вы' — общайся уважительно. "
+    "Никогда не выдумывай факты."
+)
 
 
 @dp.message(CommandStart())
 async def start_cmd(message: types.Message):
-    await message.answer("Привет! Напиши мне, и я отвечу с помощью Gemini.")
+    await message.answer(
+        "Привет! Я Джарвис. Напиши мне, и я отвечу с помощью Gemini."
+    )
 
 
 @dp.message()
@@ -55,16 +54,17 @@ async def handle_message(message: types.Message):
     if not message.text:
         return
 
+    # Показываем статус "печатает..." в Telegram
     await bot.send_chat_action(chat_id=message.chat.id, action="typing")
 
     try:
-        # Получаем актуальное время
+        # Формируем актуальное время для системного промпта
         current_time = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
         full_instruction = (
-            f"{SYSTEM_PROMPT}\nТекущая дата и время сервера: {current_time}."
+            f"{SYSTEM_PROMPT} Текущая дата и время сервера: {current_time}."
         )
 
-        # Запрос к Gemini
+        # Отправляем запрос в Gemini API версии 1.0.0
         response = ai_client.models.generate_content(
             model="gemini-2.5-flash",
             contents=message.text,
@@ -73,18 +73,27 @@ async def handle_message(message: types.Message):
                 temperature=0.7,
             ),
         )
-        await message.reply(response.text)
+
+        # Отправляем ответ пользователю, если он сгенерирован
+        if response.text:
+            await message.reply(response.text)
+        else:
+            await message.reply(
+                "Gemini вернул пустой ответ (возможно, сработали фильтры безопасности)."
+            )
+
     except Exception as e:
-        await message.reply("Произошла ошибка при обращении к ИИ.")
-        print(f"Ошибка Gemini API: {e}")
+        # Выводим ошибку прямо в чат для быстрой диагностики
+        await message.reply(f"Ошибка ИИ: {str(e)[:150]}")
+        print(f"Полная ошибка в логах: {e}")
 
 
 async def main():
-    # Запуск Flask в потоке
+    # Запускаем веб-сервер Flask в фоновом режиме для Railway
     flask_thread = Thread(target=run_flask, daemon=True)
     flask_thread.start()
 
-    print("Бот успешно запущен...")
+    print("Бот Джарвис успешно запущен...")
     await dp.start_polling(bot)
 
 
