@@ -23,7 +23,7 @@ from prompts import ENDERIA_PROMPT
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-NEWS_CHANNEL_ID = os.getenv("NEWS_CHANNEL_ID")  # ID канала с новостями (например -1001234567890)
+NEWS_CHANNEL_ID = os.getenv("NEWS_CHANNEL_ID")  # ID канала с новостями
 
 if not BOT_TOKEN:
     raise ValueError("❌ BOT_TOKEN не найден!")
@@ -32,10 +32,9 @@ if not BOT_TOKEN:
 class ChatMemory:
     def __init__(self, max_size=100):
         self.messages = deque(maxlen=max_size)
-        self.news = deque(maxlen=20)  # отдельно для новостей
+        self.news = deque(maxlen=20)
     
     def add_message(self, username: str, message: str, user_id: int = None):
-        """Добавляет сообщение в память"""
         self.messages.append({
             "time": datetime.now().strftime("%H:%M:%S"),
             "date": datetime.now().strftime("%d.%m.%Y"),
@@ -46,7 +45,6 @@ class ChatMemory:
         })
     
     def add_enderia_response(self, message: str):
-        """Добавляет ответ Эндерии в память"""
         self.messages.append({
             "time": datetime.now().strftime("%H:%M:%S"),
             "date": datetime.now().strftime("%d.%m.%Y"),
@@ -57,7 +55,6 @@ class ChatMemory:
         })
     
     def add_news(self, news_text: str, news_link: str = None):
-        """Добавляет новость из канала"""
         self.news.append({
             "time": datetime.now().strftime("%H:%M:%S"),
             "date": datetime.now().strftime("%d.%m.%Y"),
@@ -66,41 +63,29 @@ class ChatMemory:
         })
     
     def get_chat_context(self, last_n: int = 30) -> str:
-        """Возвращает последние N сообщений чата для контекста"""
         if not self.messages:
             return "Пока сообщений в чате не было."
         
         context = "📜 Последние сообщения в чате:\n"
-        context += "━" * 40 + "\n"
-        
         for msg in list(self.messages)[-last_n:]:
             prefix = "💜" if msg.get("is_from_enderia") else "💬"
             context += f"{prefix} [{msg['time']}] {msg['username']}: {msg['message']}\n"
-        
         return context
     
     def get_news_context(self) -> str:
-        """Возвращает последние новости из канала"""
         if not self.news:
             return "Новых новостей пока нет."
         
-        context = "📰 ПОСЛЕДНИЕ НОВОСТИ КАНАЛА:\n"
-        context += "━" * 40 + "\n"
-        
+        context = "📰 ПОСЛЕДНИЕ НОВОСТИ:\n"
         for news in self.news:
-            context += f"📢 [{news['date']} {news['time']}] {news['news']}\n"
-            if news.get('link'):
-                context += f"   🔗 Подробнее: {news['link']}\n"
-        
+            context += f"📢 {news['news']}\n"
         return context
     
     def get_full_context(self) -> str:
-        """Полный контекст: новости + последние сообщения чата"""
         context = self.get_news_context()
         context += "\n" + self.get_chat_context(40)
         return context
 
-# Создаём глобальную память
 chat_memory = ChatMemory(max_size=100)
 
 # ========== ИНИЦИАЛИЗАЦИЯ ==========
@@ -108,7 +93,7 @@ bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 flask_app = Flask(__name__, static_folder='static')
 
-# Инициализация Gemini
+# Gemini
 ai_client = None
 if GEMINI_API_KEY:
     try:
@@ -133,33 +118,34 @@ def run_flask():
     port = int(os.environ.get('PORT', 8080))
     flask_app.run(host='0.0.0.0', port=port)
 
-# ========== ФУНКЦИЯ ДЛЯ ПОЛУЧЕНИЯ НОВОСТЕЙ ИЗ КАНАЛА ==========
+# ========== ФУНКЦИЯ ДЛЯ ПОЛУЧЕНИЯ НОВОСТЕЙ ИЗ КАНАЛА (ИСПРАВЛЕНА) ==========
 async def fetch_news_from_channel():
-    """Периодически получает новости из канала"""
+    """Получает последние сообщения из канала через forward или get_updates"""
     if not NEWS_CHANNEL_ID:
-        print("⚠️ NEWS_CHANNEL_ID не задан, новости не будут загружаться")
+        print("⚠️ NEWS_CHANNEL_ID не задан")
         return
+    
+    last_news_id = 0
     
     while True:
         try:
-            # Получаем последние 5 сообщений из канала
-            messages = []
-            async for message in bot.get_chat_history(chat_id=NEWS_CHANNEL_ID, limit=5):
-                if message.text and not message.text.startswith('/'):
-                    messages.append(message)
+            # Пытаемся получить сообщения из канала
+            # Для этого нужно, чтобы бот был администратором канала
+            updates = await bot.get_updates(limit=10, timeout=1)
             
-            # Добавляем новые новости (которых ещё нет в памяти)
-            for msg in reversed(messages):
-                news_text = msg.text[:500]  # обрезаем длинные новости
-                chat_memory.add_news(news_text)
-            
-            print(f"📰 Загружено {len(messages)} новостей из канала")
-            
+            for update in updates:
+                if update.channel_post and str(update.channel_post.chat.id) == NEWS_CHANNEL_ID:
+                    msg = update.channel_post
+                    if msg.text and msg.message_id > last_news_id:
+                        news_text = msg.text[:500]
+                        chat_memory.add_news(news_text)
+                        last_news_id = msg.message_id
+                        print(f"📰 Новая новость: {news_text[:50]}...")
+                        
         except Exception as e:
             print(f"❌ Ошибка загрузки новостей: {e}")
         
-        # Проверяем новости раз в 5 минут
-        await asyncio.sleep(300)
+        await asyncio.sleep(60)  # Проверяем раз в минуту
 
 # ========== ПРЕМИУМ ЭМОДЗИ ==========
 EMOJI = {
@@ -270,7 +256,6 @@ async def get_enderia_response(user_message, username):
         online = await get_server_online()
         java_online = online.get("java", {}).get("online", 0)
         
-        # Получаем ПОЛНЫЙ контекст (новости + чат)
         full_context = chat_memory.get_full_context()
         
         full_instruction = f"""{ENDERIA_PROMPT}
@@ -282,7 +267,7 @@ async def get_enderia_response(user_message, username):
 
 Игрок {username} написал мне: "{user_message}"
 
-Ответь как Эндерия (мило, с премиум эмодзи, коротко). Ты знаешь всё, что происходит в чате, и последние новости сервера!"""
+Ответь как Эндерия (мило, с премиум эмодзи, коротко)."""
 
         response = ai_client.models.generate_content(
             model="gemini-2.5-flash",
@@ -368,8 +353,7 @@ async def start_cmd(message: Message):
     text = (
         f"{emoji(EMOJI['start'], '✨')} <b>Добро пожаловать на {SERVER['name']}</b>\n\n"
         f"{emoji(EMOJI['house'], '🏠')} <b>{SERVER['mode']}</b>\n\n"
-        f"{emoji(EMOJI['cat_ok'], '🐱')} <b>Я Эндерия - напиши моё имя, и я отвечу!</b>\n\n"
-        f"{emoji(EMOJI['rabbit_fly'], '📰')} <i>Я знаю последние новости сервера и помню что происходит в чате!</i>"
+        f"{emoji(EMOJI['cat_ok'], '🐱')} <b>Я Эндерия - напиши моё имя, и я отвечу!</b>"
     )
     await message.answer(text, parse_mode="HTML", reply_markup=get_main_keyboard())
 
@@ -392,7 +376,7 @@ async def handle_message(message: Message):
     username = message.from_user.first_name or message.from_user.username or "Игрок"
     user_id = message.from_user.id
     
-    # Запоминаем ВСЕ сообщения в чате (жёстко)
+    # Запоминаем все сообщения
     chat_memory.add_message(username, message.text, user_id)
     
     # Отвечаем только если обратились к Эндерии
@@ -402,11 +386,12 @@ async def handle_message(message: Message):
         
         if response:
             await message.reply(response, parse_mode="HTML")
-            # Запоминаем ответ Эндерии
             chat_memory.add_enderia_response(response)
         else:
-            error_msg = f"{emoji(EMOJI['cat_surprised'], '😲')} Телепортация сломалась... Попробуй ещё раз!"
-            await message.reply(error_msg, parse_mode="HTML")
+            await message.reply(
+                f"{emoji(EMOJI['cat_surprised'], '😲')} Телепортация сломалась... Попробуй ещё раз!",
+                parse_mode="HTML"
+            )
 
 # ========== КОЛБЭКИ ==========
 @dp.callback_query(lambda c: c.data == "menu_main")
@@ -519,16 +504,10 @@ async def menu_enderia(callback: CallbackQuery):
 
 {emoji(EMOJI['cat_ok'], '🐱')} Я девушка-эндермен, хранительница Края!
 
-{emoji(EMOJI['cat_glasses'], '😎')} <b>Что я умею:</b>
-- 📖 Помню последние 100 сообщений в чате
-- 📰 Слежу за новостями канала
-- 🎮 Знаю онлайн сервера
-- 💬 Отвечаю когда меня зовут
-
-{emoji(EMOJI['rabbit_fly'], '🐰')} <b>Как ко мне обратиться:</b>
+{emoji(EMOJI['cat_glasses'], '😎')} <b>Как ко мне обратиться:</b>
 Напиши: Эндер, Эндерия, Энди, Энд, Ендер
 
-{emoji(EMOJI['cat_kiss'], '😘')} <i>Я знаю всё, что происходит на сервере!</i>
+{emoji(EMOJI['rabbit_fly'], '🐰')} <i>Я помню всё, что говорят в чате!</i>
 """
     await callback.message.edit_text(
         text, 
@@ -541,19 +520,19 @@ async def menu_enderia(callback: CallbackQuery):
 
 # ========== ЗАПУСК ==========
 async def main():
-    # Запускаем Flask
     flask_thread = Thread(target=run_flask, daemon=True)
     flask_thread.start()
     
-    # Запускаем фоновую задачу для сбора новостей
+    # Запускаем фоновую задачу для новостей
     if NEWS_CHANNEL_ID:
         asyncio.create_task(fetch_news_from_channel())
+        print("📰 Запущен сбор новостей из канала")
     
     print("=" * 50)
     print("БОТ LOSTEARTH ЗАПУЩЕН")
     print(f"Правила: {RULES_URL}")
     print(f"Заявка: {APPLY_URL}")
-    print("Эндерия хранит 100 сообщений чата и следит за новостями!")
+    print("Эндерия хранит 100 сообщений чата!")
     print("=" * 50)
     
     await dp.start_polling(bot)
