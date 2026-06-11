@@ -5,6 +5,7 @@ import socket
 import struct
 import json
 from threading import Thread
+from io import BytesIO
 
 from flask import Flask, send_from_directory
 from aiogram import Bot, Dispatcher, types
@@ -13,7 +14,7 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKe
 from aiogram.utils.chat_action import ChatActionSender
 from aiogram.fsm.storage.memory import MemoryStorage
 from google import genai
-from google.genai import types as genai_types
+from google.genai import types
 
 # ========== НАСТРОЙКА ==========
 logging.basicConfig(level=logging.INFO)
@@ -25,28 +26,22 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not TELEGRAM_TOKEN:
     raise ValueError("❌ TELEGRAM_TOKEN не найден!")
 
-# ========== НАСТРОЙКА GEMINI ==========
+# ========== ИНИЦИАЛИЗАЦИЯ GEMINI (ПРАВИЛЬНАЯ) ==========
 GEMINI_AVAILABLE = False
 gemini_client = None
 
 if GEMINI_API_KEY:
     try:
+        # Правильная инициализация клиента
         gemini_client = genai.Client(api_key=GEMINI_API_KEY)
-        
-        test_response = gemini_client.models.generate_content(
-            model='gemini-1.5-flash',
-            contents='Скажи "OK"'
-        )
         GEMINI_AVAILABLE = True
-        logger.info("✅ Gemini AI клиент создан и тест пройден!")
+        logger.info("✅ Gemini AI клиент создан!")
     except Exception as e:
-        # ВРЕМЕННО ВКЛЮЧАЕМ ФЛАГ ДАЖЕ ПРИ ОШИБКЕ ДЛЯ ВЫВОДА ТЕКСТА В ТЕЛЕГРАМ
-        GEMINI_AVAILABLE = True 
-        logger.error(f"❌ Ошибка инициализации Gemini: {e}")
+        logger.error(f"❌ Ошибка создания клиента Gemini: {e}")
 else:
     logger.error("❌ GEMINI_API_KEY не найден!")
 
-# ========== ИНИЦИАЛИЗАЦИЯ ==========
+# ========== ИНИЦИАЛИЗАЦИЯ БОТА ==========
 bot = Bot(token=TELEGRAM_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 flask_app = Flask(__name__, static_folder='static')
@@ -74,7 +69,7 @@ BASE_URL = "https://lostearthbot-production.up.railway.app"
 RULES_URL = f"{BASE_URL}/"
 APPLY_URL = f"{BASE_URL}/apply"
 
-# ========== ПРЕМИУМ ЭМОДЗИ (ТОЛЬКО ДЛЯ КНОПОК) ==========
+# ========== ПРЕМИУМ ЭМОДЗИ ==========
 EMOJI_IDS = {
     "door": "5873147866364514353",
     "note": "5870930744116776638",
@@ -88,6 +83,7 @@ EMOJI_IDS = {
     "crown": "5807868868886009920",
     "house": "5873147866364514353",
     "start": "5870921127685001066",
+    "cat_surprised": "5269649173946345008",
 }
 
 def emoji(sticker_id: str, fallback: str = "") -> str:
@@ -142,37 +138,57 @@ async def get_minecraft_online():
         logger.error(f"Ошибка онлайна: {e}")
         return 0
 
-# ========== ЭНДЕРИЯ ==========
-async def get_enderia_response(user_message, username):
+# ========== ЭНДЕРИЯ С GEMINI (ИСПРАВЛЕННАЯ) ==========
+async def get_enderia_response(user_message, username, photo_data=None):
     if not GEMINI_AVAILABLE or not gemini_client:
-        return "🛠 <b>ОШИБКА:</b> GEMINI_API_KEY не найден в переменных окружения."
+        logger.error("❌ Gemini не доступен!")
+        return None
     
     try:
-        prompt = f"""Ты - Эндерия, девушка-эндермен. Ты добрая, любишь шутить. Отвечай коротко, с эмодзи 💜\n\nИгрок {username} написал: {user_message}\n\nОтветь как Эндерия:"""
+        logger.info(f"🤖 Запрос к Gemini от {username}: {user_message[:50] if user_message else 'фото'}")
         
-        response = await gemini_client.aio.models.generate_content(
-            model='gemini-1.5-flash',
-            contents=prompt,
-            config=genai_types.GenerateContentConfig(
-                temperature=0.9,
-                max_output_tokens=150,
+        # Формируем промпт
+        prompt = f"""Ты - Эндерия, девушка-эндермен в чате Minecraft сервера LostEarth.
+
+Твой характер: добрая, загадочная, любишь фиолетовый цвет, жемчуг Края и телепортации. Обожаешь котиков, аниме и зайчиков.
+
+Твой стиль: используй эмодзи 💜 🟣 🌌 ✨ 🐱 🐰 💃. Обращайся к игроку по имени. Отвечай коротко, 2-3 предложения.
+
+Игрок {username} написал: {user_message if user_message else 'Отправил фото'}
+
+Ответь как Эндерия (мило, с эмодзи):"""
+        
+        # Если есть фото, отправляем с ним
+        if photo_data:
+            response = gemini_client.models.generate_content(
+                model='gemini-1.5-flash',
+                contents=[prompt, photo_data]
             )
-        )
+        else:
+            response = gemini_client.models.generate_content(
+                model='gemini-1.5-flash',
+                contents=prompt
+            )
         
-        return response.text.strip() if response and response.text else None
+        if response and response.text:
+            logger.info(f"✅ Ответ получен")
+            return response.text.strip()
+        else:
+            logger.error("❌ Пустой ответ")
+            return None
+        
     except Exception as e:
         logger.error(f"❌ Ошибка Gemini: {e}")
-        # ВЫВОД РЕАЛЬНОЙ ОШИБКИ В ЧАТ
-        return f"🛠 <b>ТЕХНИЧЕСКАЯ ОШИБКА GEMINI:</b>\n<code>{e}</code>"
+        return f"🛠 Техническая ошибка:\n{e}"
 
 def should_respond(message_text):
-    if not message_text: 
+    if not message_text:
         return False
     text_lower = message_text.lower()
     keywords = ["эндер", "эндерия", "энди", "эндерка", "ендер"]
     return any(k in text_lower for k in keywords)
 
-# ========== КНОПКИ ТОЛЬКО С ПРЕМИУМ ЭМОДЗИ (БЕЗ ТЕКСТА) ==========
+# ========== КНОПКИ ==========
 def get_main_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
         [
@@ -238,6 +254,7 @@ async def cmd_online(message: Message):
     online = await get_minecraft_online()
     await message.answer(f"📊 <b>Онлайн: {online}</b> игроков!", parse_mode="HTML")
 
+# Обработчик текстовых сообщений
 @dp.message()
 async def handle_message(message: Message):
     if should_respond(message.text):
@@ -248,7 +265,10 @@ async def handle_message(message: Message):
             if response:
                 await message.reply(response, parse_mode="HTML")
             else:
-                await message.reply("😲 Ой, телепортация сломалась... Попробуй ещё раз! 💜", parse_mode="HTML")
+                await message.reply(
+                    "😲 Ой, телепортация сломалась... Попробуй ещё раз! 💜",
+                    parse_mode="HTML"
+                )
 
 # ========== КОЛБЭКИ ==========
 @dp.callback_query(lambda c: c.data == "menu_main")
@@ -328,7 +348,11 @@ async def main():
     
     logger.info("=" * 50)
     logger.info("🚀 БОТ LOSTEARTH ЗАПУЩЕН")
-    logger.info(f"🤖 Gemini: {'✅' if GEMINI_AVAILABLE else '❌'}")
+    logger.info(f"🤖 Gemini: {'✅ ДОСТУПЕН' if GEMINI_AVAILABLE else '❌ НЕТ'}")
+    if GEMINI_AVAILABLE:
+        logger.info("💜 Эндерия готова к общению!")
+    else:
+        logger.warning("⚠️ Добавь GEMINI_API_KEY в Railway!")
     logger.info("=" * 50)
     
     await bot.delete_webhook(drop_pending_updates=True)
