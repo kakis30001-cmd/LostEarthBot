@@ -4,6 +4,7 @@ import struct
 import json
 from datetime import datetime
 import os
+import traceback
 from threading import Thread
 from collections import deque
 
@@ -21,6 +22,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 if not BOT_TOKEN:
+    print("❌ ОШИБКА: BOT_TOKEN не найден в переменных окружения!")
     raise ValueError("❌ BOT_TOKEN не найден!")
 
 # ========== ПАМЯТЬ ЧАТА ==========
@@ -43,10 +45,18 @@ bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 flask_app = Flask(__name__, static_folder='static')
 
-# Gemini
-ai_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
-if ai_client:
-    print("✅ Gemini AI подключен!")
+# Gemini инициализация с проверкой
+ai_client = None
+if GEMINI_API_KEY:
+    try:
+        print("🔄 Подключение к Gemini API...")
+        ai_client = genai.Client(api_key=GEMINI_API_KEY)
+        print("✅ Gemini AI успешно подключен!")
+    except Exception as e:
+        print(f"❌ ОШИБКА подключения Gemini: {e}")
+        traceback.print_exc()
+else:
+    print("⚠️ GEMINI_API_KEY не найден! Эндерия не будет отвечать.")
 
 @flask_app.route('/')
 def index():
@@ -62,6 +72,7 @@ def favicon():
 
 def run_flask():
     port = int(os.environ.get('PORT', 8080))
+    print(f"🔄 Запуск Flask на порту {port}...")
     flask_app.run(host='0.0.0.0', port=port, debug=False)
 
 # ========== ПРЕМИУМ ЭМОДЗИ ==========
@@ -105,6 +116,7 @@ last_update = {}
 # ========== MINECRAFT API ==========
 async def get_java_status(ip: str, port: int = 25565):
     try:
+        print(f"🔄 Проверка статуса сервера {ip}:{port}...")
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(3)
         sock.connect((ip, port))
@@ -146,8 +158,12 @@ async def get_java_status(ip: str, port: int = 25565):
         data = data[1:]
         json_data = json.loads(data.decode('utf-8'))
         players = json_data.get("players", {})
-        return players.get("online", 0), players.get("max", 0)
-    except:
+        online = players.get("online", 0)
+        max_players = players.get("max", 0)
+        print(f"📊 Сервер онлайн: {online}/{max_players}")
+        return online, max_players
+    except Exception as e:
+        print(f"❌ Ошибка получения статуса сервера: {e}")
         return 0, 0
 
 async def get_server_online():
@@ -180,7 +196,10 @@ ENDERIA_PROMPT = """
 
 # ========== ЭНДЕРИЯ ==========
 async def get_enderia_response(user_message, username):
+    print(f"🔄 Запрос к Gemini от {username}: {user_message[:50]}...")
+    
     if not ai_client:
+        print("❌ Gemini клиент не инициализирован!")
         return None
     
     try:
@@ -200,8 +219,10 @@ async def get_enderia_response(user_message, username):
 
 Ответь как Эндерия (мило, с эмодзи, коротко):"""
 
+        print("🔄 Отправка запроса в Gemini...")
+        
         response = ai_client.models.generate_content(
-            model="gemini-1.5-flash",
+            model="gemini-2.0-flash-exp",
             contents=user_message,
             config=ai_types.GenerateContentConfig(
                 system_instruction=full_instruction,
@@ -211,11 +232,15 @@ async def get_enderia_response(user_message, username):
         )
         
         if response and response.text:
+            print(f"✅ Gemini ответил: {response.text[:50]}...")
             return response.text
-        return None
+        else:
+            print("⚠️ Gemini вернул пустой ответ")
+            return None
         
     except Exception as e:
-        print(f"Gemini ошибка: {e}")
+        print(f"❌ КРИТИЧЕСКАЯ ОШИБКА Gemini: {e}")
+        traceback.print_exc()
         return None
 
 def should_respond(message_text):
@@ -282,6 +307,7 @@ def get_ip_keyboard():
 # ========== ХЕНДЛЕРЫ ==========
 @dp.message(CommandStart())
 async def start_cmd(message: Message):
+    print(f"📨 Команда /start от {message.from_user.id}")
     text = f"""{emoji(EMOJI['start'], '✨')} <b>Добро пожаловать на {SERVER['name']}</b>
 
 {emoji(EMOJI['house'], '🏠')} <b>{SERVER['mode']}</b>
@@ -291,6 +317,7 @@ async def start_cmd(message: Message):
 
 @dp.message(Command("online"))
 async def cmd_online(message: Message):
+    print(f"📨 Команда /online от {message.from_user.id}")
     online, max_players = await get_server_online()
     await message.answer(
         f"{emoji(EMOJI['joystick'], '📊')} <b>Онлайн LostEarth</b>\n\n"
@@ -304,15 +331,20 @@ async def handle_message(message: Message):
         return
     
     username = message.from_user.first_name or "Игрок"
+    print(f"💬 Сообщение от {username}: {message.text[:50]}...")
+    
     add_to_memory(username, message.text)
     
     if should_respond(message.text):
+        print(f"🔔 Обращение к Эндерии от {username}")
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
         response = await get_enderia_response(message.text, username)
         
         if response:
+            print(f"✅ Ответ отправлен {username}")
             await message.reply(response, parse_mode="HTML")
         else:
+            print(f"❌ Не удалось получить ответ от Gemini для {username}")
             await message.reply(
                 f"{emoji(EMOJI['cat_surprised'], '😲')} Телепортация сломалась... Попробуй ещё раз!",
                 parse_mode="HTML"
@@ -416,15 +448,15 @@ async def main():
     flask_thread = Thread(target=run_flask, daemon=True)
     flask_thread.start()
     
-    print("=" * 50)
+    print("=" * 60)
     print("🚀 БОТ LOSTEARTH ЗАПУЩЕН")
     print(f"📱 Правила WebApp: {RULES_URL}")
     print(f"📝 Заявка WebApp: {APPLY_URL}")
     if ai_client:
-        print("💜 Эндерия с Gemini AI активна!")
+        print("💜 Эндерия с Gemini AI активна и готова к общению!")
     else:
-        print("⚠️ Эндерия отключена (нет API ключа)")
-    print("=" * 50)
+        print("⚠️ Эндерия отключена (проверь GEMINI_API_KEY в переменных)")
+    print("=" * 60)
     
     await dp.start_polling(bot)
 
