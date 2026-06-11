@@ -2,44 +2,61 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LostEarth - Правила</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>LostEarth - Правила и Донаты</title>
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
+        
         body {
-            background: linear-gradient(135deg, #0a0a1a, #1a1a3e);
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            padding: 20px;
-            color: #fff;
+            background: linear-gradient(135deg, #0a0a1a 0%, #0f0f2a 50%, #1a1a3e 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            padding: 16px;
+            color: #e0e0e0;
             min-height: 100vh;
         }
+        
         .container {
-            max-width: 700px;
+            max-width: 800px;
             margin: 0 auto;
         }
+        
         .card {
-            background: rgba(10, 10, 30, 0.8);
+            background: rgba(20, 20, 40, 0.85);
             backdrop-filter: blur(10px);
-            border-radius: 32px;
-            padding: 28px;
-            border: 1px solid rgba(255,255,255,0.15);
-            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            border-radius: 28px;
+            padding: 24px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
         }
+        
         h1 {
             text-align: center;
-            font-size: 24px;
-            margin-bottom: 24px;
-            letter-spacing: 2px;
+            font-size: 26px;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, #ffd89b, #c7e9fb);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
+        
+        .subtitle {
+            text-align: center;
+            font-size: 14px;
+            opacity: 0.7;
+            margin-bottom: 24px;
+        }
+        
         .tabs {
             display: flex;
             gap: 12px;
-            margin-bottom: 28px;
+            margin-bottom: 24px;
         }
+        
         .tab {
             flex: 1;
             padding: 12px;
@@ -48,44 +65,137 @@
             font-size: 15px;
             font-weight: bold;
             cursor: pointer;
-            background: rgba(255,255,255,0.08);
+            background: rgba(255, 255, 255, 0.08);
             color: #aaa;
-            transition: 0.3s;
+            transition: all 0.3s ease;
         }
+        
         .tab.active {
             background: linear-gradient(135deg, #7c3aed, #a855f7);
             color: white;
-            box-shadow: 0 4px 12px rgba(124,58,237,0.4);
+            box-shadow: 0 4px 12px rgba(124, 58, 237, 0.4);
         }
+        
+        .section-title {
+            font-size: 20px;
+            font-weight: bold;
+            margin: 20px 0 16px 0;
+            padding-bottom: 8px;
+            border-bottom: 2px solid rgba(139, 92, 246, 0.5);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .donate-card {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 20px;
+            padding: 18px;
+            margin-bottom: 16px;
+            border-left: 4px solid;
+            transition: transform 0.2s;
+        }
+        
+        .donate-card:hover {
+            transform: translateX(5px);
+        }
+        
+        .donate-header {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        
+        .donate-price {
+            display: inline-block;
+            background: rgba(139, 92, 246, 0.3);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: normal;
+        }
+        
+        .donate-features {
+            list-style: none;
+            padding-left: 20px;
+            margin: 12px 0;
+        }
+        
+        .donate-features li {
+            margin-bottom: 6px;
+            padding-left: 20px;
+            position: relative;
+            font-size: 14px;
+        }
+        
+        .donate-features li::before {
+            content: "▸";
+            position: absolute;
+            left: 0;
+            color: #a855f7;
+        }
+        
+        .command {
+            display: inline-block;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 2px 8px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 12px;
+            color: #a855f7;
+            margin: 2px;
+        }
+        
+        .contact {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(168, 85, 247, 0.1));
+            border-radius: 20px;
+            padding: 20px;
+            text-align: center;
+            margin-top: 20px;
+            border: 1px solid rgba(139, 92, 246, 0.3);
+        }
+        
+        .contact a {
+            color: #a855f7;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 18px;
+        }
+        
         .rule-block {
             margin-bottom: 24px;
         }
+        
         .rule-title {
             font-size: 18px;
             font-weight: bold;
-            margin-bottom: 14px;
-            padding-bottom: 8px;
-            border-bottom: 1px solid rgba(255,255,255,0.15);
-            color: #c084fc;
+            margin-bottom: 12px;
+            color: #a855f7;
         }
+        
         .rule-list {
             list-style: none;
-            padding-left: 8px;
+            padding-left: 16px;
         }
+        
         .rule-list li {
-            margin-bottom: 12px;
-            padding-left: 24px;
+            margin-bottom: 8px;
+            padding-left: 20px;
             position: relative;
-            line-height: 1.45;
             font-size: 14px;
-            opacity: 0.9;
         }
+        
         .rule-list li::before {
-            content: "▸";
+            content: "•";
             position: absolute;
             left: 4px;
             color: #a855f7;
         }
+        
         .badge {
             display: inline-block;
             padding: 2px 10px;
@@ -94,54 +204,62 @@
             font-weight: bold;
             margin-left: 8px;
         }
-        .badge-ban { background: rgba(239,68,68,0.2); color: #f87171; border: 0.5px solid #f87171; }
-        .badge-mute { background: rgba(245,158,11,0.2); color: #fbbf24; border: 0.5px solid #fbbf24; }
-        .badge-warn { background: rgba(234,179,8,0.2); color: #fde047; border: 0.5px solid #fde047; }
-        .badge-ip { background: rgba(139,92,246,0.2); color: #a78bfa; border: 0.5px solid #a78bfa; }
+        
+        .badge-ban { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+        .badge-mute { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+        
         .footer {
             text-align: center;
-            padding: 20px 0 8px;
+            padding: 16px;
             font-size: 12px;
             opacity: 0.6;
-            border-top: 1px solid rgba(255,255,255,0.1);
-            margin-top: 16px;
         }
+        
         hr {
             margin: 20px 0;
             border: none;
             height: 1px;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
         }
-        @media (max-width: 500px) {
-            .card { padding: 20px; }
-            h1 { font-size: 20px; }
-            .tab { padding: 10px; font-size: 13px; }
+        
+        @media (max-width: 550px) {
+            .card { padding: 16px; }
+            h1 { font-size: 22px; }
+            .donate-header { font-size: 18px; }
+        }
+        
+        .gradient-text {
+            font-weight: bold;
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
     </style>
 </head>
 <body>
 <div class="container">
     <div class="card">
-        <h1>✨ LOSTEARTH ✨<br>СВОД ПРАВИЛ</h1>
+        <h1>✨ LOSTEARTH ✨</h1>
+        <div class="subtitle">Мирный режим по заявкам</div>
         
         <div class="tabs">
-            <button class="tab active" onclick="showTab('peaceful')">🌙 МИРНЫЙ</button>
-            <button class="tab" onclick="showTab('smp')">⚡ SMP</button>
+            <button class="tab active" onclick="showTab('rules')">📜 ПРАВИЛА</button>
+            <button class="tab" onclick="showTab('donates')">💎 ДОНАТЫ</button>
         </div>
-
-        <!-- МИРНЫЙ РЕЖИМ -->
-        <div id="peaceful">
+        
+        <!-- ПРАВИЛА -->
+        <div id="rules-tab">
             <div class="rule-block">
                 <div class="rule-title">◈ ОБЩИЕ ПРАВИЛА</div>
                 <ul class="rule-list">
                     <li><strong>0.</strong> Администрация имеет высшую силу <span class="badge badge-ban">ABSOLUTE</span></li>
                     <li><strong>1.</strong> Заходя на проект, вы соглашаетесь с правилами</li>
-                    <li><strong>2.</strong> Продажа аккаунтов — <strong>ЗАПРЕЩЕНА</strong> <span class="badge badge-ban">БАН</span></li>
-                    <li><strong>3.</strong> Взлом аккаунтов — <strong>ЗАПРЕЩЁН</strong> <span class="badge badge-ban">БАН</span></li>
-                    <li><strong>4.</strong> Реклама других серверов <span class="badge badge-ip">БАН IP</span></li>
+                    <li><strong>2.</strong> Продажа аккаунтов — ЗАПРЕЩЕНА <span class="badge badge-ban">БАН</span></li>
+                    <li><strong>3.</strong> Взлом аккаунтов — ЗАПРЕЩЁН <span class="badge badge-ban">БАН</span></li>
+                    <li><strong>4.</strong> Реклама других серверов <span class="badge badge-ban">БАН IP</span></li>
                 </ul>
             </div>
-
+            
             <div class="rule-block">
                 <div class="rule-title">◈ ЗАПРЕЩЁННОЕ ПО</div>
                 <ul class="rule-list">
@@ -152,18 +270,18 @@
                     <li>Боты / твинки <span class="badge badge-ban">БАН</span></li>
                 </ul>
             </div>
-
+            
             <div class="rule-block">
                 <div class="rule-title">◈ НАКАЗАНИЯ</div>
                 <ul class="rule-list">
-                    <li>Подстрекательство <span class="badge badge-warn">ПРЕДУПРЕЖДЕНИЕ</span></li>
-                    <li>Помеха работе модерации <span class="badge badge-warn">ПРЕДУПРЕЖДЕНИЕ</span></li>
+                    <li>Подстрекательство <span class="badge">ПРЕДУПРЕЖДЕНИЕ</span></li>
+                    <li>Помеха работе модерации <span class="badge">ПРЕДУПРЕЖДЕНИЕ</span></li>
                     <li>Лаг-машины <span class="badge badge-ban">БАН</span></li>
                     <li>Оскорбление администрации <span class="badge badge-mute">МУТ</span></li>
                     <li>Подкаты к модерации <span class="badge badge-mute">МУТ</span></li>
                 </ul>
             </div>
-
+            
             <div class="rule-block">
                 <div class="rule-title">◈ НА СПАВНЕ</div>
                 <ul class="rule-list">
@@ -172,76 +290,159 @@
                     <li>Разрушение построек <span class="badge badge-ban">БАН</span></li>
                 </ul>
             </div>
-
+            
             <hr>
-
+            
             <div class="rule-block">
-                <div class="rule-title">◈ ОСОБЕННОСТИ МИРНОГО</div>
+                <div class="rule-title">◈ ОСОБЕННОСТИ МИРНОГО РЕЖИМА</div>
                 <ul class="rule-list">
-                    <li>✦ ПВП только по согласию</li>
-                    <li>✦ Территории защищены</li>
-                    <li>✦ Доступ по заявкам</li>
+                    <li>✅ ПВП только по согласию</li>
+                    <li>✅ Территории защищены от гриферства</li>
+                    <li>✅ Доступ по заявкам</li>
                 </ul>
             </div>
         </div>
-
-        <!-- SMP РЕЖИМ -->
-        <div id="smp" style="display:none">
-            <div class="rule-block">
-                <div class="rule-title">◈ РАЗРЕШЕНО</div>
-                <ul class="rule-list">
-                    <li>✦ PVP в любом месте</li>
-                    <li>✦ Воровство ресурсов</li>
-                    <li>✦ Рейды на базы</li>
-                    <li>✦ Уничтожение построек</li>
+        
+        <!-- ДОНАТЫ -->
+        <div id="donates-tab" style="display: none;">
+            <div class="section-title">
+                <span>🍃</span> ДРУИД — 25 грн / 50 руб
+            </div>
+            <div class="donate-card" style="border-left-color: #38EF7D;">
+                <div class="donate-header">
+                    <span style="background: linear-gradient(135deg, #38EF7D, #1A9B51); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: bold;">[Друид]</span>
+                    <span class="donate-price">🍃 Префикс в чате и табе</span>
+                </div>
+                <ul class="donate-features">
+                    <li><span class="command">/anvil</span> — наковальня</li>
+                    <li><span class="command">/wb</span> — верстак</li>
+                    <li><span class="command">/ec</span> — эндер-сундук</li>
+                    <li><span class="command">/kit druid</span> — набор друида</li>
                 </ul>
             </div>
-
-            <div class="rule-block">
-                <div class="rule-title">◈ ЗАПРЕЩЕНО</div>
-                <ul class="rule-list">
-                    <li>✧ Читы и X-Ray <span class="badge badge-ban">БАН</span></li>
-                    <li>✧ Лаг-машины <span class="badge badge-ban">БАН</span></li>
-                    <li>✧ Дюп предметов <span class="badge badge-ban">БАН</span></li>
-                    <li>✧ Оскорбления в чате <span class="badge badge-mute">МУТ</span></li>
+            
+            <div class="section-title">
+                <span>🔮</span> ОРАКУЛ — 50 грн / 100 руб
+            </div>
+            <div class="donate-card" style="border-left-color: #A846FF;">
+                <div class="donate-header">
+                    <span style="background: linear-gradient(135deg, #A846FF, #3FA9FF); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: bold;">[Оракул]</span>
+                    <span class="donate-price">🔮 2 дома</span>
+                </div>
+                <ul class="donate-features">
+                    <li><span class="command">/heal</span> — лечение</li>
+                    <li><span class="command">/feed</span> — насыщение</li>
+                    <li><span class="command">/anvil</span>, <span class="command">/wb</span>, <span class="command">/ec</span></li>
+                    <li><span class="command">/kit oracul</span> — набор оракула</li>
                 </ul>
             </div>
-
+            
+            <div class="section-title">
+                <span>👑</span> МОНАРХ — 100 грн / 200 руб
+            </div>
+            <div class="donate-card" style="border-left-color: #FFD400;">
+                <div class="donate-header">
+                    <span style="background: linear-gradient(135deg, #FF0000, #FFD400); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: bold;">[Монарх]</span>
+                    <span class="donate-price">👑 2 дома</span>
+                </div>
+                <ul class="donate-features">
+                    <li><span class="command">/heal</span> (себе и другим)</li>
+                    <li><span class="command">/feed</span> (себе и другим)</li>
+                    <li><span class="command">/anvil</span>, <span class="command">/wb</span>, <span class="command">/ec</span></li>
+                    <li><span class="command">/kit monarh</span> — набор монарха</li>
+                </ul>
+            </div>
+            
+            <div class="section-title">
+                <span>👼</span> ХЕРУВИМ — 150 грн / 300 руб
+            </div>
+            <div class="donate-card" style="border-left-color: #FF66FF;">
+                <div class="donate-header">
+                    <span style="background: linear-gradient(135deg, #FFFFFF, #FF66FF); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: bold;">[Херувим]</span>
+                    <span class="donate-price">👼 Полет, 2 дома</span>
+                </div>
+                <ul class="donate-features">
+                    <li><span class="command">/fly</span> — полёт</li>
+                    <li><span class="command">/ptime</span> — личное время</li>
+                    <li><span class="command">/heal</span>, <span class="command">/feed</span> (себе и другим)</li>
+                    <li><span class="command">/anvil</span>, <span class="command">/wb</span>, <span class="command">/ec</span></li>
+                    <li><span class="command">/kit heruvim</span> — набор херувима</li>
+                </ul>
+            </div>
+            
+            <div class="section-title">
+                <span>🏛️</span> АРХОНТ — 200 грн / 400 руб
+            </div>
+            <div class="donate-card" style="border-left-color: #C0C0C0;">
+                <div class="donate-header">
+                    <span style="background: linear-gradient(135deg, #C0C0C0, #808080); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: bold;">[Архонт]</span>
+                    <span class="donate-price">🏛️ Полет, 3 дома</span>
+                </div>
+                <ul class="donate-features">
+                    <li><span class="command">/fly</span> — полёт</li>
+                    <li><span class="command">/ptime</span> — личное время</li>
+                    <li><span class="command">/heal</span>, <span class="command">/feed</span> (себе и другим)</li>
+                    <li><span class="command">/anvil</span>, <span class="command">/wb</span>, <span class="command">/ec</span></li>
+                    <li><span class="command">/kit arhont</span> — набор архонта</li>
+                </ul>
+            </div>
+            
+            <div class="section-title">
+                <span>🌌</span> СЕРАФИМ — 300 грн / 600 руб
+            </div>
+            <div class="donate-card" style="border-left-color: #FFD700;">
+                <div class="donate-header">
+                    <span style="background: linear-gradient(135deg, #FFD700, #FF69B4); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: bold;">[Серафим]</span>
+                    <span class="donate-price">🌌 Полет, 3 дома</span>
+                </div>
+                <ul class="donate-features">
+                    <li><span class="command">/fly</span> — полёт</li>
+                    <li><span class="command">/ptime</span> — личное время</li>
+                    <li><span class="command">/heal</span>, <span class="command">/feed</span> (себе и другим)</li>
+                    <li><span class="command">/anvil</span>, <span class="command">/wb</span>, <span class="command">/ec</span></li>
+                    <li><span class="command">/kit serafim</span> — набор серафима</li>
+                </ul>
+            </div>
+            
             <hr>
-
-            <div class="rule-block">
-                <div class="rule-title">◈ ВАЖНО</div>
-                <ul class="rule-list">
-                    <li>✦ Спавн — безопасная зона</li>
-                    <li>✦ Читеры банятся без аппеляции</li>
-                </ul>
+            
+            <div class="contact">
+                <div style="font-size: 18px; margin-bottom: 12px;">💎 Принимаю любой валютой</div>
+                <div style="margin-bottom: 12px;">🇺🇦 Гривны (₴) • 🇷🇺 Рубли (₽)</div>
+                <div>📩 <a href="https://t.me/pelmewki379">@pelmewki379</a></div>
+                <div style="margin-top: 12px; font-size: 12px; opacity: 0.7;">Для уточнения деталей писать в ЛС</div>
             </div>
         </div>
-
+        
         <div class="footer">
-            📍 По вопросам: @pelmewki379<br>
-            ⚡ Приятной игры на LostEarth!
+            🐱 По всем вопросам: @pelmewki379<br>
+            🐰 Приятной игры на LostEarth!
         </div>
     </div>
 </div>
 
 <script>
-    function showTab(tab) {
-        const peaceful = document.getElementById('peaceful');
-        const smp = document.getElementById('smp');
+    function showTab(tabName) {
+        const rulesTab = document.getElementById('rules-tab');
+        const donatesTab = document.getElementById('donates-tab');
         const tabs = document.querySelectorAll('.tab');
         
-        if (tab === 'peaceful') {
-            peaceful.style.display = 'block';
-            smp.style.display = 'none';
+        if (tabName === 'rules') {
+            rulesTab.style.display = 'block';
+            donatesTab.style.display = 'none';
             tabs[0].classList.add('active');
             tabs[1].classList.remove('active');
         } else {
-            peaceful.style.display = 'none';
-            smp.style.display = 'block';
+            rulesTab.style.display = 'none';
+            donatesTab.style.display = 'block';
             tabs[0].classList.remove('active');
             tabs[1].classList.add('active');
         }
+    }
+    
+    if (window.Telegram && Telegram.WebApp) {
+        Telegram.WebApp.ready();
+        Telegram.WebApp.expand();
     }
 </script>
 </body>
