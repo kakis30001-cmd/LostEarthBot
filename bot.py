@@ -30,13 +30,8 @@ dp = Dispatcher(storage=MemoryStorage())
 flask_app = Flask(__name__, static_folder='static')
 
 # Инициализация Gemini
-ai_client = None
-if GEMINI_API_KEY:
-    try:
-        ai_client = genai.Client(api_key=GEMINI_API_KEY)
-        print("✅ Gemini AI подключен!")
-    except Exception as e:
-        print(f"❌ Ошибка Gemini: {e}")
+ai_client = genai.Client(api_key=GEMINI_API_KEY)
+print("✅ Gemini AI подключен!")
 
 @flask_app.route('/')
 def index():
@@ -95,31 +90,25 @@ APPLY_URL = f"{BASE_URL}/apply"
 online_cache = {}
 last_update = {}
 
-# ========== ФУНКЦИЯ ПОЛУЧЕНИЯ ОНЛАЙНА (РАБОЧАЯ) ==========
+# ========== ФУНКЦИЯ ПОЛУЧЕНИЯ ОНЛАЙНА ==========
 async def get_minecraft_online():
-    """Получает реальный онлайн сервера"""
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(3)
         sock.connect((SERVER["java_ip"], SERVER["java_port"]))
         
-        # Отправляем handshake
         handshake = bytearray()
-        handshake += b'\x00'  # packet id
-        handshake += b'\x04\x00\x00\x00'  # protocol version (754)
+        handshake += b'\x00'
+        handshake += b'\x04\x00\x00\x00'
         host_bytes = SERVER["java_ip"].encode('utf-8')
         handshake += bytes([len(host_bytes)]) + host_bytes
         handshake += struct.pack('>H', SERVER["java_port"])
-        handshake += b'\x01'  # next state: status
+        handshake += b'\x01'
         
-        # Отправляем длину и данные
         sock.send(struct.pack('>i', len(handshake)))
         sock.send(handshake)
+        sock.send(b'\x00\x00')
         
-        # Request
-        sock.send(b'\x00\x00')  # length 0, packet id 0
-        
-        # Читаем ответ
         data = b''
         while len(data) < 5:
             data += sock.recv(1024)
@@ -132,20 +121,15 @@ async def get_minecraft_online():
         
         sock.close()
         
-        # Парсим JSON
-        data = data[1:]  # пропускаем packet id
+        data = data[1:]
         json_data = json.loads(data.decode('utf-8'))
         players = json_data.get("players", {})
-        online = players.get("online", 0)
-        max_players = players.get("max", 0)
-        
-        return online, max_players
+        return players.get("online", 0), players.get("max", 0)
     except Exception as e:
-        print(f"Ошибка получения онлайна: {e}")
+        print(f"Ошибка онлайна: {e}")
         return 0, 0
 
 async def get_server_online():
-    """Кэшированный онлайн"""
     now = datetime.now().timestamp()
     if "online" in last_update and now - last_update["online"] < 30:
         return online_cache.get("online", 0), online_cache.get("max", 0)
@@ -158,34 +142,21 @@ async def get_server_online():
 
 # ========== ЭНДЕРИЯ (GEMINI) ==========
 async def get_enderia_response(user_message, username):
-    if not ai_client:
-        return None
-    
     try:
-        # Получаем РЕАЛЬНЫЙ онлайн
         online, max_players = await get_server_online()
-        
-        current_time = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
         
         full_instruction = f"""{ENDERIA_PROMPT}
 
-ВАЖНАЯ ИНФОРМАЦИЯ ПРЯМО СЕЙЧАС:
-- Текущая дата и время: {current_time}
-- Реальный онлайн на сервере LostEarth ПРЯМО СЕЙЧАС: {online} игроков (максимум {max_players})
-- Если игрок спрашивает про онлайн - назови точную цифру {online}
-- Если онлайн 0 - скажи что сервер пустует, можно заходить первым
+СЕЙЧАС НА СЕРВЕРЕ:
+Онлайн: {online} игроков из {max_players}
+Время: {datetime.now().strftime("%H:%M:%S")}
 
-Игрок {username} написал: "{user_message}"
+Игрок {username} спросил: "{user_message}"
 
-ОТВЕТЬ КАК ЭНДЕРИЯ:
-- Обязательно используй премиум эмодзи (котик танцует, аниме, зайчик)
-- Отвечай коротко и мило
-- Если спрашивают про онлайн - скажи что сейчас {online} игроков
-- Будь живой и эмоциональной
-- Не пиши длинные тексты, 2-3 предложения максимум"""
+Ответь как Эндерия. Обязательно используй премиум эмодзи. Отвечай коротко и мило (2-4 предложения)."""
 
         response = ai_client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-2.0-flash-exp",
             contents=user_message,
             config=ai_types.GenerateContentConfig(
                 system_instruction=full_instruction,
@@ -193,9 +164,7 @@ async def get_enderia_response(user_message, username):
             ),
         )
         
-        if response.text:
-            return response.text
-        return None
+        return response.text if response.text else None
         
     except Exception as e:
         print(f"Gemini ошибка: {e}")
@@ -205,7 +174,7 @@ def should_respond_to_enderia(message_text):
     if not message_text:
         return False
     text_lower = message_text.lower()
-    keywords = ["эндер", "эндерия", "энди", "эндерка", "ендер", "энд"]
+    keywords = ["эндер", "эндерия", "энди", "ендер"]
     return any(keyword in text_lower for keyword in keywords)
 
 # ========== КЛАВИАТУРЫ ==========
@@ -268,19 +237,17 @@ async def start_cmd(message: Message):
     text = (
         f"{emoji(EMOJI['start'], '✨')} <b>Добро пожаловать на {SERVER['name']}</b>\n\n"
         f"{emoji(EMOJI['house'], '🏠')} <b>{SERVER['mode']}</b>\n\n"
-        f"{emoji(EMOJI['cat_ok'], '🐱')} <b>Я Эндерия - напиши моё имя, и я отвечу с премиум эмодзи!</b>"
+        f"{emoji(EMOJI['cat_ok'], '🐱')} <b>Я Эндерия - напиши моё имя, и я отвечу!</b>"
     )
     await message.answer(text, parse_mode="HTML", reply_markup=get_main_keyboard())
 
 @dp.message(Command("online"))
 async def cmd_online(message: Message):
     online, max_players = await get_server_online()
-    status = "🟢 РАБОТАЕТ" if online > 0 else "🔴 ОФФЛАЙН"
     await message.answer(
         f"{emoji(EMOJI['joystick'], '📊')} <b>Онлайн LostEarth</b>\n\n"
-        f"Статус: {status}\n"
-        f"Java: {online}/{max_players}\n\n"
-        f"{emoji(EMOJI['rabbit_fly'], '🐰')} <i>Присоединяйся к игре!</i>",
+        f"Сейчас играет: <b>{online}</b> игроков\n"
+        f"Максимум: <b>{max_players}</b>",
         parse_mode="HTML"
     )
 
@@ -297,10 +264,7 @@ async def handle_message(message: Message):
         if response:
             await message.reply(response, parse_mode="HTML")
         else:
-            await message.reply(
-                f"{emoji(EMOJI['cat_surprised'], '😲')} Телепортация сломалась... Попробуй ещё раз! {emoji(EMOJI['cat_kiss'], '💜')}",
-                parse_mode="HTML"
-            )
+            print(f"⚠️ Не удалось получить ответ от Gemini")
 
 # ========== КОЛБЭКИ ==========
 @dp.callback_query(lambda c: c.data == "menu_main")
@@ -312,7 +276,7 @@ async def menu_main(callback: CallbackQuery):
 @dp.callback_query(lambda c: c.data == "menu_ip")
 async def menu_ip(callback: CallbackQuery):
     await callback.message.edit_text(
-        f"{emoji(EMOJI['cat_glasses'], '🔄')} <i>Получаю информацию...</i>",
+        f"{emoji(EMOJI['cat_glasses'], '🔄')} <i>Загрузка...</i>",
         parse_mode="HTML"
     )
     
@@ -334,7 +298,7 @@ async def menu_ip(callback: CallbackQuery):
 ├ IP: <code>{SERVER['bedrock_ip']}</code>
 └ Порт: <code>{SERVER['bedrock_port']}</code>
 
-{emoji(EMOJI['rabbit_fly'], '🐰')} <i>Приятной игры на LostEarth!</i>
+{emoji(EMOJI['rabbit_fly'], '🐰')} <i>Приятной игры!</i>
 """
     await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_ip_keyboard())
     await callback.answer()
@@ -362,7 +326,7 @@ async def refresh_online(callback: CallbackQuery):
 ├ IP: <code>{SERVER['bedrock_ip']}</code>
 └ Порт: <code>{SERVER['bedrock_port']}</code>
 
-{emoji(EMOJI['rabbit_fly'], '🐰')} <i>Приятной игры на LostEarth!</i>
+{emoji(EMOJI['rabbit_fly'], '🐰')} <i>Приятной игры!</i>
 """
     await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_ip_keyboard())
     await callback.answer(f"{emoji(EMOJI['check'], '✅')} Обновлено!")
@@ -408,9 +372,9 @@ async def menu_enderia(callback: CallbackQuery):
 {emoji(EMOJI['cat_ok'], '🐱')} Я девушка-эндермен, хранительница Края!
 
 {emoji(EMOJI['cat_glasses'], '😎')} <b>Как ко мне обратиться:</b>
-Напиши: Эндер, Эндерия, Энди, Энд, Ендер
+Напиши: Эндер, Эндерия, Энди, Ендер
 
-{emoji(EMOJI['rabbit_fly'], '🐰')} <i>Просто упомяни моё имя в сообщении, и я отвечу с премиум эмодзи!</i>
+{emoji(EMOJI['rabbit_fly'], '🐰')} <i>Просто напиши моё имя - я отвечу!</i>
 """
     await callback.message.edit_text(
         text, 
@@ -423,14 +387,13 @@ async def menu_enderia(callback: CallbackQuery):
 
 # ========== ЗАПУСК ==========
 async def main():
-    flask_thread = Thread(target=run_flask, daemon=True)
-    flask_thread.start()
+    thread = Thread(target=run_flask, daemon=True)
+    thread.start()
     
     print("=" * 50)
     print("🚀 БОТ LOSTEARTH ЗАПУЩЕН")
     print(f"📱 Правила: {RULES_URL}")
     print(f"📝 Заявка: {APPLY_URL}")
-    print("💜 Эндерия использует ПРЕМИУМ ЭМОДЗИ и реальный ОНЛАЙН!")
     print("=" * 50)
     
     await dp.start_polling(bot)
