@@ -4,12 +4,14 @@ import struct
 import json
 from datetime import datetime
 import os
+import random
 from threading import Thread
 
 from flask import Flask, send_from_directory
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import CommandStart, Command
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+from aiogram.utils.chat_action import ChatActionSender
 from aiogram.fsm.storage.memory import MemoryStorage
 from google import genai
 from google.genai import types as ai_types
@@ -30,8 +32,13 @@ dp = Dispatcher(storage=MemoryStorage())
 flask_app = Flask(__name__, static_folder='static')
 
 # Инициализация Gemini
-ai_client = genai.Client(api_key=GEMINI_API_KEY)
-print("✅ Gemini AI подключен!")
+ai_client = None
+if GEMINI_API_KEY:
+    try:
+        ai_client = genai.Client(api_key=GEMINI_API_KEY)
+        print("✅ Gemini AI подключен!")
+    except Exception as e:
+        print(f"❌ Ошибка Gemini: {e}")
 
 @flask_app.route('/')
 def index():
@@ -90,73 +97,84 @@ APPLY_URL = f"{BASE_URL}/apply"
 online_cache = {}
 last_update = {}
 
-# ========== ФУНКЦИЯ ПОЛУЧЕНИЯ ОНЛАЙНА ==========
-async def get_minecraft_online():
+# ========== ФУНКЦИИ MINECRAFT ==========
+async def get_java_status(ip: str, port: int = 25565, timeout: int = 3):
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(3)
-        sock.connect((SERVER["java_ip"], SERVER["java_port"]))
+        sock.settimeout(timeout)
+        sock.connect((ip, port))
         
         handshake = bytearray()
         handshake += b'\x00'
         handshake += b'\x04\x00\x00\x00'
-        host_bytes = SERVER["java_ip"].encode('utf-8')
+        host_bytes = ip.encode('utf-8')
         handshake += bytes([len(host_bytes)]) + host_bytes
-        handshake += struct.pack('>H', SERVER["java_port"])
+        handshake += struct.pack('>H', port)
         handshake += b'\x01'
         
-        sock.send(struct.pack('>i', len(handshake)))
+        value = len(handshake)
+        while True:
+            if value & ~0x7F == 0:
+                sock.send(bytes([value]))
+                break
+            sock.send(bytes([(value & 0x7F) | 0x80]))
+            value >>= 7
+        
         sock.send(handshake)
         sock.send(b'\x00\x00')
         
+        result = 0
+        shift = 0
+        while True:
+            byte = sock.recv(1)[0]
+            result |= (byte & 0x7F) << shift
+            shift += 7
+            if not (byte & 0x80):
+                length = result
+                break
+        
         data = b''
-        while len(data) < 5:
-            data += sock.recv(1024)
-        
-        length = struct.unpack('>i', data[:4])[0]
-        data = data[4:]
-        
         while len(data) < length:
             data += sock.recv(1024)
-        
         sock.close()
         
         data = data[1:]
         json_data = json.loads(data.decode('utf-8'))
         players = json_data.get("players", {})
-        return players.get("online", 0), players.get("max", 0)
+        return {"online": players.get("online", 0), "max": players.get("max", 0)}
     except Exception as e:
-        print(f"Ошибка онлайна: {e}")
-        return 0, 0
+        print(f"Ошибка получения онлайна: {e}")
+        return {"online": 0, "max": 0}
 
 async def get_server_online():
     now = datetime.now().timestamp()
-    if "online" in last_update and now - last_update["online"] < 30:
-        return online_cache.get("online", 0), online_cache.get("max", 0)
-    
-    online, max_players = await get_minecraft_online()
-    online_cache["online"] = online
-    online_cache["max"] = max_players
-    last_update["online"] = now
-    return online, max_players
+    if "java" in last_update and now - last_update["java"] < 30:
+        return online_cache
+    java_status = await get_java_status(SERVER["java_ip"], SERVER["java_port"])
+    online_cache["java"] = java_status
+    last_update["java"] = now
+    return online_cache
 
 # ========== ЭНДЕРИЯ (GEMINI) ==========
 async def get_enderia_response(user_message, username):
+    if not ai_client:
+        return None
+    
     try:
-        online, max_players = await get_server_online()
+        current_time = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
+        online = await get_server_online()
+        java_online = online.get("java", {}).get("online", 0)
         
         full_instruction = f"""{ENDERIA_PROMPT}
 
-СЕЙЧАС НА СЕРВЕРЕ:
-Онлайн: {online} игроков из {max_players}
-Время: {datetime.now().strftime("%H:%M:%S")}
+Текущая дата и время: {current_time}
+Сейчас на сервере онлайн: {java_online} игроков.
+Игрок {username} написал: "{user_message}"
 
-Игрок {username} спросил: "{user_message}"
-
-Ответь как Эндерия. Обязательно используй премиум эмодзи. Отвечай коротко и мило (2-4 предложения)."""
+Ответь как Эндерия (мило, с премиум эмодзи, коротко):"""
 
         response = ai_client.models.generate_content(
-            model="gemini-2.0-flash-exp",
+            model="gemini-2.5-flash",
             contents=user_message,
             config=ai_types.GenerateContentConfig(
                 system_instruction=full_instruction,
@@ -164,7 +182,9 @@ async def get_enderia_response(user_message, username):
             ),
         )
         
-        return response.text if response.text else None
+        if response.text:
+            return response.text
+        return None
         
     except Exception as e:
         print(f"Gemini ошибка: {e}")
@@ -174,7 +194,7 @@ def should_respond_to_enderia(message_text):
     if not message_text:
         return False
     text_lower = message_text.lower()
-    keywords = ["эндер", "эндерия", "энди", "ендер"]
+    keywords = ["эндер", "эндерия", "энди", "эндерка", "ендер", "энд"]
     return any(keyword in text_lower for keyword in keywords)
 
 # ========== КЛАВИАТУРЫ ==========
@@ -243,11 +263,12 @@ async def start_cmd(message: Message):
 
 @dp.message(Command("online"))
 async def cmd_online(message: Message):
-    online, max_players = await get_server_online()
+    online = await get_server_online()
+    java_online = online.get("java", {}).get("online", 0)
+    java_max = online.get("java", {}).get("max", 0)
     await message.answer(
         f"{emoji(EMOJI['joystick'], '📊')} <b>Онлайн LostEarth</b>\n\n"
-        f"Сейчас играет: <b>{online}</b> игроков\n"
-        f"Максимум: <b>{max_players}</b>",
+        f"Java: {java_online}/{java_max}",
         parse_mode="HTML"
     )
 
@@ -264,7 +285,10 @@ async def handle_message(message: Message):
         if response:
             await message.reply(response, parse_mode="HTML")
         else:
-            print(f"⚠️ Не удалось получить ответ от Gemini")
+            await message.reply(
+                f"{emoji(EMOJI['cat_surprised'], '😲')} Телепортация сломалась... Попробуй ещё раз!",
+                parse_mode="HTML"
+            )
 
 # ========== КОЛБЭКИ ==========
 @dp.callback_query(lambda c: c.data == "menu_main")
@@ -280,8 +304,11 @@ async def menu_ip(callback: CallbackQuery):
         parse_mode="HTML"
     )
     
-    online, max_players = await get_server_online()
-    status = "🟢 ONLINE" if online > 0 else "🔴 OFFLINE"
+    online = await get_server_online()
+    java_online = online.get("java", {}).get("online", 0)
+    java_max = online.get("java", {}).get("max", 0)
+    
+    status = "🟢 ONLINE" if java_online > 0 else "🔴 OFFLINE"
     
     text = f"""
 {emoji(EMOJI['crown'], '👑')} <b>LOSTEARTH</b> | {status}
@@ -289,16 +316,16 @@ async def menu_ip(callback: CallbackQuery):
 {emoji(EMOJI['house'], '🏠')} <i>{SERVER['mode']}</i>
 
 {emoji(EMOJI['joystick'], '💻')} <b>JAVA EDITION</b>
-├ IP: <code>{SERVER['java_ip']}</code>
-├ Порт: <code>{SERVER['java_port']}</code>
-├ Версия: <code>{SERVER['java_versions']}</code>
-└ Онлайн: <b>{online}/{max_players}</b>
+- IP: <code>{SERVER['java_ip']}</code>
+- Порт: <code>{SERVER['java_port']}</code>
+- Версия: <code>{SERVER['java_versions']}</code>
+- Онлайн: <b>{java_online}/{java_max}</b>
 
-📱 <b>BEDROCK EDITION</b>
-├ IP: <code>{SERVER['bedrock_ip']}</code>
-└ Порт: <code>{SERVER['bedrock_port']}</code>
+<b>BEDROCK EDITION</b>
+- IP: <code>{SERVER['bedrock_ip']}</code>
+- Порт: <code>{SERVER['bedrock_port']}</code>
 
-{emoji(EMOJI['rabbit_fly'], '🐰')} <i>Приятной игры!</i>
+{emoji(EMOJI['rabbit_fly'], '✨')} <i>Приятной игры!</i>
 """
     await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_ip_keyboard())
     await callback.answer()
@@ -308,8 +335,11 @@ async def refresh_online(callback: CallbackQuery):
     online_cache.clear()
     last_update.clear()
     
-    online, max_players = await get_server_online()
-    status = "🟢 ONLINE" if online > 0 else "🔴 OFFLINE"
+    online = await get_server_online()
+    java_online = online.get("java", {}).get("online", 0)
+    java_max = online.get("java", {}).get("max", 0)
+    
+    status = "🟢 ONLINE" if java_online > 0 else "🔴 OFFLINE"
     
     text = f"""
 {emoji(EMOJI['crown'], '👑')} <b>LOSTEARTH</b> | {status}
@@ -317,16 +347,16 @@ async def refresh_online(callback: CallbackQuery):
 {emoji(EMOJI['house'], '🏠')} <i>{SERVER['mode']}</i>
 
 {emoji(EMOJI['joystick'], '💻')} <b>JAVA EDITION</b>
-├ IP: <code>{SERVER['java_ip']}</code>
-├ Порт: <code>{SERVER['java_port']}</code>
-├ Версия: <code>{SERVER['java_versions']}</code>
-└ Онлайн: <b>{online}/{max_players}</b>
+- IP: <code>{SERVER['java_ip']}</code>
+- Порт: <code>{SERVER['java_port']}</code>
+- Версия: <code>{SERVER['java_versions']}</code>
+- Онлайн: <b>{java_online}/{java_max}</b>
 
-📱 <b>BEDROCK EDITION</b>
-├ IP: <code>{SERVER['bedrock_ip']}</code>
-└ Порт: <code>{SERVER['bedrock_port']}</code>
+<b>BEDROCK EDITION</b>
+- IP: <code>{SERVER['bedrock_ip']}</code>
+- Порт: <code>{SERVER['bedrock_port']}</code>
 
-{emoji(EMOJI['rabbit_fly'], '🐰')} <i>Приятной игры!</i>
+{emoji(EMOJI['rabbit_fly'], '✨')} <i>Приятной игры!</i>
 """
     await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_ip_keyboard())
     await callback.answer(f"{emoji(EMOJI['check'], '✅')} Обновлено!")
@@ -337,10 +367,10 @@ async def menu_premium(callback: CallbackQuery):
 {emoji(EMOJI['cat_dance'], '🐱')}{emoji(EMOJI['anime_dance'], '💃')}{emoji(EMOJI['rabbit_fly'], '🐰')} <b>ПРЕМИУМ ДОСТУП</b>
 
 {emoji(EMOJI['crown'], '👑')} <b>Привилегии:</b>
-• Эксклюзивные ивенты
-• Кастомные эмоции в чате
-• Приоритетная поддержка
-• Уникальный префикс
+- Эксклюзивные ивенты
+- Кастомные эмоции в чате
+- Приоритетная поддержка
+- Уникальный префикс
 
 {emoji(EMOJI['cat_ok'], '📋')} <b>ДОНАТЫ:</b>
 
@@ -372,9 +402,9 @@ async def menu_enderia(callback: CallbackQuery):
 {emoji(EMOJI['cat_ok'], '🐱')} Я девушка-эндермен, хранительница Края!
 
 {emoji(EMOJI['cat_glasses'], '😎')} <b>Как ко мне обратиться:</b>
-Напиши: Эндер, Эндерия, Энди, Ендер
+Напиши: Эндер, Эндерия, Энди, Энд, Ендер
 
-{emoji(EMOJI['rabbit_fly'], '🐰')} <i>Просто напиши моё имя - я отвечу!</i>
+{emoji(EMOJI['rabbit_fly'], '🐰')} <i>Просто упомяни моё имя в сообщении, и я отвечу!</i>
 """
     await callback.message.edit_text(
         text, 
@@ -387,13 +417,13 @@ async def menu_enderia(callback: CallbackQuery):
 
 # ========== ЗАПУСК ==========
 async def main():
-    thread = Thread(target=run_flask, daemon=True)
-    thread.start()
+    flask_thread = Thread(target=run_flask, daemon=True)
+    flask_thread.start()
     
     print("=" * 50)
-    print("🚀 БОТ LOSTEARTH ЗАПУЩЕН")
-    print(f"📱 Правила: {RULES_URL}")
-    print(f"📝 Заявка: {APPLY_URL}")
+    print("БОТ LOSTEARTH ЗАПУЩЕН")
+    print(f"Правила: {RULES_URL}")
+    print(f"Заявка: {APPLY_URL}")
     print("=" * 50)
     
     await dp.start_polling(bot)
