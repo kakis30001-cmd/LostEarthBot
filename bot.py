@@ -17,12 +17,14 @@ from google import genai
 from google.genai import types as ai_types
 from dotenv import load_dotenv
 
+from prompts import ENDERIA_PROMPT
+
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 if not BOT_TOKEN:
-    raise ValueError("BOT_TOKEN не найден!")
+    raise ValueError("❌ BOT_TOKEN не найден!")
 
 # ========== ИНИЦИАЛИЗАЦИЯ ==========
 bot = Bot(token=BOT_TOKEN)
@@ -30,78 +32,13 @@ dp = Dispatcher(storage=MemoryStorage())
 flask_app = Flask(__name__, static_folder='static')
 
 # Инициализация Gemini
-ai_client = genai.Client(api_key=GEMINI_API_KEY)
-
-# ========== СТИКЕРЫ ЭНДИ ==========
-ENDERIA_STICKERS = {
-    "heart": "5287606320541767403",
-    "hello_table": "5287669868877878494",
-    "think": "5285357625989441766",
-    "embarrassed": "5285522484014129703",
-    "cry": "5285421273109800150",
-    "laugh": "5287664117916670544",
-    "sleep": "5285207310724014574",
-    "angry": "5285260439469467427",
-}
-
-# ========== ТВОИ СПЕЦИАЛЬНЫЕ ЭМОДЗИ ДЛЯ ЭНДИ ==========
-ENDERIA_EMOJI = {
-    "cat_dance": "5359444458930718519",
-    "cat_ok": "5269476765369144234",
-    "cat_glasses": "5267088110717544191",
-    "cat_kiss": "6325462176660195024",
-    "cat_up": "5269698007724499331",
-    "cat_surprised": "5269649173946345008",
-    "rabbit_fly": "5217576088506505749",
-    "anime_dance": "6325682031741109665",
-    "heart": "5199427253225667842",
-}
-
-def endi_emoji(emoji_id: str, fallback: str = "✨") -> str:
-    return f'<tg-emoji emoji-id="{emoji_id}">{fallback}</tg-emoji>'
-
-# ========== ПРОМПТ ДЛЯ ЭНДЕРИИ ==========
-SYSTEM_PROMPT = f"""
-Ты — Эндерия (Энди), девушка-эндермен в чате Minecraft сервера LostEarth.
-
-ТВОЙ ХАРАКТЕР:
-- Ты добрая, загадочная, любишь фиолетовый цвет, жемчуг Края и телепортации
-- Ты немного вредная, но по-доброму
-- Обожаешь котиков, аниме и зайчиков
-- Ты живая, эмоциональная, но НЕ КРИЧИШЬ и НЕ ПАНИКУЕШЬ
-- Просто отвечаешь весело и с характером
-
-СТИЛЬ ОБЩЕНИЯ:
-- Обязательно используй эти эмодзи в ответах:
-  {endi_emoji(ENDERIA_EMOJI["cat_dance"], "🐱")} - танцующий котик
-  {endi_emoji(ENDERIA_EMOJI["cat_ok"], "🤙")} - котик одобряет
-  {endi_emoji(ENDERIA_EMOJI["cat_glasses"], "😎")} - котик в очках
-  {endi_emoji(ENDERIA_EMOJI["cat_kiss"], "😘")} - котик целует
-  {endi_emoji(ENDERIA_EMOJI["rabbit_fly"], "🐰")} - зайчик летит
-  {endi_emoji(ENDERIA_EMOJI["anime_dance"], "💃")} - аниме танцует
-- Любимые слова: телепортну, фиолетово, жемчужку
-- Обращайся к игроку по имени
-- Отвечай коротко, 2-4 предложения
-- Всегда добавляй хотя бы один эмодзи
-
-ИНФОРМАЦИЯ О СЕРВЕРЕ:
-- IP Java: 150.241.85.40:25565
-- IP Bedrock: 150.241.85.40:19132
-- Версия: 1.21-1.26+
-- Мирный режим: PvP только по согласию, доступ по заявкам
-- Админ: @pelmewki379
-
-ДОНАТЫ (все у @pelmewki379):
-- Друид 25грн/50руб: /anvil, /wb, /ec, /kit druid
-- Оракул 50грн/100руб: +/heal, /feed, 2 дома
-- Монарх 100грн/200руб: +хил других
-- Херувим 150грн/300руб: +/fly, /ptime
-- Архонт 200грн/400руб: +3 дома
-- Серафим 300грн/600руб: всё включено
-
-Твоя задача - быть душой сервера, помогать игрокам и делать чат уютным.
-Отвечай весело, используй эмодзи, но НЕ КРИЧИ и НЕ ПАНИКУЙ!
-"""
+ai_client = None
+if GEMINI_API_KEY:
+    try:
+        ai_client = genai.Client(api_key=GEMINI_API_KEY)
+        print("✅ Gemini AI подключен!")
+    except Exception as e:
+        print(f"❌ Ошибка Gemini: {e}")
 
 @flask_app.route('/')
 def index():
@@ -119,7 +56,7 @@ def run_flask():
     port = int(os.environ.get('PORT', 8080))
     flask_app.run(host='0.0.0.0', port=port)
 
-# ========== ОСТАЛЬНЫЕ ПРЕМИУМ ЭМОДЗИ ДЛЯ КНОПОК ==========
+# ========== ПРЕМИУМ ЭМОДЗИ ==========
 EMOJI = {
     "cat_up": "5269698007724499331",
     "cat_ok": "5269476765369144234",
@@ -205,7 +142,8 @@ async def get_java_status(ip: str, port: int = 25565, timeout: int = 3):
         json_data = json.loads(data.decode('utf-8'))
         players = json_data.get("players", {})
         return {"online": players.get("online", 0), "max": players.get("max", 0)}
-    except:
+    except Exception as e:
+        print(f"Ошибка получения онлайна: {e}")
         return {"online": 0, "max": 0}
 
 async def get_server_online():
@@ -217,46 +155,17 @@ async def get_server_online():
     last_update["java"] = now
     return online_cache
 
-# ========== ФУНКЦИЯ ДЛЯ ОТПРАВКИ СТИКЕРА ==========
-async def send_enderia_sticker(message: Message, emotion: str = None):
-    if emotion and emotion in ENDERIA_STICKERS:
-        sticker_id = ENDERIA_STICKERS[emotion]
-    else:
-        sticker_id = random.choice(list(ENDERIA_STICKERS.values()))
-    
-    await bot.send_sticker(chat_id=message.chat.id, sticker=sticker_id)
-
-def get_emotion_from_text(text):
-    text_lower = text.lower()
-    if any(w in text_lower for w in ["люблю", "сердеч", "❤", "💜"]):
-        return "heart"
-    if any(w in text_lower for w in ["смех", "хаха", "лол", "смеш"]):
-        return "laugh"
-    if any(w in text_lower for w in ["плач", "груст", "печал", "обид"]):
-        return "cry"
-    if any(w in text_lower for w in ["зл", "бес", "разозл"]):
-        return "angry"
-    if any(w in text_lower for w in ["дума", "хмм", "стран"]):
-        return "think"
-    if any(w in text_lower for w in ["спать", "сон", "устал"]):
-        return "sleep"
-    return None
-
-def should_respond_to_enderia(message_text):
-    if not message_text:
-        return False
-    text_lower = message_text.lower()
-    keywords = ["эндер", "эндерия", "энди", "эндерка", "ендер", "энд"]
-    return any(keyword in text_lower for keyword in keywords)
-
 # ========== ЭНДЕРИЯ (GEMINI) ==========
 async def get_enderia_response(user_message, username):
+    if not ai_client:
+        return None
+    
     try:
         current_time = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
         online = await get_server_online()
         java_online = online.get("java", {}).get("online", 0)
         
-        full_instruction = f"""{SYSTEM_PROMPT}
+        full_instruction = f"""{ENDERIA_PROMPT}
 
 Текущая дата и время: {current_time}
 Сейчас на сервере онлайн: {java_online} игроков.
@@ -280,6 +189,13 @@ async def get_enderia_response(user_message, username):
     except Exception as e:
         print(f"Gemini ошибка: {e}")
         return None
+
+def should_respond_to_enderia(message_text):
+    if not message_text:
+        return False
+    text_lower = message_text.lower()
+    keywords = ["эндер", "эндерия", "энди", "эндерка", "ендер", "энд"]
+    return any(keyword in text_lower for keyword in keywords)
 
 # ========== КЛАВИАТУРЫ ==========
 def get_main_keyboard():
@@ -341,8 +257,7 @@ async def start_cmd(message: Message):
     text = (
         f"{emoji(EMOJI['start'], '✨')} <b>Добро пожаловать на {SERVER['name']}</b>\n\n"
         f"{emoji(EMOJI['house'], '🏠')} <b>{SERVER['mode']}</b>\n\n"
-        f"{emoji(EMOJI['cat_ok'], '🐱')} <b>Используйте кнопки ниже</b>\n\n"
-        f"{endi_emoji(ENDERIA_EMOJI['cat_dance'], '💜')} <i>Я Эндерия - напиши моё имя, и я отвечу с премиум эмодзи и стикерами!</i>"
+        f"{emoji(EMOJI['cat_ok'], '🐱')} <b>Я Эндерия - напиши моё имя, и я отвечу!</b>"
     )
     await message.answer(text, parse_mode="HTML", reply_markup=get_main_keyboard())
 
@@ -365,17 +280,13 @@ async def handle_message(message: Message):
     if should_respond_to_enderia(message.text):
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
         username = message.from_user.first_name or "Игрок"
-        
-        emotion = get_emotion_from_text(message.text)
-        await send_enderia_sticker(message, emotion)
-        
         response = await get_enderia_response(message.text, username)
         
         if response:
             await message.reply(response, parse_mode="HTML")
         else:
             await message.reply(
-                f"{endi_emoji(ENDERIA_EMOJI['cat_surprised'], '😲')} Телепортация сломалась... Попробуй ещё раз!",
+                f"{emoji(EMOJI['cat_surprised'], '😲')} Телепортация сломалась... Попробуй ещё раз!",
                 parse_mode="HTML"
             )
 
@@ -397,7 +308,7 @@ async def menu_ip(callback: CallbackQuery):
     java_online = online.get("java", {}).get("online", 0)
     java_max = online.get("java", {}).get("max", 0)
     
-    status = "ONLINE" if java_online > 0 else "OFFLINE"
+    status = "🟢 ONLINE" if java_online > 0 else "🔴 OFFLINE"
     
     text = f"""
 {emoji(EMOJI['crown'], '👑')} <b>LOSTEARTH</b> | {status}
@@ -428,7 +339,7 @@ async def refresh_online(callback: CallbackQuery):
     java_online = online.get("java", {}).get("online", 0)
     java_max = online.get("java", {}).get("max", 0)
     
-    status = "ONLINE" if java_online > 0 else "OFFLINE"
+    status = "🟢 ONLINE" if java_online > 0 else "🔴 OFFLINE"
     
     text = f"""
 {emoji(EMOJI['crown'], '👑')} <b>LOSTEARTH</b> | {status}
@@ -478,7 +389,7 @@ async def menu_premium(callback: CallbackQuery):
         text, 
         parse_mode="HTML", 
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="НАЗАД", callback_data="menu_main", icon_custom_emoji_id=EMOJI["back"])]
+            [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="menu_main", icon_custom_emoji_id=EMOJI["back"])]
         ])
     )
     await callback.answer()
@@ -486,25 +397,20 @@ async def menu_premium(callback: CallbackQuery):
 @dp.callback_query(lambda c: c.data == "menu_enderia")
 async def menu_enderia(callback: CallbackQuery):
     text = f"""
-{endi_emoji(ENDERIA_EMOJI['cat_dance'], '💜')} <b>Кто такая Эндерия?</b>
+{emoji(EMOJI['cat_dance'], '💜')} <b>Кто такая Эндерия?</b>
 
-{endi_emoji(ENDERIA_EMOJI['cat_ok'], '🐱')} Я девушка-эндермен, хранительница Края!
+{emoji(EMOJI['cat_ok'], '🐱')} Я девушка-эндермен, хранительница Края!
 
-{endi_emoji(ENDERIA_EMOJI['cat_glasses'], '😎')} <b>Мои фишки:</b>
-- Обожаю телепортироваться и собирать эндер-жемчуг
-- Использую специальные эмодзи котиков, аниме и зайчиков
-- Отправляю стикеры по настроению
-
-{endi_emoji(ENDERIA_EMOJI['rabbit_fly'], '🐰')} <b>Как ко мне обратиться:</b>
+{emoji(EMOJI['cat_glasses'], '😎')} <b>Как ко мне обратиться:</b>
 Напиши: Эндер, Эндерия, Энди, Энд, Ендер
 
-{endi_emoji(ENDERIA_EMOJI['cat_kiss'], '😘')} <i>Просто упомяни моё имя в сообщении, и я отвечу с премиум эмодзи и стикерами!</i>
+{emoji(EMOJI['rabbit_fly'], '🐰')} <i>Просто упомяни моё имя в сообщении, и я отвечу!</i>
 """
     await callback.message.edit_text(
         text, 
         parse_mode="HTML", 
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="НАЗАД", callback_data="menu_main", icon_custom_emoji_id=EMOJI["back"])]
+            [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="menu_main", icon_custom_emoji_id=EMOJI["back"])]
         ])
     )
     await callback.answer()
@@ -518,7 +424,6 @@ async def main():
     print("БОТ LOSTEARTH ЗАПУЩЕН")
     print(f"Правила: {RULES_URL}")
     print(f"Заявка: {APPLY_URL}")
-    print("Эндерия использует СПЕЦИАЛЬНЫЕ ЭМОДЗИ и СТИКЕРЫ!")
     print("=" * 50)
     
     await dp.start_polling(bot)
