@@ -4,6 +4,7 @@ import os
 import socket
 import struct
 import json
+import random
 from threading import Thread
 
 from flask import Flask, send_from_directory
@@ -37,14 +38,15 @@ def apply():
 def run_flask():
     flask_app.run(host='0.0.0.0', port=int(os.getenv('PORT', 8080)))
 
-# ========== КОНФИГУРАЦИЯ СЕРВЕРА ==========
+# ========== КОНФИГУРАЦИЯ ==========
 SERVER_JAVA_IP = "150.241.85.40"
 SERVER_JAVA_PORT = 25565
 SERVER_BEDROCK_IP = "150.241.85.40"
 SERVER_BEDROCK_PORT = 19132
 SERVER_VERSION = "1.21—1.26+"
 
-BASE_URL = os.getenv("RAILWAY_PUBLIC_DOMAIN", "https://lostearthbot-production.up.railway.app")
+# ПРАВИЛЬНАЯ HTTPS ССЫЛКА
+BASE_URL = "https://lostearthbot-production.up.railway.app"
 RULES_URL = f"{BASE_URL}/"
 APPLY_URL = f"{BASE_URL}/apply"
 
@@ -120,6 +122,65 @@ async def get_minecraft_online():
         logger.error(f"Ошибка онлайна: {e}")
         return 0
 
+# ========== УМНАЯ ЭНДЕРИЯ (ОТВЕЧАЕТ ПО ДЕЛУ) ==========
+async def get_enderia_response(user_message, username):
+    """Эндерия отвечает умно, а не рандомно"""
+    msg_lower = user_message.lower()
+    
+    # Вопросы про IP
+    if "айпи" in msg_lower or "ip" in msg_lower or "подключиться" in msg_lower:
+        return f"Приветик, {username}! 💜 IP для Java: <code>150.241.85.40:25565</code>, для Bedrock: <code>150.241.85.40:19132</code>. Версия 1.21—1.26+! Телепортируйся к нам 🐱"
+    
+    # Вопросы про онлайн
+    if "онлайн" in msg_lower or "сколько людей" in msg_lower or "игроков" in msg_lower:
+        online = await get_minecraft_online()
+        return f"Сейчас на сервере играет <b>{online}</b> игроков, {username}! Можешь проверить командой /online 💜✨"
+    
+    # Вопросы про донаты
+    if "донат" in msg_lower or "премиум" in msg_lower or "купить" in msg_lower:
+        return f"Ой, {username}! Донаты принимает @pelmewki379 💎 Цены: Друид 50₽, Оракул 100₽, Монарх 200₽, Херувим 300₽, Архонт 400₽, Серафим 600₽. Всё подробнее в меню \"ПРЕМИУМ\" 🐱"
+    
+    # Вопросы про правила
+    if "правил" in msg_lower or "наруш" in msg_lower or "бан" in msg_lower:
+        return f"Правила кратко: {username}, читы = бан, на спавне не гриферить, уважать других. Полные правила в меню \"ПРАВИЛА\" 📜💜"
+    
+    # Вопросы про мирный режим
+    if "мирный" in msg_lower or "заявк" in msg_lower:
+        return f"Мирный режим — PvP только по согласию, территории защищены. Доступ по заявкам через кнопку \"ЗАЯВКА\" или напиши @pelmewki379 🐰💜"
+    
+    # Вопросы про SMP
+    if "smp" in msg_lower:
+        return f"SMP режим — PvP разрешён везде, можно воровать и рейдить. Но читы и лаг-машины = бан! ⚔️💜"
+    
+    # Приветствия
+    if "привет" in msg_lower or "здрав" in msg_lower:
+        responses = [
+            f"Приветик, {username}! 💜 Как настроение? На сервер зайдешь? 🐱",
+            f"Здравствуй, {username}! 🌌 Рада тебя видеть! Чем могу помочь? ✨",
+            f"Ой, {username}! Телепортнулась на твой зов! Рассказывай, что случилось? 💜"
+        ]
+        return random.choice(responses)
+    
+    # Как дела
+    if "как дел" in msg_lower or "как ты" in msg_lower:
+        responses = [
+            f"У меня всё отлично, {username}! Телепортируюсь по Краю, собираю жемчуг 💜 А у тебя как? 🐱",
+            f"Фиолетово~ {username}! У меня всё хорошо. Скучаю по игрокам, заходи на сервер! ✨"
+        ]
+        return random.choice(responses)
+    
+    # Про команды
+    if "команд" in msg_lower or "/" in msg_lower:
+        return f"Доступные команды, {username}: /start, /online, /enderia. А в донатах есть /heal, /fly, /ptime и другие 💜🐱"
+    
+    # Ответ по умолчанию
+    responses = [
+        f"Я — Эндерия, {username}! Могу рассказать про IP, онлайн, донаты или правила. Что именно интересует? 💜",
+        f"Телепортнулась на твой зов, {username}! Спрашивай про сервер — я всё знаю! ✨🐱",
+        f"Фиолетово~ {username}, я слушаю! Расскажи, что хочешь узнать о LostEarth? 🌌"
+    ]
+    return random.choice(responses)
+
 # ========== КЛАВИАТУРЫ ==========
 def get_main_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -190,7 +251,7 @@ async def cmd_online(message: Message):
     await message.answer(
         f"{emoji(EMOJI['joystick'], '📊')} <b>Онлайн LostEarth</b>\n\n"
         f"💻 Сейчас играет: <b>{online}</b> игроков!\n"
-        f"🐰 Присоединяйся: <code>150.241.85.40:25565</code>",
+        f"{emoji(EMOJI['rabbit_fly'], '🐰')} Присоединяйся: <code>150.241.85.40:25565</code>",
         parse_mode="HTML"
     )
 
@@ -219,10 +280,7 @@ async def cmd_enderia(message: Message):
 def should_respond_to_enderia(message_text):
     text_lower = message_text.lower()
     keywords = ["эндер", "эндерия", "энди", "эндерка", "эндер тян", "энд-тян", "@enderia", "@энд", "@эндерия", "ендер"]
-    for keyword in keywords:
-        if keyword in text_lower:
-            return True
-    return False
+    return any(keyword in text_lower for keyword in keywords)
 
 @dp.message()
 async def handle_message(message: Message):
@@ -231,16 +289,10 @@ async def handle_message(message: Message):
     
     if should_respond_to_enderia(user_text):
         async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
-            # Простые ответы без Gemini (чтобы не падало)
-            responses = [
-                f"Приветик, {username}! 💜 Чем могу помочь? Спроси про сервер, донаты или правила! 🐱",
-                f"Ой, меня позвали? {username}, я тут! Что хотел узнать? 🌌",
-                f"Телепортнулась на твой зов, {username}! Рассказывай, что случилось? ✨",
-                f"Фиолетово~ {username}, я слушаю! Задавай вопрос 💜",
-            ]
-            import random
-            await message.reply(random.choice(responses), parse_mode="HTML")
+            response = await get_enderia_response(user_text, username)
+            await message.reply(response, parse_mode="HTML")
 
+# ========== КОЛБЭКИ ==========
 @dp.callback_query(lambda c: c.data == "menu_main")
 async def menu_main(callback: CallbackQuery):
     text = f"{emoji(EMOJI['cat_dance'], '✨')} <b>Главное меню</b>"
@@ -367,7 +419,6 @@ async def menu_enderia(callback: CallbackQuery):
 
 # ========== ЗАПУСК ==========
 async def main():
-    # Запускаем Flask для WebApp
     thread = Thread(target=run_flask, daemon=True)
     thread.start()
     
