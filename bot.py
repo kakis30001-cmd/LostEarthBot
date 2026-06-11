@@ -13,7 +13,7 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKe
 from aiogram.utils.chat_action import ChatActionSender
 from aiogram.fsm.storage.memory import MemoryStorage
 from google import genai
-from google.genai import types
+from google.genai import types as genai_types  # ✅ Исправленный импорт (добавлен алиас)
 
 # ========== НАСТРОЙКА ==========
 logging.basicConfig(level=logging.INFO)
@@ -32,16 +32,16 @@ gemini_client = None
 if GEMINI_API_KEY:
     try:
         gemini_client = genai.Client(api_key=GEMINI_API_KEY)
-        GEMINI_AVAILABLE = True
-        logger.info("✅ Gemini AI клиент создан!")
         
+        # ✅ Тест остается синхронным, так как выполняется до старта асинхронного бота
         test_response = gemini_client.models.generate_content(
             model='gemini-1.5-flash',
             contents='Скажи "OK"'
         )
-        logger.info(f"✅ Gemini тест пройден")
+        GEMINI_AVAILABLE = True  # ✅ Флаг ставим только после успешного теста
+        logger.info("✅ Gemini AI клиент создан и тест пройден!")
     except Exception as e:
-        logger.error(f"❌ Ошибка Gemini: {e}")
+        logger.error(f"❌ Ошибка инициализации Gemini: {e}")
 else:
     logger.error("❌ GEMINI_API_KEY не найден!")
 
@@ -153,10 +153,11 @@ async def get_enderia_response(user_message, username):
 
 Ответь как Эндерия:"""
         
-        response = gemini_client.models.generate_content(
+        # ✅ Используем асинхронный вызов .aio и алиас genai_types
+        response = await gemini_client.aio.models.generate_content(
             model='gemini-1.5-flash',
             contents=prompt,
-            config=types.GenerateContentConfig(
+            config=genai_types.GenerateContentConfig(
                 temperature=0.9,
                 max_output_tokens=150,
             )
@@ -168,6 +169,8 @@ async def get_enderia_response(user_message, username):
         return None
 
 def should_respond(message_text):
+    if not message_text:  # ✅ Защита от пустых сообщений (фото, стикеры, кружочки)
+        return False
     text_lower = message_text.lower()
     keywords = ["эндер", "эндерия", "энди", "эндерка", "ендер"]
     return any(k in text_lower for k in keywords)
