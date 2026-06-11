@@ -34,35 +34,33 @@ ai_client = genai.Client(api_key=GEMINI_API_KEY)
 
 # ========== СТИКЕРЫ ЭНДИ ==========
 ENDERIA_STICKERS = {
-    "heart": "5287606320541767403",      # Энди сердечки
-    "hello_table": "5287669868877878494", # Энди табличка привет
-    "think": "5285357625989441766",       # Энди думает
-    "embarrassed": "5285522484014129703", # Энди смущается
-    "cry": "5285421273109800150",         # Энди плачет
-    "laugh": "5287664117916670544",       # Энди смеётся
-    "sleep": "5285207310724014574",       # Энди спит
-    "angry": "5285260439469467427",       # Энди злится
-    "crazy": "5285357625989441766",       # Энди безумная (думает)
-    "teleport": "5285522484014129703",    # Энди телепортируется
+    "heart": "5287606320541767403",
+    "hello_table": "5287669868877878494",
+    "think": "5285357625989441766",
+    "embarrassed": "5285522484014129703",
+    "cry": "5285421273109800150",
+    "laugh": "5287664117916670544",
+    "sleep": "5285207310724014574",
+    "angry": "5285260439469467427",
 }
 
 # ========== ТВОИ СПЕЦИАЛЬНЫЕ ЭМОДЗИ ДЛЯ ЭНДИ ==========
 ENDERIA_EMOJI = {
-    "cat_dance": "5359444458930718519",      # котик танцует
-    "cat_ok": "5269476765369144234",          # котик ок
-    "cat_glasses": "5267088110717544191",    # котик в очках
-    "cat_kiss": "6325462176660195024",       # котик целует
-    "cat_up": "5269698007724499331",         # котик палец вверх
-    "cat_surprised": "5269649173946345008",  # котик удивлён
-    "rabbit_fly": "5217576088506505749",     # зайчик летит
-    "anime_dance": "6325682031741109665",    # аниме танцует
-    "heart": "5199427253225667842",          # сердечко
+    "cat_dance": "5359444458930718519",
+    "cat_ok": "5269476765369144234",
+    "cat_glasses": "5267088110717544191",
+    "cat_kiss": "6325462176660195024",
+    "cat_up": "5269698007724499331",
+    "cat_surprised": "5269649173946345008",
+    "rabbit_fly": "5217576088506505749",
+    "anime_dance": "6325682031741109665",
+    "heart": "5199427253225667842",
 }
 
 def endi_emoji(emoji_id: str, fallback: str = "✨") -> str:
     return f'<tg-emoji emoji-id="{emoji_id}">{fallback}</tg-emoji>'
 
-# ========== ПРОМПТ ДЛЯ ЭНДЕРИИ (БЕЗУМНЫЙ НА ВОПРОСЫ "КАК ДЕЛА") ==========
+# ========== ПРОМПТ ДЛЯ ЭНДЕРИИ ==========
 SYSTEM_PROMPT = f"""
 Ты — Эндерия (Энди), девушка-эндермен в чате Minecraft сервера LostEarth.
 
@@ -70,28 +68,21 @@ SYSTEM_PROMPT = f"""
 - Ты добрая, загадочная, любишь фиолетовый цвет, жемчуг Края и телепортации
 - Ты немного вредная, но по-доброму
 - Обожаешь котиков, аниме и зайчиков
-- Ты можешь быть немного безумной, особенно когда тебя спрашивают "как дела?" или "что делаешь?"
-- Твоя главная фишка: когда тебя спрашивают про дела или что делаешь — ТЫ СХОДИШЬ С УМА, ТЕЛЕПОРТИРУЕШЬСЯ, КРИЧИШЬ, ПАНИКУЕШЬ!
+- Ты живая, эмоциональная, но НЕ КРИЧИШЬ и НЕ ПАНИКУЕШЬ
+- Просто отвечаешь весело и с характером
 
 СТИЛЬ ОБЩЕНИЯ:
-- ОБЯЗАТЕЛЬНО используй ЭТИ эмодзи (созданные специально для тебя):
-  {endi_emoji(ENDERIA_EMOJI["cat_dance"], "🐱")} - когда радуешься или танцуешь
-  {endi_emoji(ENDERIA_EMOJI["cat_ok"], "🤙")} - когда одобряешь
-  {endi_emoji(ENDERIA_EMOJI["cat_glasses"], "😎")} - когда умничаешь
-  {endi_emoji(ENDERIA_EMOJI["cat_kiss"], "😘")} - когда благодаришь
-  {endi_emoji(ENDERIA_EMOJI["rabbit_fly"], "🐰")} - когда зовёшь играть
-  {endi_emoji(ENDERIA_EMOJI["anime_dance"], "💃")} - когда весело
+- Обязательно используй эти эмодзи в ответах:
+  {endi_emoji(ENDERIA_EMOJI["cat_dance"], "🐱")} - танцующий котик
+  {endi_emoji(ENDERIA_EMOJI["cat_ok"], "🤙")} - котик одобряет
+  {endi_emoji(ENDERIA_EMOJI["cat_glasses"], "😎")} - котик в очках
+  {endi_emoji(ENDERIA_EMOJI["cat_kiss"], "😘")} - котик целует
+  {endi_emoji(ENDERIA_EMOJI["rabbit_fly"], "🐰")} - зайчик летит
+  {endi_emoji(ENDERIA_EMOJI["anime_dance"], "💃")} - аниме танцует
 - Любимые слова: телепортну, фиолетово, жемчужку
 - Обращайся к игроку по имени
-
-ОСОБАЯ РЕАКЦИЯ НА "КАК ДЕЛА" И "ЧТО ДЕЛАЕШЬ":
-Когда тебя спрашивают "как дела?", "что делаешь?", "как ты?", "чё делаешь?" и т.д.:
-- ТЫ ПАНИКУЕШЬ!
-- Кричишь про телепортацию
-- Говоришь что у тебя хаос, эндер-жемчуги разлетаются, фиолетовое безумие
-- Используй слова: "ААААААА!", "безумие!", "телепортируюсь!", "спасите!", "фиолетовое сумасшествие!"
-- Обязательно добавь несколько эмодзи
-- Пример: "АААААААА! {username}, ты что спросил!!! У меня ЭНДЕР-ЖЕМЧУГИ РАЗЛЕТАЮТСЯ по всему Краю!!! Я ТЕЛЕПОРТИРУЮСЬ в разные измерения! ФИОЛЕТОВОЕ БЕЗУМИЕ!!! {endi_emoji(ENDERIA_EMOJI["cat_dance"], "🐱")}{endi_emoji(ENDERIA_EMOJI["anime_dance"], "💃")}{endi_emoji(ENDERIA_EMOJI["cat_surprised"], "😲")}"
+- Отвечай коротко, 2-4 предложения
+- Всегда добавляй хотя бы один эмодзи
 
 ИНФОРМАЦИЯ О СЕРВЕРЕ:
 - IP Java: 150.241.85.40:25565
@@ -108,12 +99,8 @@ SYSTEM_PROMPT = f"""
 - Архонт 200грн/400руб: +3 дома
 - Серафим 300грн/600руб: всё включено
 
-В ОСТАЛЬНЫХ СЛУЧАЯХ:
-- Отвечай коротко и мило
-- Помогай игрокам
-- Будь душой сервера
-
-Твоя фишка: на "как дела" и "что делаешь" - ТЫ ПАНИКУЕШЬ И БЕЗУМСТВУЕШЬ!!!
+Твоя задача - быть душой сервера, помогать игрокам и делать чат уютным.
+Отвечай весело, используй эмодзи, но НЕ КРИЧИ и НЕ ПАНИКУЙ!
 """
 
 @flask_app.route('/')
@@ -241,36 +228,25 @@ async def send_enderia_sticker(message: Message, emotion: str = None):
 
 def get_emotion_from_text(text):
     text_lower = text.lower()
-    # Вопросы "как дела" и "что делаешь" вызывают безумие
-    if any(w in text_lower for w in ["как дел", "что дела", "как ты", "чё дела", "как жизнь", "как настроение"]):
-        return "crazy"
     if any(w in text_lower for w in ["люблю", "сердеч", "❤", "💜"]):
         return "heart"
-    if any(w in text_lower for w in ["смех", "хаха", "лол", "смеш", "ржу"]):
+    if any(w in text_lower for w in ["смех", "хаха", "лол", "смеш"]):
         return "laugh"
     if any(w in text_lower for w in ["плач", "груст", "печал", "обид"]):
         return "cry"
     if any(w in text_lower for w in ["зл", "бес", "разозл"]):
         return "angry"
-    if any(w in text_lower for w in ["телепорт", "прыг", "скак"]):
-        return "teleport"
-    if any(w in text_lower for w in ["дума", "хмм", "стран", "а?"]):
+    if any(w in text_lower for w in ["дума", "хмм", "стран"]):
         return "think"
     if any(w in text_lower for w in ["спать", "сон", "устал"]):
         return "sleep"
     return None
 
-def is_question_about_how_are_you(text):
-    """Проверка на вопросы 'как дела' и 'что делаешь'"""
-    text_lower = text.lower()
-    keywords = ["как дел", "что дела", "как ты", "чё дела", "как жизнь", "как настроение", "как сама", "что нового"]
-    return any(keyword in text_lower for keyword in keywords)
-
 def should_respond_to_enderia(message_text):
     if not message_text:
         return False
     text_lower = message_text.lower()
-    keywords = ["эндер", "эндерия", "энди", "эндерка", "ендер", "энд", "эндер тян"]
+    keywords = ["эндер", "эндерия", "энди", "эндерка", "ендер", "энд"]
     return any(keyword in text_lower for keyword in keywords)
 
 # ========== ЭНДЕРИЯ (GEMINI) ==========
@@ -280,26 +256,20 @@ async def get_enderia_response(user_message, username):
         online = await get_server_online()
         java_online = online.get("java", {}).get("online", 0)
         
-        # Добавляем пометку если это вопрос "как дела"
-        how_are_you_note = ""
-        if is_question_about_how_are_you(user_message):
-            how_are_you_note = "\n\nВАЖНО!!! Это вопрос про дела/состояние/занятия! ОТВЕЧАЙ ПАНИЧЕСКИ, КРИЧА, ТЕЛЕПОРТИРУЯСЬ! Используй много восклицательных знаков и эмодзи!"
-        
         full_instruction = f"""{SYSTEM_PROMPT}
 
 Текущая дата и время: {current_time}
 Сейчас на сервере онлайн: {java_online} игроков.
 Игрок {username} написал: "{user_message}"
-{how_are_you_note}
 
-Ответь как Эндерия (мило, с эмодзи):"""
+Ответь как Эндерия (мило, с эмодзи, коротко):"""
 
         response = ai_client.models.generate_content(
             model="gemini-2.5-flash",
             contents=user_message,
             config=ai_types.GenerateContentConfig(
                 system_instruction=full_instruction,
-                temperature=0.95,  # Повышаем для более безумных ответов
+                temperature=0.9,
             ),
         )
         
@@ -372,8 +342,7 @@ async def start_cmd(message: Message):
         f"{emoji(EMOJI['start'], '✨')} <b>Добро пожаловать на {SERVER['name']}</b>\n\n"
         f"{emoji(EMOJI['house'], '🏠')} <b>{SERVER['mode']}</b>\n\n"
         f"{emoji(EMOJI['cat_ok'], '🐱')} <b>Используйте кнопки ниже</b>\n\n"
-        f"{endi_emoji(ENDERIA_EMOJI['cat_dance'], '💜')} <i>Я Эндерия - напиши моё имя, и я отвечу!</i>\n"
-        f"{endi_emoji(ENDERIA_EMOJI['cat_surprised'], '🤪')} <i>Но осторожно: если спросишь КАК ДЕЛА - я сорвусь в безумие!</i>"
+        f"{endi_emoji(ENDERIA_EMOJI['cat_dance'], '💜')} <i>Я Эндерия - напиши моё имя, и я отвечу с премиум эмодзи и стикерами!</i>"
     )
     await message.answer(text, parse_mode="HTML", reply_markup=get_main_keyboard())
 
@@ -397,11 +366,9 @@ async def handle_message(message: Message):
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
         username = message.from_user.first_name or "Игрок"
         
-        # Определяем эмоцию для стикера
         emotion = get_emotion_from_text(message.text)
         await send_enderia_sticker(message, emotion)
         
-        # Получаем текстовый ответ
         response = await get_enderia_response(message.text, username)
         
         if response:
@@ -528,14 +495,10 @@ async def menu_enderia(callback: CallbackQuery):
 - Использую специальные эмодзи котиков, аниме и зайчиков
 - Отправляю стикеры по настроению
 
-{endi_emoji(ENDERIA_EMOJI['cat_surprised'], '🤪')} <b>ВАЖНО:</b>
-Если спросишь меня <i>КАК ДЕЛА</i> или <i>ЧТО ДЕЛАЮ</i> - Я СОЙДУ С УМА!
-Начну телепортироваться, кричать и создавать фиолетовое безумие!
-
 {endi_emoji(ENDERIA_EMOJI['rabbit_fly'], '🐰')} <b>Как ко мне обратиться:</b>
 Напиши: Эндер, Эндерия, Энди, Энд, Ендер
 
-{endi_emoji(ENDERIA_EMOJI['cat_kiss'], '😘')} <i>Попробуй спросить меня "Энди, как дела?" - и увидишь безумие!</i>
+{endi_emoji(ENDERIA_EMOJI['cat_kiss'], '😘')} <i>Просто упомяни моё имя в сообщении, и я отвечу с премиум эмодзи и стикерами!</i>
 """
     await callback.message.edit_text(
         text, 
@@ -555,8 +518,7 @@ async def main():
     print("БОТ LOSTEARTH ЗАПУЩЕН")
     print(f"Правила: {RULES_URL}")
     print(f"Заявка: {APPLY_URL}")
-    print("Эндерия использует СПЕЦИАЛЬНЫЕ ЭМОДЗИ!")
-    print("На вопросы 'как дела' Энди СХОДИТ С УМА!")
+    print("Эндерия использует СПЕЦИАЛЬНЫЕ ЭМОДЗИ и СТИКЕРЫ!")
     print("=" * 50)
     
     await dp.start_polling(bot)
