@@ -13,7 +13,7 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKe
 from aiogram.utils.chat_action import ChatActionSender
 from aiogram.fsm.storage.memory import MemoryStorage
 from google import genai
-from google.genai import types as genai_types  # ✅ Исправленный импорт (добавлен алиас)
+from google.genai import types as genai_types
 
 # ========== НАСТРОЙКА ==========
 logging.basicConfig(level=logging.INFO)
@@ -33,14 +33,15 @@ if GEMINI_API_KEY:
     try:
         gemini_client = genai.Client(api_key=GEMINI_API_KEY)
         
-        # ✅ Тест остается синхронным, так как выполняется до старта асинхронного бота
         test_response = gemini_client.models.generate_content(
             model='gemini-1.5-flash',
             contents='Скажи "OK"'
         )
-        GEMINI_AVAILABLE = True  # ✅ Флаг ставим только после успешного теста
+        GEMINI_AVAILABLE = True
         logger.info("✅ Gemini AI клиент создан и тест пройден!")
     except Exception as e:
+        # ВРЕМЕННО ВКЛЮЧАЕМ ФЛАГ ДАЖЕ ПРИ ОШИБКЕ ДЛЯ ВЫВОДА ТЕКСТА В ТЕЛЕГРАМ
+        GEMINI_AVAILABLE = True 
         logger.error(f"❌ Ошибка инициализации Gemini: {e}")
 else:
     logger.error("❌ GEMINI_API_KEY не найден!")
@@ -144,16 +145,11 @@ async def get_minecraft_online():
 # ========== ЭНДЕРИЯ ==========
 async def get_enderia_response(user_message, username):
     if not GEMINI_AVAILABLE or not gemini_client:
-        return None
+        return "🛠 <b>ОШИБКА:</b> GEMINI_API_KEY не найден в переменных окружения."
     
     try:
-        prompt = f"""Ты - Эндерия, девушка-эндермен. Ты добрая, любишь шутить. Отвечай коротко, с эмодзи 💜
-
-Игрок {username} написал: {user_message}
-
-Ответь как Эндерия:"""
+        prompt = f"""Ты - Эндерия, девушка-эндермен. Ты добрая, любишь шутить. Отвечай коротко, с эмодзи 💜\n\nИгрок {username} написал: {user_message}\n\nОтветь как Эндерия:"""
         
-        # ✅ Используем асинхронный вызов .aio и алиас genai_types
         response = await gemini_client.aio.models.generate_content(
             model='gemini-1.5-flash',
             contents=prompt,
@@ -166,10 +162,11 @@ async def get_enderia_response(user_message, username):
         return response.text.strip() if response and response.text else None
     except Exception as e:
         logger.error(f"❌ Ошибка Gemini: {e}")
-        return None
+        # ВЫВОД РЕАЛЬНОЙ ОШИБКИ В ЧАТ
+        return f"🛠 <b>ТЕХНИЧЕСКАЯ ОШИБКА GEMINI:</b>\n<code>{e}</code>"
 
 def should_respond(message_text):
-    if not message_text:  # ✅ Защита от пустых сообщений (фото, стикеры, кружочки)
+    if not message_text: 
         return False
     text_lower = message_text.lower()
     keywords = ["эндер", "эндерия", "энди", "эндерка", "ендер"]
