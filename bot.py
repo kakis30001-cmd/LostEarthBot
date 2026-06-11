@@ -33,17 +33,19 @@ if GEMINI_API_KEY:
     try:
         gemini_client = genai.Client(api_key=GEMINI_API_KEY)
         GEMINI_AVAILABLE = True
-        logger.info("✅ Gemini AI готов!")
+        logger.info("✅ Gemini AI клиент создан!")
         
-        # Тестовый запрос
+        # ПРОВЕРКА: отправляем тестовый запрос
+        logger.info("🔄 Отправляю тестовый запрос к Gemini...")
         test_response = gemini_client.models.generate_content(
             model='gemini-2.0-flash-exp',
-            contents='Скажи "OK"'
+            contents='Напиши "Привет, я работаю!"'
         )
-        logger.info(f"✅ Тест Gemini прошёл: {test_response.text}")
+        logger.info(f"✅ Gemini ТЕСТ ПРОЙДЕН! Ответ: {test_response.text}")
         
     except Exception as e:
         logger.error(f"❌ Ошибка Gemini: {e}")
+        GEMINI_AVAILABLE = False
 else:
     logger.error("❌ GEMINI_API_KEY не найден!")
 
@@ -61,13 +63,14 @@ def apply():
     return send_from_directory('static', 'apply.html')
 
 def run_flask():
-    flask_app.run(host='0.0.0.0', port=int(os.getenv('PORT', 8080)))
+    flask_app.run(host='0.0.0.0', port=int(os.getenv('PORT', 8080)), debug=False)
 
 # ========== КОНФИГУРАЦИЯ ==========
 SERVER_JAVA_IP = "150.241.85.40"
 SERVER_JAVA_PORT = 25565
 SERVER_BEDROCK_IP = "150.241.85.40"
 SERVER_BEDROCK_PORT = 19132
+SERVER_VERSION = "1.21—1.26+"
 ADMIN_CONTACT = "@pelmewki379"
 
 BASE_URL = "https://lostearthbot-production.up.railway.app"
@@ -76,17 +79,21 @@ APPLY_URL = f"{BASE_URL}/apply"
 
 # ========== ЭМОДЗИ ==========
 EMOJI = {
-    "door": "5873147866364514353",
-    "note": "5870930744116776638",
-    "rabbit_fly": "5217576088506505749",
-    "cat_dance": "5359444458930718519",
+    "cat_up": "5269698007724499331",
     "cat_ok": "5269476765369144234",
+    "cat_glasses": "5267088110717544191",
+    "cat_dance": "5359444458930718519",
+    "cat_kiss": "6325462176660195024",
+    "cat_surprised": "5269649173946345008",
+    "rabbit_fly": "5217576088506505749",
+    "anime_dance": "6325682031741109665",
+    "house": "5873147866364514353",
+    "note": "5870930744116776638",
     "check": "5870633910337015697",
     "back": "5875082500023258804",
-    "cat_glasses": "5267088110717544191",
+    "door": "5873147866364514353",
     "joystick": "5870717606364713020",
     "crown": "5807868868886009920",
-    "house": "5873147866364514353",
     "start": "5870921127685001066",
 }
 
@@ -142,24 +149,23 @@ async def get_minecraft_online():
         logger.error(f"Ошибка онлайна: {e}")
         return 0
 
-# ========== ЭНДЕРИЯ (ИСПРАВЛЕННЫЙ GEMINI) ==========
+# ========== ЭНДЕРИЯ (С ДЕТАЛЬНЫМИ ЛОГАМИ) ==========
 async def get_enderia_response(user_message, username):
     if not GEMINI_AVAILABLE or not gemini_client:
-        logger.error("Gemini не доступен!")
+        logger.error("❌ Gemini не доступен!")
         return None
     
     try:
-        logger.info(f"🤖 Запрос к Gemini от {username}: {user_message[:50]}")
+        logger.info(f"🤖 ЗАПРОС к Gemini от {username}: {user_message[:100]}")
         
-        # Правильный формат промпта
-        prompt = f"""Ты - Эндерия, девушка-эндермен в чате Minecraft сервера LostEarth. 
-Ты добрая, любишь шутить про телепортацию. Отвечай коротко и весело.
+        prompt = f"""Ты - Эндерия, девушка-эндермен. Ты добрая, любишь шутить. Отвечай коротко и весело, с эмодзи.
 
 Игрок {username} спрашивает: {user_message}
 
-Твой ответ (с эмодзи 💜🐱):"""
+Твой ответ:"""
         
-        # Правильный вызов API
+        logger.info(f"🔄 Отправка в Gemini...")
+        
         response = gemini_client.models.generate_content(
             model='gemini-2.0-flash-exp',
             contents=prompt,
@@ -169,17 +175,16 @@ async def get_enderia_response(user_message, username):
             )
         )
         
-        # Получаем текст ответа
+        logger.info(f"✅ ПОЛУЧЕН ОТВЕТ: {response.text[:100] if response.text else 'ПУСТО'}")
+        
         if response and response.text:
-            result = response.text.strip()
-            logger.info(f"✅ Ответ: {result[:50]}...")
-            return result
+            return response.text.strip()
         else:
             logger.error("❌ Пустой ответ от Gemini")
             return None
         
     except Exception as e:
-        logger.error(f"❌ Ошибка Gemini: {e}")
+        logger.error(f"❌ ОШИБКА Gemini: {type(e).__name__}: {e}")
         return None
 
 def should_respond(message_text):
@@ -210,12 +215,12 @@ def get_ip_keyboard():
 # ========== ХЕНДЛЕРЫ ==========
 @dp.message(CommandStart())
 async def cmd_start(message: Message):
-    status = "✅" if GEMINI_AVAILABLE else "❌"
-    text = f"""{emoji(EMOJI['start'], '✨')} <b>Добро пожаловать на LostEarth!</b>
+    status = "✅ АКТИВЕН" if GEMINI_AVAILABLE else "❌ НЕ ПОДКЛЮЧЕН"
+    text = f"""✨ <b>Добро пожаловать на LostEarth!</b>
 
-{emoji(EMOJI['house'], '🏠')} <b>Мирный режим по заявкам!</b>
+🏠 <b>Мирный режим по заявкам!</b>
 
-🤖 <b>Статус ИИ:</b> {status}
+🤖 <b>Статус ИИ Эндерии:</b> {status}
 
 💜 Напиши <b>Эндерия</b> или <b>Энди</b> в сообщении, и я отвечу!"""
     await message.answer(text, parse_mode="HTML", reply_markup=get_main_keyboard())
@@ -228,7 +233,7 @@ async def cmd_online(message: Message):
 @dp.message(Command("ai"))
 async def cmd_ai(message: Message):
     if GEMINI_AVAILABLE:
-        await message.reply("✅ <b>Gemini AI активен!</b>\n\nЭндерия готова к общению! Просто напиши её имя в сообщении 💜", parse_mode="HTML")
+        await message.reply("✅ <b>Gemini AI активен!</b>\n\nЭндерия готова к общению!", parse_mode="HTML")
     else:
         await message.reply("❌ <b>Gemini AI не подключен!</b>\n\nДобавь переменную GEMINI_API_KEY в Railway", parse_mode="HTML")
 
@@ -243,7 +248,7 @@ async def handle_message(message: Message):
             if response:
                 await message.reply(response, parse_mode="HTML")
             else:
-                await message.reply("😲 Ой, телепортация сломалась... Попробуй позже! 💜", parse_mode="HTML")
+                await message.reply("😲 Ой, что-то пошло не так... Попробуй ещё раз! 💜", parse_mode="HTML")
 
 # ========== КОЛБЭКИ ==========
 @dp.callback_query(lambda c: c.data == "menu_main")
@@ -304,12 +309,10 @@ async def main():
     thread = Thread(target=run_flask, daemon=True)
     thread.start()
     
-    logger.info("=" * 40)
-    logger.info("🚀 БОТ ЗАПУЩЕН")
+    logger.info("=" * 50)
+    logger.info("🚀 БОТ LOSTEARTH ЗАПУЩЕН")
     logger.info(f"🤖 Gemini: {'✅ ДОСТУПЕН' if GEMINI_AVAILABLE else '❌ НЕТ'}")
-    if GEMINI_AVAILABLE:
-        logger.info("💜 Эндерия готова отвечать!")
-    logger.info("=" * 40)
+    logger.info("=" * 50)
     
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
