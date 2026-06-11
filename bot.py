@@ -4,9 +4,7 @@ import os
 import socket
 import struct
 import json
-import random
 from datetime import datetime
-from threading import Thread
 import time
 
 from aiogram import Bot, Dispatcher, types
@@ -14,17 +12,14 @@ from aiogram.filters import CommandStart, Command
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from aiogram.utils.chat_action import ChatActionSender
 from aiogram.fsm.storage.memory import MemoryStorage
-from google import genai
-from google.genai import types as ai_types
+import google.generativeai as genai  # ПРАВИЛЬНЫЙ ИМПОРТ
 
 # ========== КОНФИГУРАЦИЯ ==========
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# Для RCON (чтение чата Minecraft)
-RCON_HOST = os.getenv("RCON_HOST", "localhost")
-RCON_PORT = int(os.getenv("RCON_PORT", 25575))
-RCON_PASSWORD = os.getenv("RCON_PASSWORD")
+# Настройка Gemini
+genai.configure(api_key=GEMINI_API_KEY)
 
 # Сервер
 SERVER_JAVA_IP = "150.241.85.40"
@@ -41,10 +36,9 @@ APPLY_URL = f"{BASE_URL}/apply"
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Инициализация бота и Gemini
+# Инициализация бота
 bot = Bot(token=TELEGRAM_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
-ai_client = genai.Client(api_key=GEMINI_API_KEY)
 
 # ========== ЭМОДЗИ (ПРЕМИУМ) ==========
 EMOJI = {
@@ -173,7 +167,7 @@ def should_respond_to_enderia(message_text):
             return True
     return False
 
-async def get_gemini_response(user_message, username=None, context=None):
+async def get_gemini_response(user_message, username=None):
     """Получает ответ от Эндерии"""
     if username:
         full_prompt = f"В чат написал {username}: {user_message}\n\nОтветь как Эндерия (девушка-эндермен), коротко и мило (2-3 предложения с эмодзи):"
@@ -181,15 +175,11 @@ async def get_gemini_response(user_message, username=None, context=None):
         full_prompt = f"Вопрос: {user_message}\n\nОтветь как Эндерия (девушка-эндермен), коротко и мило (2-3 предложения с эмодзи):"
     
     try:
-        response = ai_client.models.generate_content(
-            model='gemini-2.0-flash-exp',
-            contents=full_prompt,
-            config=ai_types.GenerateContentConfig(
-                system_instruction=ENDERIA_PROMPT,
-                temperature=0.9,
-                max_output_tokens=200,
-            ),
+        model = genai.GenerativeModel(
+            model_name='gemini-1.5-flash',
+            system_instruction=ENDERIA_PROMPT
         )
+        response = model.generate_content(full_prompt)
         return response.text
     except Exception as e:
         logger.error(f"Gemini ошибка: {e}")
