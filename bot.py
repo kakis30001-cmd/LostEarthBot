@@ -4,7 +4,6 @@ import struct
 import json
 from datetime import datetime
 import os
-import random
 from threading import Thread
 from collections import deque
 
@@ -12,7 +11,6 @@ from flask import Flask, send_from_directory
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import CommandStart, Command
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
-from aiogram.utils.chat_action import ChatActionSender
 from aiogram.fsm.storage.memory import MemoryStorage
 from google import genai
 from google.genai import types as ai_types
@@ -27,35 +25,8 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not BOT_TOKEN:
     raise ValueError("❌ BOT_TOKEN не найден!")
 
-# ========== ПАМЯТЬ ЧАТА (50 сообщений) ==========
-chat_memory = deque(maxlen=100)
-
-def add_to_memory(username: str, message: str):
-    chat_memory.append({
-        "time": datetime.now().strftime("%H:%M:%S"),
-        "username": username,
-        "message": message
-    })
-
-def get_chat_context() -> str:
-    if not chat_memory:
-        return ""
-    context = "\n".join([f"{msg['username']}: {msg['message']}" for msg in chat_memory])
-    return context
-
-# ========== ИНИЦИАЛИЗАЦИЯ ==========
-bot = Bot(token=BOT_TOKEN)
-dp = Dispatcher(storage=MemoryStorage())
+# ========== FLASK В ОТДЕЛЬНОМ ПОТОКЕ ==========
 flask_app = Flask(__name__, static_folder='static')
-
-# Gemini
-ai_client = None
-if GEMINI_API_KEY:
-    try:
-        ai_client = genai.Client(api_key=GEMINI_API_KEY)
-        print("✅ Gemini AI подключен!")
-    except Exception as e:
-        print(f"❌ Ошибка Gemini: {e}")
 
 @flask_app.route('/')
 def index():
@@ -72,6 +43,34 @@ def favicon():
 def run_flask():
     port = int(os.environ.get('PORT', 8080))
     flask_app.run(host='0.0.0.0', port=port)
+
+# ========== ПАМЯТЬ ЧАТА ==========
+chat_memory = deque(maxlen=100)
+
+def add_to_memory(username: str, message: str):
+    chat_memory.append({
+        "time": datetime.now().strftime("%H:%M:%S"),
+        "username": username,
+        "message": message
+    })
+
+def get_chat_context() -> str:
+    if not chat_memory:
+        return ""
+    return "\n".join([f"{msg['username']}: {msg['message']}" for msg in chat_memory])
+
+# ========== ИНИЦИАЛИЗАЦИЯ БОТА ==========
+bot = Bot(token=BOT_TOKEN)
+dp = Dispatcher(storage=MemoryStorage())
+
+# Gemini
+ai_client = None
+if GEMINI_API_KEY:
+    try:
+        ai_client = genai.Client(api_key=GEMINI_API_KEY)
+        print("✅ Gemini AI подключен!")
+    except Exception as e:
+        print(f"❌ Ошибка Gemini: {e}")
 
 # ========== ПРЕМИУМ ЭМОДЗИ ==========
 EMOJI = {
@@ -171,7 +170,7 @@ async def get_server_online():
     last_update["java"] = now
     return online_cache
 
-# ========== ЭНДЕРИЯ (GEMINI) ==========
+# ========== ЭНДЕРИЯ ==========
 async def get_enderia_response(user_message, username):
     if not ai_client:
         return None
@@ -297,11 +296,8 @@ async def handle_message(message: Message):
         return
     
     username = message.from_user.first_name or "Игрок"
-    
-    # Запоминаем сообщение
     add_to_memory(username, message.text)
     
-    # Отвечаем только если обратились к Эндерии
     if should_respond_to_enderia(message.text):
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
         response = await get_enderia_response(message.text, username)
@@ -441,6 +437,7 @@ async def menu_enderia(callback: CallbackQuery):
 
 # ========== ЗАПУСК ==========
 async def main():
+    # Запускаем Flask в отдельном потоке
     flask_thread = Thread(target=run_flask, daemon=True)
     flask_thread.start()
     
