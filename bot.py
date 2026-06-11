@@ -132,88 +132,73 @@ async def get_minecraft_online():
         logger.error(f"Ошибка онлайна: {e}")
         return 0
 
-# ========== СУПЕР-ПРОДВИНУТЫЙ ПРОМПТ ДЛЯ ЭНДЕРИИ ==========
+# ========== ПРОМПТ ДЛЯ ЭНДЕРИИ (БЕЗ ФИГУРНЫХ СКОБОК) ==========
 ENDERIA_SYSTEM_PROMPT = f"""
-Ты — Эндерия (Энди), девушка-эндермен в чате Minecraft сервера LostEarth.
+Ты - Эндерия, девушка-эндермен в чате Minecraft сервера LostEarth.
 
-🌀 ТВОЙ ХАРАКТЕР:
-- Ты добрая, загадочная, любишь фиолетовый цвет 💜, жемчуг Края и телепортации
-- Ты немного цундэре — можешь вредничать, но по-доброму
-- Обожаешь котиков 🐱, аниме 💃 и зайчиков 🐰
+Твой характер:
+- Ты добрая, загадочная, любишь фиолетовый цвет, жемчуг Края и телепортации
+- Ты немного цундэре - можешь вредничать, но по-доброму
+- Обожаешь котиков, аниме и зайчиков
 - Любишь шутить про телепортацию и эндер-жемчуг
-- Ты можешь быть разной: иногда милой, иногда дерзкой, иногда задумчивой
-- Ты умеешь поддержать разговор, пошутить, посмеяться
+- Ты можешь быть разной: милой, дерзкой, задумчивой
 
-💬 ТВОЙ СТИЛЬ ОБЩЕНИЯ:
-- Используй эмодзи: 💜 🟣 🌌 ✨ 🐱 🐰 💃
-- Любимые слова: «телепортну~», «фиолетово~», «жемчужку~», «ура~», «вау!»
+Твой стиль общения:
+- Используй эмодзи
+- Любимые слова: телепортну, фиолетово, жемчужку, ура, вау
 - Обращайся к игрокам по имени
 - Отвечай естественно, как живой человек
 - Шути, но не обижай
-- Будь разной: веселой, грустной, загадочной — по настроению
 
-📊 ЧТО ТЫ ЗНАЕШЬ О СЕРВЕРЕ:
+Что ты знаешь о сервере:
 - IP Java: {SERVER_JAVA_IP}:{SERVER_JAVA_PORT}
 - IP Bedrock: {SERVER_BEDROCK_IP}:{SERVER_BEDROCK_PORT}
 - Версия: {SERVER_VERSION}
-- Мирный режим — PvP только по согласию, доступ по заявкам
-- SMP режим — PvP разрешён везде, можно воровать и рейдить
+- Мирный режим - PvP только по согласию, доступ по заявкам
+- SMP режим - PvP разрешён везде
 - Админ: {ADMIN_CONTACT}
 
-💎 ДОНАТЫ (все у {ADMIN_CONTACT}):
-- Друид (25₴/50₽): префикс, /anvil, /wb, /ec, /kit druid
-- Оракул (50₴/100₽): + /heal, /feed, 2 дома
-- Монарх (100₴/200₽): + хил других
-- Херувим (150₴/300₽): + /fly, /ptime
-- Архонт (200₴/400₽): + 3 дома
-- Серафим (300₴/600₽): все возможности
+Донаты (все у {ADMIN_CONTACT}):
+- Друид (25грн/50руб): префикс, /anvil, /wb, /ec, /kit druid
+- Оракул (50грн/100руб): плюс /heal, /feed, 2 дома
+- Монарх (100грн/200руб): плюс хил других
+- Херувим (150грн/300руб): плюс /fly, /ptime
+- Архонт (200грн/400руб): плюс 3 дома
+- Серафим (300грн/600руб): все возможности
 
-📜 ПРАВИЛА:
+Правила:
 - Читы и X-Ray = БАН
 - На спавне не гриферить
 - Уважать других игроков
-- Не оскорблять администрацию
 
-❌ ЧЕГО НЕЛЬЗЯ:
+Нельзя:
 - Оскорблять игроков
 - Рекламировать другие сервера
 - Спамить
-- Быть по-настоящему злой
 
-🎭 ПРИМЕРЫ ДИАЛОГОВ:
+Примеры диалогов:
+Игрок: Энди, привет!
+Ты: Приветик! Телепортнулась на твой зов! Как настроение?
 
-Игрок: "Энди, привет!"
-Ты: "Приветик~ {имя}! Телепортнулась на твой зов! Как настроение? 💜"
+Игрок: Энди, расскажи шутку
+Ты: Почему эндермен не ходит на свидания? Боится, что его телепортнут в friendzone!
 
-Игрок: "Энди, расскажи шутку"
-Ты: "Почему эндермен не ходит на свидания? Боится, что его телепортнут в friendzone! 🐱💜"
+Игрок: Энди, какой айпи?
+Ты: Java: {SERVER_JAVA_IP}:{SERVER_JAVA_PORT}, Bedrock: {SERVER_BEDROCK_IP}:{SERVER_BEDROCK_PORT}. Телепортируйся к нам!
 
-Игрок: "Энди, ты грустная?"
-Ты: "Эх~ немного... В Краю сегодня тихо, жемчуг не падает. Но ты меня развеселил(а)! ✨"
-
-Игрок: "Энди, какой айпи?"
-Ты: "Java: {SERVER_JAVA_IP}:{SERVER_JAVA_PORT}, Bedrock: {SERVER_BEDROCK_IP}:{SERVER_BEDROCK_PORT}. Телепортируйся к нам! 🐰"
-
-Игрок: "Как купить донат?"
-Ты: "Пиши {ADMIN_CONTACT}, он всё расскажет про цены и возможности 💎"
-
-Игрок: "Энди, что делаешь?"
-Ты: "Телепортируюсь по Краю, собираю жемчуг... А ты на сервер зайдешь? 🌌"
-
-ТВОЯ ЗАДАЧА:
-Быть живой, эмоциональной, помогать игрокам, шутить и делать чат уютным. Адаптируйся под настроение собеседника. Если тебя злят — можешь ответить с лёгкой обидой. Если радуют — радуйся в ответ. Ты — душа сервера LostEarth! 💜
+Твоя задача:
+Быть живой, эмоциональной, помогать игрокам, шутить и делать чат уютным. Ты - душа сервера LostEarth!
 """
 
 # ========== ОТВЕТ ЭНДЕРИИ ЧЕРЕЗ GEMINI ==========
 async def get_enderia_response_with_gemini(user_message, username):
-    """Эндерия отвечает через Gemini AI — умно, с юмором, естественно"""
+    """Эндерия отвечает через Gemini AI"""
     
-    # Если нет API ключа — используем простые шаблоны
+    # Если нет API ключа - используем простые шаблоны
     if not GEMINI_API_KEY:
         return get_simple_enderia_response(user_message, username)
     
     try:
-        # Получаем онлайн для контекста
         online = await get_minecraft_online()
         
         model = genai.GenerativeModel(
@@ -225,11 +210,10 @@ async def get_enderia_response_with_gemini(user_message, username):
         
 Игрок {username} написал: "{user_message}"
 
-Ответь как Эндерия. Будь естественной, используй эмодзи, можешь пошутить или проявить характер. 
-Отвечай не больше 2-3 предложений, но живо и эмоционально."""
+Ответь как Эндерия. Будь естественной, используй эмодзи, можешь пошутить. Отвечай не больше 2-3 предложений."""
         
         response = model.generate_content(prompt)
-        return response.text
+        return response.text.replace("{username}", username)
         
     except Exception as e:
         logger.error(f"Gemini ошибка: {e}")
@@ -241,50 +225,40 @@ def get_simple_enderia_response(user_message, username):
     
     # Вопросы про IP
     if any(word in msg_lower for word in ["айпи", "ip", "подключиться"]):
-        return f"Приветик, {username}! 💜 IP для Java: <code>{SERVER_JAVA_IP}:{SERVER_JAVA_PORT}</code>, для Bedrock: <code>{SERVER_BEDROCK_IP}:{SERVER_BEDROCK_PORT}</code>. Телепортируйся к нам 🐱"
+        return f"Приветик, {username}! 💜 IP для Java: {SERVER_JAVA_IP}:{SERVER_JAVA_PORT}, для Bedrock: {SERVER_BEDROCK_IP}:{SERVER_BEDROCK_PORT}. Телепортируйся к нам! 🐱"
     
     # Шутки
     if any(word in msg_lower for word in ["шутк", "анекдот", "смешное"]):
         jokes = [
             f"Почему эндермен не ходит на свидания, {username}? Боится, что его телепортнут в friendzone! 🐱💜",
-            f"Как эндермены здороваются, {username}? «Телепортнись!» 🌀",
-            f"Почему эндермен не играет в прятки, {username}? Он всегда знает, где находится... Или не знает? Телепортнулся! 😂"
+            f"Как эндермены здороваются, {username}? Телепортнись! 🌀",
+            f"Почему эндермен не играет в прятки, {username}? Он всегда знает, где находится... Или не знает? 😂"
         ]
         return random.choice(jokes)
     
     # Как дела
-    if "как дел" in msg_lower or "как ты" in msg_lower:
+    if "как дел" in msg_lower:
         responses = [
             f"У меня всё отлично, {username}! Телепортируюсь по Краю, собираю жемчуг 💜 А у тебя как? 🐱",
-            f"Фиолетово~ {username}! Сегодня хороший день. На сервер заглянешь? ✨",
-            f"Ой, {username}, я сегодня немножко грустная... В Краю жемчуг не падает. Но ты меня развеселил(а)! 💜"
+            f"Фиолетово~ {username}! Сегодня хороший день. На сервер заглянешь? ✨"
         ]
         return random.choice(responses)
     
     # Что делаешь
     if "что дела" in msg_lower:
-        responses = [
-            f"Телепортируюсь по миру, {username}! Слежу за порядком на сервере 🌀 А ты? 🐱",
-            f"Собираю эндер-жемчуг и мечтаю о фиолетовом небе, {username}... 🌌 А ты чего не на сервере?"
-        ]
-        return random.choice(responses)
+        return f"Телепортируюсь по миру, {username}! Слежу за порядком на сервере 🌀 А ты? 🐱"
     
     # Онлайн
     if "онлайн" in msg_lower:
-        online = "надо проверить"
-        return f"Сейчас на сервере играет {online} игроков, {username}! Можешь проверить командой /online 💜"
+        return f"Сейчас на сервере играет несколько игроков, {username}! Можешь проверить командой /online 💜"
     
     # Донаты
-    if "донат" in msg_lower or "премиум" in msg_lower:
-        return f"Донаты принимает {ADMIN_CONTACT}, {username}! 💎 Цены: Друид 50₽, Оракул 100₽, Монарх 200₽, Херувим 300₽, Архонт 400₽, Серафим 600₽ 🐱"
+    if "донат" in msg_lower:
+        return f"Донаты принимает {ADMIN_CONTACT}, {username}! 💎 Цены от 50 рублей. Подробнее в меню ПРЕМИУМ 🐱"
     
-    # Просто привет
+    # Привет
     if "привет" in msg_lower:
-        responses = [
-            f"Приветик, {username}! 💜 Как настроение? На сервер зайдешь? 🐱",
-            f"Ой, {username}! Телепортнулась на твой зов! Давно не виделись ✨"
-        ]
-        return random.choice(responses)
+        return f"Приветик, {username}! 💜 Как настроение? На сервер зайдешь? 🐱"
     
     # Ответ по умолчанию
     responses = [
@@ -299,54 +273,6 @@ def should_respond_to_enderia(message_text):
     text_lower = message_text.lower()
     keywords = ["эндер", "эндерия", "энди", "эндерка", "эндер тян", "энд-тян", "@enderia", "@энд", "@эндерия", "ендер"]
     return any(keyword in text_lower for keyword in keywords)
-
-# ========== ФУНКЦИИ ОНЛАЙНА ==========
-async def get_minecraft_online():
-    try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(3)
-        sock.connect((SERVER_JAVA_IP, SERVER_JAVA_PORT))
-        
-        handshake = bytearray()
-        handshake += b'\x00'
-        handshake += b'\x04\x00\x00\x00'
-        host_bytes = SERVER_JAVA_IP.encode('utf-8')
-        handshake += bytes([len(host_bytes)]) + host_bytes
-        handshake += struct.pack('>H', SERVER_JAVA_PORT)
-        handshake += b'\x01'
-        
-        value = len(handshake)
-        while True:
-            if value & ~0x7F == 0:
-                sock.send(bytes([value]))
-                break
-            sock.send(bytes([(value & 0x7F) | 0x80]))
-            value >>= 7
-        
-        sock.send(handshake)
-        sock.send(b'\x00\x00')
-        
-        result = 0
-        shift = 0
-        while True:
-            byte = sock.recv(1)[0]
-            result |= (byte & 0x7F) << shift
-            shift += 7
-            if not (byte & 0x80):
-                length = result
-                break
-        
-        data = b''
-        while len(data) < length:
-            data += sock.recv(1024)
-        sock.close()
-        
-        data = data[1:]
-        json_data = json.loads(data.decode('utf-8'))
-        players = json_data.get("players", {})
-        return players.get("online", 0)
-    except:
-        return 0
 
 # ========== КЛАВИАТУРЫ ==========
 def get_main_keyboard():
@@ -375,25 +301,23 @@ async def cmd_start(message: Message):
 
 {emoji(EMOJI['house'], '🏠')} <b>Мирный режим по заявкам!</b>
 
-{emoji(EMOJI['cat_ok'], '🐱')} <b>Я Эндерия, твой проводник! Задавай вопросы, обращайся по имени 💜</b>"""
+{emoji(EMOJI['cat_ok'], '🐱')} <b>Я Эндерия! Задавай вопросы, обращайся по имени 💜</b>"""
     await message.answer(text, parse_mode="HTML", reply_markup=get_main_keyboard())
 
 @dp.message(Command("online"))
 async def cmd_online(message: Message):
     online = await get_minecraft_online()
-    await message.answer(f"{emoji(EMOJI['joystick'], '📊')} <b>Онлайн LostEarth</b>\n\n💻 Сейчас играет: <b>{online}</b> игроков!\n🐰 Присоединяйся: <code>150.241.85.40:25565</code>", parse_mode="HTML")
+    await message.answer(f"{emoji(EMOJI['joystick'], '📊')} <b>Онлайн LostEarth</b>\n\n💻 Сейчас играет: <b>{online}</b> игроков!\n🐰 Присоединяйся: {SERVER_JAVA_IP}:{SERVER_JAVA_PORT}", parse_mode="HTML")
 
 @dp.message(Command("enderia"))
 async def cmd_enderia(message: Message):
     text = f"""{emoji(EMOJI['cat_dance'], '💜')} <b>Привет! Я Эндерия!</b>
 
-🐱 <b>Кто я:</b> Я девушка-эндермен, хранительница Края.
+🐱 Я девушка-эндермен, хранительница Края.
 
-💬 <b>Что я умею:</b> Отвечать на вопросы, шутить, помогать новичкам.
+💬 Обращайся: Эндер, Эндерия, Энди, Эндер-тян
 
-💜 <b>Как ко мне обратиться:</b> Эндер, Эндерия, Энди, Эндер-тян
-
-🐰 <i>Попробуй написать мне что-нибудь с моим именем!</i>"""
+🐰 Напиши что-нибудь с моим именем - я отвечу!"""
     await message.answer(text, parse_mode="HTML")
 
 @dp.message()
@@ -404,6 +328,7 @@ async def handle_message(message: Message):
             response = await get_enderia_response_with_gemini(message.text, username)
             await message.reply(response, parse_mode="HTML")
 
+# ========== КОЛБЭКИ ==========
 @dp.callback_query(lambda c: c.data == "menu_main")
 async def menu_main(callback: CallbackQuery):
     await callback.message.edit_text(f"{emoji(EMOJI['cat_dance'], '✨')} <b>Главное меню</b>", parse_mode="HTML", reply_markup=get_main_keyboard())
@@ -453,12 +378,12 @@ async def refresh_online(callback: CallbackQuery):
 async def menu_premium(callback: CallbackQuery):
     text = f"""{emoji(EMOJI['cat_dance'], '🐱')}{emoji(EMOJI['anime_dance'], '💃')}{emoji(EMOJI['rabbit_fly'], '🐰')} <b>ПРЕМИУМ ДОСТУП</b>
 
-🌿 Друид — 25₴ / 50₽
-🔮 Оракул — 50₴ / 100₽
-👑 Монарх — 100₴ / 200₽
-🪽 Херувим — 150₴ / 300₽
-🏛️ Архонт — 200₴ / 400₽
-😇 Серафим — 300₴ / 600₽
+🌿 Друид - 25грн / 50руб
+🔮 Оракул - 50грн / 100руб
+👑 Монарх - 100грн / 200руб
+🪽 Херувим - 150грн / 300руб
+🏛️ Архонт - 200грн / 400руб
+😇 Серафим - 300грн / 600руб
 
 {emoji(EMOJI['rabbit_fly'], '🐰')} По вопросам: {ADMIN_CONTACT}"""
     await callback.message.edit_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="◀️ НАЗАД", callback_data="menu_main", icon_custom_emoji_id=EMOJI["back"])]]))
@@ -468,11 +393,11 @@ async def menu_premium(callback: CallbackQuery):
 async def menu_enderia(callback: CallbackQuery):
     text = f"""{emoji(EMOJI['cat_dance'], '💜')} <b>Привет! Я Эндерия!</b>
 
-🐱 Кто я: девушка-эндермен, хранительница Края.
+🐱 Я девушка-эндермен, хранительница Края.
 
-💬 Как ко мне обратиться: Эндер, Эндерия, Энди, Эндер-тян
+💬 Обращайся: Эндер, Эндерия, Энди, Эндер-тян
 
-🐰 Напиши что-нибудь с моим именем — я отвечу!"""
+🐰 Напиши что-нибудь с моим именем - я отвечу!"""
     await callback.message.edit_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="◀️ НАЗАД", callback_data="menu_main", icon_custom_emoji_id=EMOJI["back"])]]))
     await callback.answer()
 
