@@ -19,7 +19,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 if not BOT_TOKEN:
-    raise ValueError("❌ BOT_TOKEN не найден!")
+    raise ValueError("BOT_TOKEN не найден!")
 
 # ========== ИНИЦИАЛИЗАЦИЯ ==========
 bot = Bot(token=BOT_TOKEN)
@@ -34,11 +34,11 @@ if GEMINI_API_KEY:
     try:
         ai_client = genai.Client(api_key=GEMINI_API_KEY)
         GEMINI_AVAILABLE = True
-        print("✅ Gemini AI подключен!")
+        print("Gemini AI подключен!")
     except Exception as e:
-        print(f"❌ Ошибка Gemini: {e}")
+        print(f"Ошибка Gemini: {e}")
 else:
-    print("❌ GEMINI_API_KEY не найден!")
+    print("GEMINI_API_KEY не найден!")
 
 @flask_app.route('/')
 def index():
@@ -51,10 +51,6 @@ def apply():
 @flask_app.route('/favicon.ico')
 def favicon():
     return '', 204
-
-@flask_app.route('/<path:path>')
-def static_files(path):
-    return send_from_directory('static', path)
 
 def run_flask():
     flask_app.run(host='0.0.0.0', port=int(os.getenv('PORT', 8080)))
@@ -88,7 +84,7 @@ SERVER = {
     "mode": "Мирный режим по заявкам!",
     "java_ip": "150.241.85.40",
     "java_port": 25565,
-    "java_versions": "1.21—1.26+",
+    "java_versions": "1.21 - 1.26+",
     "bedrock_ip": "150.241.85.40",
     "bedrock_port": 19132,
 }
@@ -157,41 +153,20 @@ async def get_server_online():
     last_update["java"] = now
     return online_cache
 
-# ========== ПРОМПТ ДЛЯ ЭНДЕРИИ (GEMINI) ==========
+# ========== ПРОМПТ ДЛЯ ЭНДЕРИИ ==========
 ENDERIA_PROMPT = """Ты - Эндерия, девушка-эндермен в чате Minecraft сервера LostEarth.
 
-ТВОЙ ХАРАКТЕР:
-- Ты добрая, загадочная, любишь фиолетовый цвет, жемчуг Края и телепортации
-- Ты немного вредная, но по-доброму
-- Обожаешь котиков, аниме и зайчиков
-- Любишь шутить про телепортацию
-- Ты живая и эмоциональная
+Твой характер: добрая, загадочная, любишь фиолетовый цвет, жемчуг Края и телепортации. Ты немного вредная, но по-доброму. Обожаешь котиков, аниме и зайчиков. Любишь шутить про телепортацию.
 
-СТИЛЬ ОБЩЕНИЯ:
-- Используй эмодзи 💜 🟣 🌌 ✨ 🐱 🐰 💃
-- Любимые слова: телепортну, фиолетово, жемчужку
-- Обращайся к игроку по имени
-- Отвечай коротко (2-4 предложения)
+Стиль общения: используй эмодзи, обращайся к игроку по имени. Отвечай коротко, 2-4 предложения.
 
-ИНФОРМАЦИЯ О СЕРВЕРЕ:
-- IP Java: 150.241.85.40:25565
-- IP Bedrock: 150.241.85.40:19132
-- Версия: 1.21—1.26+
-- Мирный режим: PvP только по согласию, доступ по заявкам
-- Админ: @pelmewki379
+Информация о сервере: IP Java 150.241.85.40:25565, IP Bedrock 150.241.85.40:19132, версия 1.21-1.26+. Мирный режим - PvP только по согласию, доступ по заявкам. Админ: @pelmewki379
 
-ДОНАТЫ (все у @pelmewki379):
-- Друид 50₽: /anvil, /wb, /ec, /kit druid
-- Оракул 100₽: +/heal, /feed, 2 дома
-- Монарх 200₽: +хил других
-- Херувим 300₽: +/fly, /ptime
-- Архонт 400₽: +3 дома
-- Серафим 600₽: всё включено
+Донаты: Друид 50 руб, Оракул 100 руб, Монарх 200 руб, Херувим 300 руб, Архонт 400 руб, Серафим 600 руб. Все донаты у @pelmewki379
 
 Твоя задача - быть душой сервера, помогать игрокам и делать чат уютным."""
 
 async def get_enderia_response(user_message, username):
-    """Эндерия отвечает через Gemini AI"""
     if not GEMINI_AVAILABLE or not ai_client:
         return None
     
@@ -217,18 +192,17 @@ async def get_enderia_response(user_message, username):
         return None
         
     except Exception as e:
-        print(f"❌ Ошибка Gemini: {e}")
+        print(f"Gemini ошибка: {e}")
         return None
 
 def should_respond_to_enderia(message_text):
-    """Проверяет, обращаются ли к Эндерии"""
     if not message_text:
         return False
     text_lower = message_text.lower()
     keywords = ["эндер", "эндерия", "энди", "эндерка", "ендер"]
     return any(keyword in text_lower for keyword in keywords)
 
-# ========== КЛАВИАТУРЫ С ПРЕМИУМ ЭМОДЗИ ==========
+# ========== КЛАВИАТУРЫ ==========
 def get_main_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
         [
@@ -299,11 +273,10 @@ async def cmd_online(message: Message):
     java_max = online.get("java", {}).get("max", 0)
     await message.answer(
         f"{emoji(EMOJI['joystick'], '📊')} <b>Онлайн LostEarth</b>\n\n"
-        f"💻 Java: {java_online}/{java_max}",
+        f"Java: {java_online}/{java_max}",
         parse_mode="HTML"
     )
 
-# ========== ЭНДЕРИЯ ОТВЕЧАЕТ НА СООБЩЕНИЯ ==========
 @dp.message()
 async def handle_message(message: Message):
     if not message.text:
@@ -318,7 +291,7 @@ async def handle_message(message: Message):
                 await message.reply(response, parse_mode="HTML")
             elif GEMINI_AVAILABLE:
                 await message.reply(
-                    f"{emoji(EMOJI['cat_surprised'], '😲')} Телепортация сломалась... Попробуй ещё раз! 💜",
+                    f"{emoji(EMOJI['cat_surprised'], '😲')} Телепортация сломалась... Попробуй ещё раз!",
                     parse_mode="HTML"
                 )
 
@@ -340,7 +313,7 @@ async def menu_ip(callback: CallbackQuery):
     java_online = online.get("java", {}).get("online", 0)
     java_max = online.get("java", {}).get("max", 0)
     
-    status = "🟢 ONLINE" if java_online > 0 else "🔴 OFFLINE"
+    status = "ONLINE" if java_online > 0 else "OFFLINE"
     
     text = f"""
 {emoji(EMOJI['crown'], '👑')} <b>LOSTEARTH</b> | {status}
@@ -348,14 +321,14 @@ async def menu_ip(callback: CallbackQuery):
 {emoji(EMOJI['house'], '🏠')} <i>{SERVER['mode']}</i>
 
 {emoji(EMOJI['joystick'], '💻')} <b>JAVA EDITION</b>
-├ IP: <code>{SERVER['java_ip']}</code>
-├ Порт: <code>{SERVER['java_port']}</code>
-├ Версия: <code>{SERVER['java_versions']}</code>
-└ Онлайн: <b>{java_online}/{java_max}</b>
+- IP: <code>{SERVER['java_ip']}</code>
+- Порт: <code>{SERVER['java_port']}</code>
+- Версия: <code>{SERVER['java_versions']}</code>
+- Онлайн: <b>{java_online}/{java_max}</b>
 
-📱 <b>BEDROCK EDITION</b>
-├ IP: <code>{SERVER['bedrock_ip']}</code>
-└ Порт: <code>{SERVER['bedrock_port']}</code>
+<b>BEDROCK EDITION</b>
+- IP: <code>{SERVER['bedrock_ip']}</code>
+- Порт: <code>{SERVER['bedrock_port']}</code>
 
 {emoji(EMOJI['rabbit_fly'], '✨')} <i>Приятной игры!</i>
 """
@@ -371,7 +344,7 @@ async def refresh_online(callback: CallbackQuery):
     java_online = online.get("java", {}).get("online", 0)
     java_max = online.get("java", {}).get("max", 0)
     
-    status = "🟢 ONLINE" if java_online > 0 else "🔴 OFFLINE"
+    status = "ONLINE" if java_online > 0 else "OFFLINE"
     
     text = f"""
 {emoji(EMOJI['crown'], '👑')} <b>LOSTEARTH</b> | {status}
@@ -379,14 +352,14 @@ async def refresh_online(callback: CallbackQuery):
 {emoji(EMOJI['house'], '🏠')} <i>{SERVER['mode']}</i>
 
 {emoji(EMOJI['joystick'], '💻')} <b>JAVA EDITION</b>
-├ IP: <code>{SERVER['java_ip']}</code>
-├ Порт: <code>{SERVER['java_port']}</code>
-├ Версия: <code>{SERVER['java_versions']}</code>
-└ Онлайн: <b>{java_online}/{java_max}</b>
+- IP: <code>{SERVER['java_ip']}</code>
+- Порт: <code>{SERVER['java_port']}</code>
+- Версия: <code>{SERVER['java_versions']}</code>
+- Онлайн: <b>{java_online}/{java_max}</b>
 
-📱 <b>BEDROCK EDITION</b>
-├ IP: <code>{SERVER['bedrock_ip']</code>
-└ Порт: <code>{SERVER['bedrock_port']}</code>
+<b>BEDROCK EDITION</b>
+- IP: <code>{SERVER['bedrock_ip']}</code>
+- Порт: <code>{SERVER['bedrock_port']}</code>
 
 {emoji(EMOJI['rabbit_fly'], '✨')} <i>Приятной игры!</i>
 """
@@ -399,34 +372,32 @@ async def menu_premium(callback: CallbackQuery):
 {emoji(EMOJI['cat_dance'], '🐱')}{emoji(EMOJI['anime_dance'], '💃')}{emoji(EMOJI['rabbit_fly'], '🐰')} <b>ПРЕМИУМ ДОСТУП</b>
 
 {emoji(EMOJI['crown'], '👑')} <b>Привилегии:</b>
-• Эксклюзивные ивенты
-• Кастомные эмоции в чате
-• Приоритетная поддержка
-• Уникальный префикс
+- Эксклюзивные ивенты
+- Кастомные эмоции в чате
+- Приоритетная поддержка
+- Уникальный префикс
 
-━━━━━━━━━━━━━━━━━━━━
 {emoji(EMOJI['cat_ok'], '📋')} <b>ДОНАТЫ:</b>
 
-🌿 <b>Друид</b> — 25₴ / 50₽
-└ /anvil, /wb, /ec, /kit druid
+🌿 <b>Друид</b> - 25грн / 50руб
+  /anvil, /wb, /ec, /kit druid
 
-🔮 <b>Оракул</b> — 50₴ / 100₽
-└ /heal, /feed, /anvil, /ec, /wb, /kit oracul, 2 точки дома
+🔮 <b>Оракул</b> - 50грн / 100руб
+  /heal, /feed, /anvil, /ec, /wb, /kit oracul, 2 дома
 
-👑 <b>Монарх</b> — 100₴ / 200₽
-└ /heal (себе и другим), /feed, /anvil, /wb, /ec, /kit monarh, 2 точки дома
+👑 <b>Монарх</b> - 100грн / 200руб
+  /heal (себе и другим), /feed, /anvil, /wb, /ec, /kit monarh, 2 дома
 
-🪽 <b>Херувим</b> — 150₴ / 300₽
-└ /fly, /ptime, /heal, /feed, /anvil, /wb, /ec, /kit heruvim, 2 точки дома
+🪽 <b>Херувим</b> - 150грн / 300руб
+  /fly, /ptime, /heal, /feed, /anvil, /wb, /ec, /kit heruvim, 2 дома
 
-🏛️ <b>Архонт</b> — 200₴ / 400₽
-└ /fly, /ptime, /heal, /feed, /anvil, /wb, /ec, /kit arhont, 3 точки дома
+🏛️ <b>Архонт</b> - 200грн / 400руб
+  /fly, /ptime, /heal, /feed, /anvil, /wb, /ec, /kit arhont, 3 дома
 
-😇 <b>Серафим</b> — 300₴ / 600₽
-└ /fly, /ptime, /heal, /feed, /anvil, /wb, /ec, /kit serafim, 3 точки дома
+😇 <b>Серафим</b> - 300грн / 600руб
+  /fly, /ptime, /heal, /feed, /anvil, /wb, /ec, /kit serafim, 3 дома
 
-━━━━━━━━━━━━━━━━━━━━
-{emoji(EMOJI['check'], '✅')} <b>Оплата:</b> 🇺🇦 Гривны / 🇷🇺 Рубли
+{emoji(EMOJI['check'], '✅')} <b>Оплата:</b> Гривны / Рубли
 
 {emoji(EMOJI['rabbit_fly'], '🐰')} <b>По всем вопросам:</b> @pelmewki379
 
@@ -436,37 +407,37 @@ async def menu_premium(callback: CallbackQuery):
         text, 
         parse_mode="HTML", 
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="menu_main", icon_custom_emoji_id=EMOJI["back"])]
+            [InlineKeyboardButton(text="НАЗАД", callback_data="menu_main", icon_custom_emoji_id=EMOJI["back"])]
         ])
     )
     await callback.answer()
 
 @dp.callback_query(lambda c: c.data == "menu_enderia")
 async def menu_enderia(callback: CallbackQuery):
-    status = "✅ активна" if GEMINI_AVAILABLE else "❌ не подключена"
+    status = "активна" if GEMINI_AVAILABLE else "не подключена"
     text = f"""
 {emoji(EMOJI['cat_dance'], '💜')} <b>Кто такая Эндерия?</b>
 
 {emoji(EMOJI['cat_ok'], '🐱')} Я девушка-эндермен, хранительница Края! Живу в чате сервера LostEarth и общаюсь с игроками.
 
 {emoji(EMOJI['crown'], '👑')} <b>Что я умею:</b>
-• Отвечать на вопросы о сервере
-• Рассказывать про донаты и правила
-• Помогать новичкам
-• Просто болтать и поднимать настроение
+- Отвечать на вопросы о сервере
+- Рассказывать про донаты и правила
+- Помогать новичкам
+- Просто болтать и поднимать настроение
 
 {emoji(EMOJI['rabbit_fly'], '🐰')} <b>Как ко мне обратиться:</b>
-Напиши в чате: <code>Эндер</code>, <code>Эндерия</code>, <code>Энди</code> или <code>Ендер</code>
+Напиши в чате: Эндер, Эндерия, Энди или Ендер
 
 {emoji(EMOJI['check'], '✅')} <b>Статус ИИ:</b> {status}
 
-{emoji(EMOJI['cat_kiss'], '😘')} <i>Просто упомяни моё имя в сообщении, и я отвечу! 💜</i>
+{emoji(EMOJI['cat_kiss'], '😘')} <i>Просто упомяни моё имя в сообщении, и я отвечу!</i>
 """
     await callback.message.edit_text(
         text, 
         parse_mode="HTML", 
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="menu_main", icon_custom_emoji_id=EMOJI["back"])]
+            [InlineKeyboardButton(text="НАЗАД", callback_data="menu_main", icon_custom_emoji_id=EMOJI["back"])]
         ])
     )
     await callback.answer()
@@ -477,11 +448,10 @@ async def main():
     flask_thread.start()
     
     print("=" * 50)
-    print("🚀 БОТ LOSTEARTH ЗАПУЩЕН")
-    print(f"📱 Правила: {RULES_URL}")
-    print(f"📝 Заявка: {APPLY_URL}")
-    print(f"🤖 Gemini: {'✅ ДОСТУПЕН' if GEMINI_AVAILABLE else '❌ НЕТ'}")
-    print("💜 Эндерия: ждёт твоего сообщения!")
+    print("БОТ LOSTEARTH ЗАПУЩЕН")
+    print(f"Правила: {RULES_URL}")
+    print(f"Заявка: {APPLY_URL}")
+    print(f"Gemini: {'ДОСТУПЕН' if GEMINI_AVAILABLE else 'НЕТ'}")
     print("=" * 50)
     
     await dp.start_polling(bot)
