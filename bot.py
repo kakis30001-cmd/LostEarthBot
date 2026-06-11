@@ -138,7 +138,7 @@ def get_main_keyboard():
             ),
             InlineKeyboardButton(
                 text="ЗАЯВКА", 
-                callback_data="menu_apply",
+                web_app=WebAppInfo(url=f"{RULES_URL}apply.html"),
                 icon_custom_emoji_id=EMOJI["rabbit_fly"]
             )
         ],
