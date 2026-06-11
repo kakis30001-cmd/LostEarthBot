@@ -162,8 +162,19 @@ async def get_enderia_response(user_message, username):
     
     try:
         current_time = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
-        online = await get_server_online()
-        java_online = online.get("java", {}).get("online", 0)
+        
+        # 1. ЗАЩИТА ОТ "index out of range"
+        # Если get_server_online() падает или возвращает не словарь, бот не умрет
+        try:
+            online = await get_server_online()
+            # Используем безопасное получение данных, если структуры нет — вернет 0
+            if isinstance(online, dict):
+                java_online = online.get("java", {}).get("online", 0)
+            else:
+                java_online = 0
+        except Exception as online_err:
+            print(f"Ошибка получения онлайна (игнорируем): {online_err}")
+            java_online = 0
         
         full_instruction = f"""{ENDERIA_PROMPT}
 
@@ -173,29 +184,28 @@ async def get_enderia_response(user_message, username):
 
 Ответь как Эндерия (мило, с премиум эмодзи, коротко):"""
 
+        # 2. ИСПРАВЛЕНИЕ ОШИБКИ ИМПОРТА ТИПОВ (Заменяем ai_types на типы из нового SDK)
+        # В google-genai конфигурация передается через types.GenerateContentConfig
+        from google import genai
+        from google.genai import types
+
         response = ai_client.models.generate_content(
             model="gemini-2.5-flash",
             contents=user_message,
-            config=ai_types.GenerateContentConfig(
+            config=types.GenerateContentConfig(
                 system_instruction=full_instruction,
                 temperature=0.9,
             ),
         )
         
-        if response.text:
+        if response and response.text:
             return response.text
         return None
         
     except Exception as e:
-        print(f"Gemini ошибка: {e}")
+        # Теперь вы увидите детальную причину в логах, если что-то пойдет не так
+        print(f"Критическая Gemini ошибка: {e}")
         return None
-
-def should_respond_to_enderia(message_text):
-    if not message_text:
-        return False
-    text_lower = message_text.lower()
-    keywords = ["эндер", "эндерия", "энди", "эндерка", "ендер", "энд"]
-    return any(keyword in text_lower for keyword in keywords)
 
 # ========== КЛАВИАТУРЫ ==========
 def get_main_keyboard():
