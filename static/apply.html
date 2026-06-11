@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>LostEarth - Заявка на мирный режим</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #0a0a1a 0%, #0f0f2a 50%, #1a1a3e 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            padding: 20px;
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        .card {
+            background: rgba(20, 20, 40, 0.85);
+            backdrop-filter: blur(10px);
+            border-radius: 28px;
+            padding: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        
+        h1 {
+            text-align: center;
+            font-size: 24px;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, #ffd89b, #c7e9fb);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .subtitle {
+            text-align: center;
+            font-size: 14px;
+            opacity: 0.7;
+            margin-bottom: 24px;
+        }
+        
+        .question {
+            margin-bottom: 20px;
+        }
+        
+        .question-label {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #c084fc;
+        }
+        
+        .question-number {
+            display: inline-block;
+            width: 28px;
+            height: 28px;
+            background: rgba(139, 92, 246, 0.3);
+            border-radius: 50%;
+            text-align: center;
+            line-height: 28px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        
+        input, textarea, select {
+            width: 100%;
+            padding: 14px;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 16px;
+            color: white;
+            font-size: 15px;
+            font-family: inherit;
+            transition: all 0.3s;
+        }
+        
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: #a855f7;
+            box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.2);
+        }
+        
+        textarea {
+            min-height: 80px;
+            resize: vertical;
+        }
+        
+        .radio-group {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            padding: 10px 0;
+        }
+        
+        .radio-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+        
+        .radio-option input {
+            width: auto;
+            transform: scale(1.2);
+            accent-color: #a855f7;
+        }
+        
+        button {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, #7c3aed, #a855f7);
+            border: none;
+            border-radius: 20px;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 20px;
+        }
+        
+        button:hover {
+            transform: scale(0.98);
+            box-shadow: 0 4px 15px rgba(124, 58, 237, 0.4);
+        }
+        
+        .back-btn {
+            background: rgba(255, 255, 255, 0.1);
+            margin-top: 12px;
+        }
+        
+        .back-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(0.98);
+        }
+        
+        .footer {
+            text-align: center;
+            padding: 16px;
+            font-size: 12px;
+            opacity: 0.6;
+        }
+        
+        .result {
+            display: none;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 20px;
+            padding: 20px;
+            margin-top: 20px;
+            border-left: 4px solid #38EF7D;
+        }
+        
+        .result.show {
+            display: block;
+            animation: fadeIn 0.4s ease;
+        }
+        
+        .copy-btn {
+            background: rgba(56, 239, 125, 0.2);
+            margin-top: 15px;
+            border: 1px solid #38EF7D;
+            color: #38EF7D;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="card">
+        <h1>🐱 ЗАЯВКА НА МИРНЫЙ РЕЖИМ</h1>
+        <div class="subtitle">Заполни форму, чтобы получить доступ</div>
+        
+        <form id="applyForm">
+            <div class="question">
+                <div class="question-label">
+                    <span class="question-number">1</span> Сколько тебе лет?
+                </div>
+                <input type="text" id="q1" placeholder="Например: 16" required>
+            </div>
+            
+            <div class="question">
+                <div class="question-label">
+                    <span class="question-number">2</span> Какого ты пола?
+                </div>
+                <div class="radio-group">
+                    <label class="radio-option">
+                        <input type="radio" name="gender" value="Мужской" required> Мужской
+                    </label>
+                    <label class="radio-option">
+                        <input type="radio" name="gender" value="Женский"> Женский
+                    </label>
+                    <label class="radio-option">
+                        <input type="radio" name="gender" value="Не указываю"> Не указываю
+                    </label>
+                </div>
+            </div>
+            
+            <div class="question">
+                <div class="question-label">
+                    <span class="question-number">3</span> Чем ты занимаешься? (В игре)
+                </div>
+                <textarea id="q3" placeholder="Например: строю, копаю, пвп, исследую..." required></textarea>
+            </div>
+            
+            <div class="question">
+                <div class="question-label">
+                    <span class="question-number">4</span> Умеешь играть в команде?
+                </div>
+                <div class="radio-group">
+                    <label class="radio-option">
+                        <input type="radio" name="team" value="Да, люблю командную игру" required> Да, люблю командную игру
+                    </label>
+                    <label class="radio-option">
+                        <input type="radio" name="team" value="Скорее соло-игрок"> Скорее соло-игрок
+                    </label>
+                    <label class="radio-option">
+                        <input type="radio" name="team" value="Могу и так, и так"> Могу и так, и так
+                    </label>
+                </div>
+            </div>
+            
+            <div class="question">
+                <div class="question-label">
+                    <span class="question-number">5</span> Тебя легко вывести на различные эмоции?
+                </div>
+                <div class="radio-group">
+                    <label class="radio-option">
+                        <input type="radio" name="emotions" value="Да, я эмоциональный" required> Да, я эмоциональный
+                    </label>
+                    <label class="radio-option">
+                        <input type="radio" name="emotions" value="Нет, я спокойный"> Нет, я спокойный
+                    </label>
+                    <label class="radio-option">
+                        <input type="radio" name="emotions" value="Зависит от ситуации"> Зависит от ситуации
+                    </label>
+                </div>
+            </div>
+            
+            <div class="question">
+                <div class="question-label">
+                    <span class="question-number">6</span> Твой ник?
+                </div>
+                <input type="text" id="q6" placeholder="Введите ваш игровой ник" required>
+            </div>
+            
+            <div class="question">
+                <div class="question-label">
+                    <span class="question-number">7</span> С чего играешь?
+                </div>
+                <div class="radio-group">
+                    <label class="radio-option">
+                        <input type="radio" name="platform" value="Java Edition" required> Java Edition
+                    </label>
+                    <label class="radio-option">
+                        <input type="radio" name="platform" value="Bedrock Edition"> Bedrock Edition
+                    </label>
+                </div>
+            </div>
+            
+            <button type="submit">📩 ОТПРАВИТЬ ЗАЯВКУ</button>
+            <button type="button" class="back-btn" onclick="window.history.back()">◀️ НАЗАД</button>
+        </form>
+        
+        <div id="result" class="result">
+            <div style="font-weight: bold; margin-bottom: 12px;">✨ Ваша заявка:</div>
+            <pre id="resultText" style="white-space: pre-wrap; font-family: inherit; font-size: 14px; line-height: 1.5;"></pre>
+            <button class="copy-btn" onclick="copyToClipboard()">📋 КОПИРОВАТЬ</button>
+        </div>
+    </div>
+    <div class="footer">
+        🐱 По вопросам: @pelmewki379
+    </div>
+</div>
+
+<script>
+    const form = document.getElementById('applyForm');
+    const resultDiv = document.getElementById('result');
+    const resultText = document.getElementById('resultText');
+    
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const q1 = document.getElementById('q1').value;
+        const gender = document.querySelector('input[name="gender"]:checked')?.value || '';
+        const q3 = document.getElementById('q3').value;
+        const team = document.querySelector('input[name="team"]:checked')?.value || '';
+        const emotions = document.querySelector('input[name="emotions"]:checked')?.value || '';
+        const q6 = document.getElementById('q6').value;
+        const platform = document.querySelector('input[name="platform"]:checked')?.value || '';
+        
+        const message = `🐱 НОВАЯ ЗАЯВКА НА МИРНЫЙ РЕЖИМ 🐱
+
+1️⃣ Сколько лет? ${q1}
+2️⃣ Пол: ${gender}
+3️⃣ Чем занимается в игре? ${q3}
+4️⃣ Умеет играть в команде? ${team}
+5️⃣ Легко вывести на эмоции? ${emotions}
+6️⃣ Ник: ${q6}
+7️⃣ Платформа: ${platform}
+
+💎 Отправить заявку: @pelmewki379`;
+        
+        resultText.textContent = message;
+        resultDiv.classList.add('show');
+        
+        // Прокрутка к результату
+        resultDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+    
+    function copyToClipboard() {
+        const text = resultText.textContent;
+        navigator.clipboard.writeText(text).then(() => {
+            const copyBtn = document.querySelector('.copy-btn');
+            const originalText = copyBtn.textContent;
+            copyBtn.textContent = '✅ СКОПИРОВАНО!';
+            setTimeout(() => {
+                copyBtn.textContent = originalText;
+            }, 2000);
+        });
+    }
+    
+    if (window.Telegram && Telegram.WebApp) {
+        Telegram.WebApp.ready();
+        Telegram.WebApp.expand();
+    }
+</script>
+</body>
+</html>
