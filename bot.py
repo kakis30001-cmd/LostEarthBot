@@ -48,6 +48,10 @@ def index():
 def apply():
     return send_from_directory('static', 'apply.html')
 
+@flask_app.route('/favicon.ico')
+def favicon():
+    return '', 204
+
 @flask_app.route('/<path:path>')
 def static_files(path):
     return send_from_directory('static', path)
@@ -62,6 +66,7 @@ EMOJI = {
     "cat_glasses": "5267088110717544191",
     "cat_dance": "5359444458930718519",
     "cat_kiss": "6325462176660195024",
+    "cat_surprised": "5269649173946345008",
     "rabbit_fly": "5217576088506505749",
     "anime_dance": "6325682031741109665",
     "house": "5873147866364514353",
@@ -160,11 +165,11 @@ ENDERIA_PROMPT = """Ты - Эндерия, девушка-эндермен в ч
 - Ты немного вредная, но по-доброму
 - Обожаешь котиков, аниме и зайчиков
 - Любишь шутить про телепортацию
-- Ты живая и эмоциональная: можешь радоваться, грустить, удивляться
+- Ты живая и эмоциональная
 
 СТИЛЬ ОБЩЕНИЯ:
 - Используй эмодзи 💜 🟣 🌌 ✨ 🐱 🐰 💃
-- Любимые слова: "телепортну", "фиолетово", "жемчужку"
+- Любимые слова: телепортну, фиолетово, жемчужку
 - Обращайся к игроку по имени
 - Отвечай коротко (2-4 предложения)
 
@@ -172,8 +177,16 @@ ENDERIA_PROMPT = """Ты - Эндерия, девушка-эндермен в ч
 - IP Java: 150.241.85.40:25565
 - IP Bedrock: 150.241.85.40:19132
 - Версия: 1.21—1.26+
-- Мирный режим: PvP только по согласию
+- Мирный режим: PvP только по согласию, доступ по заявкам
 - Админ: @pelmewki379
+
+ДОНАТЫ (все у @pelmewki379):
+- Друид 50₽: /anvil, /wb, /ec, /kit druid
+- Оракул 100₽: +/heal, /feed, 2 дома
+- Монарх 200₽: +хил других
+- Херувим 300₽: +/fly, /ptime
+- Архонт 400₽: +3 дома
+- Серафим 600₽: всё включено
 
 Твоя задача - быть душой сервера, помогать игрокам и делать чат уютным."""
 
@@ -183,7 +196,6 @@ async def get_enderia_response(user_message, username):
         return None
     
     try:
-        # Получаем онлайн для контекста
         online = await get_server_online()
         java_online = online.get("java", {}).get("online", 0)
         
@@ -216,7 +228,7 @@ def should_respond_to_enderia(message_text):
     keywords = ["эндер", "эндерия", "энди", "эндерка", "ендер"]
     return any(keyword in text_lower for keyword in keywords)
 
-# ========== КЛАВИАТУРЫ ==========
+# ========== КЛАВИАТУРЫ С ПРЕМИУМ ЭМОДЗИ ==========
 def get_main_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
         [
@@ -243,6 +255,11 @@ def get_main_keyboard():
                 text="ПРЕМИУМ", 
                 callback_data="menu_premium",
                 icon_custom_emoji_id=EMOJI["cat_dance"]
+            ),
+            InlineKeyboardButton(
+                text="ЭНДЕРИЯ", 
+                callback_data="menu_enderia",
+                icon_custom_emoji_id=EMOJI["cat_ok"]
             )
         ]
     ])
@@ -271,8 +288,7 @@ async def start_cmd(message: Message):
     text = (
         f"{emoji(EMOJI['start'], '✨')} <b>Добро пожаловать на {SERVER['name']}</b>\n\n"
         f"{emoji(EMOJI['house'], '🏠')} <b>{SERVER['mode']}</b>\n\n"
-        f"{emoji(EMOJI['cat_ok'], '🐱')} <b>Используйте кнопки ниже</b>\n\n"
-        f"{'🤖 Эндерия активна! Напиши её имя и она ответит' if GEMINI_AVAILABLE else '🤖 Эндерия пока не активна'}"
+        f"{emoji(EMOJI['cat_ok'], '🐱')} <b>Используйте кнопки ниже</b>"
     )
     await message.answer(text, parse_mode="HTML", reply_markup=get_main_keyboard())
 
@@ -293,7 +309,6 @@ async def handle_message(message: Message):
     if not message.text:
         return
     
-    # Проверяем, обращаются ли к Эндерии
     if should_respond_to_enderia(message.text):
         async with ChatActionSender.typing(bot=bot, chat_id=message.chat.id):
             username = message.from_user.first_name or "Игрок"
@@ -370,7 +385,7 @@ async def refresh_online(callback: CallbackQuery):
 └ Онлайн: <b>{java_online}/{java_max}</b>
 
 📱 <b>BEDROCK EDITION</b>
-├ IP: <code>{SERVER['bedrock_ip']}</code>
+├ IP: <code>{SERVER['bedrock_ip']</code>
 └ Порт: <code>{SERVER['bedrock_port']}</code>
 
 {emoji(EMOJI['rabbit_fly'], '✨')} <i>Приятной игры!</i>
@@ -426,9 +441,38 @@ async def menu_premium(callback: CallbackQuery):
     )
     await callback.answer()
 
+@dp.callback_query(lambda c: c.data == "menu_enderia")
+async def menu_enderia(callback: CallbackQuery):
+    status = "✅ активна" if GEMINI_AVAILABLE else "❌ не подключена"
+    text = f"""
+{emoji(EMOJI['cat_dance'], '💜')} <b>Кто такая Эндерия?</b>
+
+{emoji(EMOJI['cat_ok'], '🐱')} Я девушка-эндермен, хранительница Края! Живу в чате сервера LostEarth и общаюсь с игроками.
+
+{emoji(EMOJI['crown'], '👑')} <b>Что я умею:</b>
+• Отвечать на вопросы о сервере
+• Рассказывать про донаты и правила
+• Помогать новичкам
+• Просто болтать и поднимать настроение
+
+{emoji(EMOJI['rabbit_fly'], '🐰')} <b>Как ко мне обратиться:</b>
+Напиши в чате: <code>Эндер</code>, <code>Эндерия</code>, <code>Энди</code> или <code>Ендер</code>
+
+{emoji(EMOJI['check'], '✅')} <b>Статус ИИ:</b> {status}
+
+{emoji(EMOJI['cat_kiss'], '😘')} <i>Просто упомяни моё имя в сообщении, и я отвечу! 💜</i>
+"""
+    await callback.message.edit_text(
+        text, 
+        parse_mode="HTML", 
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="menu_main", icon_custom_emoji_id=EMOJI["back"])]
+        ])
+    )
+    await callback.answer()
+
 # ========== ЗАПУСК ==========
 async def main():
-    # Запускаем Flask в отдельном потоке
     flask_thread = Thread(target=run_flask, daemon=True)
     flask_thread.start()
     
@@ -437,6 +481,7 @@ async def main():
     print(f"📱 Правила: {RULES_URL}")
     print(f"📝 Заявка: {APPLY_URL}")
     print(f"🤖 Gemini: {'✅ ДОСТУПЕН' if GEMINI_AVAILABLE else '❌ НЕТ'}")
+    print("💜 Эндерия: ждёт твоего сообщения!")
     print("=" * 50)
     
     await dp.start_polling(bot)
