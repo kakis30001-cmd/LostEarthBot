@@ -201,7 +201,7 @@ async def get_enderia_response(user_message, username):
 Ответь как Эндерия (мило, с эмодзи, коротко):"""
 
         response = ai_client.models.generate_content(
-            model="gemini-2.0-flash-exp",
+            model="gemini-1.5-flash",
             contents=user_message,
             config=ai_types.GenerateContentConfig(
                 system_instruction=full_instruction,
