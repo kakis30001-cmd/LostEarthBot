@@ -22,6 +22,14 @@ flask_app = Flask(__name__, static_folder='static')
 def index():
     return send_from_directory('static', 'rules.html')
 
+@flask_app.route('/apply')
+def apply():
+    return send_from_directory('static', 'apply.html')
+
+@flask_app.route('/<path:path>')
+def static_files(path):
+    return send_from_directory('static', path)
+
 def run_flask():
     flask_app.run(host='0.0.0.0', port=int(os.getenv('PORT', 8080)))
 
@@ -58,7 +66,9 @@ SERVER = {
     "bedrock_port": 19132,
 }
 
-RULES_URL = "https://lostearthbot-production.up.railway.app/"
+BASE_URL = "https://lostearthbot-production.up.railway.app"
+RULES_URL = f"{BASE_URL}/"
+APPLY_URL = f"{BASE_URL}/apply"
 
 online_cache = {}
 last_update = {}
@@ -138,7 +148,7 @@ def get_main_keyboard():
             ),
             InlineKeyboardButton(
                 text="ЗАЯВКА", 
-                web_app=WebAppInfo(url=f"{RULES_URL}apply.html"),
+                web_app=WebAppInfo(url=APPLY_URL),
                 icon_custom_emoji_id=EMOJI["rabbit_fly"]
             )
         ],
@@ -250,30 +260,6 @@ async def refresh_online(callback: CallbackQuery):
     await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_ip_keyboard())
     await callback.answer(f"{emoji(EMOJI['check'], '✅')} Обновлено!")
 
-@dp.callback_query(lambda c: c.data == "menu_apply")
-async def menu_apply(callback: CallbackQuery):
-    text = f"""
-{emoji(EMOJI['door'], '🚪')} <b>ДОСТУП К МИРНОМУ РЕЖИМУ</b>
-
-{emoji(EMOJI['cat_ok'], '🤙')} <b>Как попасть:</b>
-
-1️⃣ Напишите заявку: @pelmewki379
-2️⃣ Расскажите немного о себе
-3️⃣ Дождитесь ответа администратора
-
-{emoji(EMOJI['rabbit_fly'], '🐰')} <b>Подать заявку:</b> @pelmewki379
-
-{emoji(EMOJI['cat_kiss'], '😘')} <i>Добро пожаловать на LostEarth!</i>
-"""
-    await callback.message.edit_text(
-        text, 
-        parse_mode="HTML", 
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="НАЗАД", callback_data="menu_main", icon_custom_emoji_id=EMOJI["back"])]
-        ])
-    )
-    await callback.answer()
-
 @dp.callback_query(lambda c: c.data == "menu_premium")
 async def menu_premium(callback: CallbackQuery):
     text = f"""
@@ -295,18 +281,20 @@ async def menu_premium(callback: CallbackQuery):
 └ /heal, /feed, /anvil, /ec, /wb, /kit oracul, 2 точки дома
 
 👑 <b>Монарх</b> — 100₴ / 200₽
-└ /heal, /feed, /anvil, /ec, /wb, /kit monarh, хил других, 2 точки дома
+└ /heal (себе и другим), /feed (себе и другим), /anvil, /wb, /ec, /kit monarh, 2 точки дома
 
 🪽 <b>Херувим</b> — 150₴ / 300₽
-└ /fly, /ptime, /heal, /feed, /ec, /wb, /anvil, /kit heruvim, 2 точки дома
+└ /fly, /ptime, /heal, /feed, /anvil, /wb, /ec, /kit heruvim, 2 точки дома
 
 🏛️ <b>Архонт</b> — 200₴ / 400₽
-└ /fly, /ptime, /heal, /feed, /ec, /wb, /anvil, /kit arhont, 3 точки дома
+└ /fly, /ptime, /heal, /feed, /anvil, /wb, /ec, /kit arhont, 3 точки дома
 
 😇 <b>Серафим</b> — 300₴ / 600₽
-└ /fly, /ptime, /heal, /feed, /ec, /wb, /anvil, /kit serafim, 3 точки дома
+└ /fly, /ptime, /heal, /feed, /anvil, /wb, /ec, /kit serafim, 3 точки дома
 
 ━━━━━━━━━━━━━━━━━━━━
+{emoji(EMOJI['check'], '✅')} <b>Оплата:</b> 🇺🇦 Гривны / 🇷🇺 Рубли
+
 {emoji(EMOJI['rabbit_fly'], '🐰')} <b>По всем вопросам:</b> @pelmewki379
 
 {emoji(EMOJI['cat_kiss'], '😘')} <i>Спасибо за поддержку сервера!</i>
@@ -336,6 +324,8 @@ async def main():
     thread.start()
     
     print("🚀 Бот LostEarth запущен!")
+    print(f"📱 Правила: {RULES_URL}")
+    print(f"📝 Заявка: {APPLY_URL}")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
