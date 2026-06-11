@@ -6,7 +6,6 @@ from datetime import datetime
 import os
 import random
 from threading import Thread
-from collections import deque
 
 from flask import Flask, send_from_directory
 from aiogram import Bot, Dispatcher, types
@@ -26,28 +25,6 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 if not BOT_TOKEN:
     raise ValueError("❌ BOT_TOKEN не найден!")
-
-# ========== ПАМЯТЬ ЧАТА ==========
-# Храним последние 20 сообщений из чата
-chat_memory = deque(maxlen=20)
-
-def add_to_memory(username: str, message: str):
-    """Добавляет сообщение в память чата"""
-    chat_memory.append({
-        "time": datetime.now().strftime("%H:%M:%S"),
-        "username": username,
-        "message": message
-    })
-
-def get_chat_context() -> str:
-    """Возвращает контекст последних сообщений чата"""
-    if not chat_memory:
-        return "Пока сообщений в чате не было."
-    
-    context = "Последние сообщения в чате:\n"
-    for msg in chat_memory:
-        context += f"[{msg['time']}] {msg['username']}: {msg['message']}\n"
-    return context
 
 # ========== ИНИЦИАЛИЗАЦИЯ ==========
 bot = Bot(token=BOT_TOKEN)
@@ -188,19 +165,13 @@ async def get_enderia_response(user_message, username):
         online = await get_server_online()
         java_online = online.get("java", {}).get("online", 0)
         
-        # Получаем контекст чата
-        chat_context = get_chat_context()
-        
         full_instruction = f"""{ENDERIA_PROMPT}
 
 Текущая дата и время: {current_time}
 Сейчас на сервере онлайн: {java_online} игроков.
+Игрок {username} написал: "{user_message}"
 
-{chat_context}
-
-Игрок {username} написал мне (Эндерии): "{user_message}"
-
-Ответь как Эндерия (мило, с премиум эмодзи, коротко). Ты знаешь, о чём говорили в чате до этого, но отвечаешь только когда к тебе обратились."""
+Ответь как Эндерия (мило, с премиум эмодзи, коротко):"""
 
         response = ai_client.models.generate_content(
             model="gemini-2.5-flash",
@@ -306,20 +277,13 @@ async def handle_message(message: Message):
     if not message.text:
         return
     
-    username = message.from_user.first_name or message.from_user.username or "Игрок"
-    
-    # Запоминаем все сообщения в чате (для контекста)
-    add_to_memory(username, message.text)
-    
-    # Отвечаем только если обратились к Эндерии
     if should_respond_to_enderia(message.text):
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+        username = message.from_user.first_name or "Игрок"
         response = await get_enderia_response(message.text, username)
         
         if response:
             await message.reply(response, parse_mode="HTML")
-            # Добавляем ответ Эндерии в память чата
-            add_to_memory("Эндерия", response)
         else:
             await message.reply(
                 f"{emoji(EMOJI['cat_surprised'], '😲')} Телепортация сломалась... Попробуй ещё раз!",
@@ -440,7 +404,7 @@ async def menu_enderia(callback: CallbackQuery):
 {emoji(EMOJI['cat_glasses'], '😎')} <b>Как ко мне обратиться:</b>
 Напиши: Эндер, Эндерия, Энди, Энд, Ендер
 
-{emoji(EMOJI['rabbit_fly'], '🐰')} <i>Я читаю чат и понимаю о чём вы говорите, но отвечаю только когда меня позовёте!</i>
+{emoji(EMOJI['rabbit_fly'], '🐰')} <i>Просто упомяни моё имя в сообщении, и я отвечу!</i>
 """
     await callback.message.edit_text(
         text, 
@@ -460,7 +424,6 @@ async def main():
     print("БОТ LOSTEARTH ЗАПУЩЕН")
     print(f"Правила: {RULES_URL}")
     print(f"Заявка: {APPLY_URL}")
-    print("Эндерия читает чат, но отвечает только когда её позовут!")
     print("=" * 50)
     
     await dp.start_polling(bot)
