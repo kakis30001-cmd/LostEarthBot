@@ -11,7 +11,8 @@ from google.genai import types as ai_types  # Правильный импорт 
 
 # Загружаем переменные
 load_dotenv()
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+
+TELEGRAM_TOKEN = os.getenv("BOT_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # Инициализация Flask для Railway
