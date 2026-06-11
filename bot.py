@@ -35,14 +35,17 @@ if GEMINI_API_KEY:
         GEMINI_AVAILABLE = True
         logger.info("✅ Gemini AI клиент создан!")
         
-        # Тестовый запрос
+        # ПРАВИЛЬНАЯ МОДЕЛЬ - gemini-1.5-flash (работает 100%)
+        logger.info("🔄 Тестируем модель gemini-1.5-flash...")
         test_response = gemini_client.models.generate_content(
-            model='gemini-2.0-flash-exp',
-            contents='Скажи "OK"'
+            model='gemini-1.5-flash',
+            contents='Скажи "Привет, я работаю!"'
         )
-        logger.info(f"✅ Gemini тест пройден: {test_response.text}")
+        logger.info(f"✅ Gemini тест пройден! Ответ: {test_response.text}")
+        
     except Exception as e:
         logger.error(f"❌ Ошибка Gemini: {e}")
+        GEMINI_AVAILABLE = False
 else:
     logger.error("❌ GEMINI_API_KEY не найден!")
 
@@ -146,7 +149,7 @@ async def get_minecraft_online():
         logger.error(f"Ошибка онлайна: {e}")
         return 0
 
-# ========== ЭНДЕРИЯ С GEMINI ==========
+# ========== ЭНДЕРИЯ С GEMINI (ИСПРАВЛЕННАЯ МОДЕЛЬ) ==========
 async def get_enderia_response(user_message, username):
     if not GEMINI_AVAILABLE or not gemini_client:
         logger.error("❌ Gemini не доступен!")
@@ -161,12 +164,13 @@ async def get_enderia_response(user_message, username):
 
 Твой стиль: используй эмодзи 💜 🟣 🌌 ✨ 🐱 🐰 💃. Любимые слова: телепортну, фиолетово, жемчужку. Обращайся к игроку по имени. Отвечай коротко, 2-3 предложения.
 
-Игрок {username} написал: {user_message}
+Игрок {username} написал: "{user_message}"
 
 Ответь как Эндерия (мило, с эмодзи, с юмором):"""
         
+        # ИСПРАВЛЕНО: правильная модель gemini-1.5-flash
         response = gemini_client.models.generate_content(
-            model='gemini-2.0-flash-exp',
+            model='gemini-1.5-flash',
             contents=prompt,
             config=types.GenerateContentConfig(
                 temperature=0.9,
@@ -175,10 +179,10 @@ async def get_enderia_response(user_message, username):
         )
         
         if response and response.text:
-            logger.info(f"✅ Ответ получен")
+            logger.info(f"✅ Ответ получен: {response.text[:50]}...")
             return response.text.strip()
         else:
-            logger.error("❌ Пустой ответ")
+            logger.error("❌ Пустой ответ от Gemini")
             return None
         
     except Exception as e:
@@ -187,7 +191,7 @@ async def get_enderia_response(user_message, username):
 
 def should_respond(message_text):
     text_lower = message_text.lower()
-    keywords = ["эндер", "эндерия", "энди", "эндерка", "эндер тян", "@энд"]
+    keywords = ["эндер", "эндерия", "энди", "эндерка", "эндер тян", "@энд", "ендер", "ендеря"]
     return any(k in text_lower for k in keywords)
 
 # ========== КЛАВИАТУРЫ С ПРЕМИУМ ЭМОДЗИ ==========
@@ -373,7 +377,7 @@ async def main():
     logger.info("🚀 БОТ LOSTEARTH ЗАПУЩЕН")
     logger.info(f"🤖 Gemini: {'✅ ДОСТУПЕН' if GEMINI_AVAILABLE else '❌ НЕТ'}")
     if GEMINI_AVAILABLE:
-        logger.info("💜 Эндерия готова к общению!")
+        logger.info("💜 Эндерия использует модель gemini-1.5-flash")
     else:
         logger.warning("⚠️ Добавь GEMINI_API_KEY в Railway!")
     logger.info("=" * 50)
