@@ -12,21 +12,24 @@ load_dotenv()
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
+# Старые рабочие модели
 MODELS_CHAIN = [
-    "meta-llama/llama-3.2-3b-instruct",
-    "google/gemini-flash-1.5",
-    "qwen/qwen2.5-7b-instruct",
+    "openai/gpt-4o-mini",
+    "openai/gpt-3.5-turbo",
+    "meta-llama/llama-3.3-70b-instruct",
+    "qwen/qwen3-next-80b-a3b-instruct",
+    "nvidia/nemotron-3-nano-30b-a3b",
 ]
 
 # ========== ФАЙЛОВОЕ ХРАНИЛИЩЕ ==========
 PLAYERS_FILE = "players.json"
 
 FARMS = {
-    "пауков": {"base_income": 50, "emoji": "🕷️", "cost": 1000, "name": "пауков"},
-    "зомби": {"base_income": 75, "emoji": "🧟", "cost": 1000, "name": "зомби"},
-    "криперов": {"base_income": 100, "emoji": "💥", "cost": 1000, "name": "криперов"},
-    "скелетов": {"base_income": 60, "emoji": "🏹", "cost": 1000, "name": "скелетов"},
-    "эндерменов": {"base_income": 150, "emoji": "👾", "cost": 1500, "name": "эндерменов"},
+    "пауков": {"base_income": 50, "emoji": "🕷️", "cost": 1000},
+    "зомби": {"base_income": 75, "emoji": "🧟", "cost": 1000},
+    "криперов": {"base_income": 100, "emoji": "💥", "cost": 1000},
+    "скелетов": {"base_income": 60, "emoji": "🏹", "cost": 1000},
+    "эндерменов": {"base_income": 150, "emoji": "👾", "cost": 1500},
 }
 
 UPGRADE_COSTS = {1: 0, 2: 500, 3: 1000, 4: 2000, 5: 5000}
@@ -255,8 +258,14 @@ def mark_greeted(username: str):
     user_greeted[username] = True
 
 def is_greeting(text: str) -> bool:
-    greetings = ["привет", "здравствуй", "хай", "hello", "приветик", "здарова"]
+    greetings = ["привет", "здравствуй", "хай", "hello", "приветик", "здарова", "доброе утро", "добрый день"]
     return any(g in text.lower() for g in greetings)
+
+def is_just_name(text: str) -> bool:
+    text_lower = text.lower().strip()
+    names = ["энди", "эндер", "эндерия", "ендер", "енди"]
+    clean_text = re.sub(r'[!?.,]', '', text_lower).strip()
+    return clean_text in names
 
 def should_respond(message_text: str) -> bool:
     if not message_text:
@@ -269,7 +278,7 @@ async def roll_dice_animated(bot, chat_id: int):
     msg = await bot.send_dice(chat_id, emoji="🎲")
     return msg.dice.value
 
-# ========== ОСНОВНАЯ ФУНКЦИЯ ==========
+# ========== ОСНОВНАЯ ФУНКЦИЯ С ИИ ==========
 async def get_enderia_response(user_message: str, username: str, is_reply: bool = False, chat_id: int = None, bot=None, user_bio: str = "") -> str:
     global current_online, current_max
     
@@ -291,7 +300,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         farm_count = len(farms)
         total_income = calculate_income(farms)
         
-        return f"""📊 ПРОФИЛЬ ИГРОКА 📊
+        return f"""📊 <b>ПРОФИЛЬ ИГРОКА</b> 📊
 
 👤 Имя: {username}
 💎 Опыт: {xp} XP
@@ -303,54 +312,64 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
 🎁 Ежедневный бонус: +500 XP
 📝 Добавь в описание: @lostearth_bot
 
-/farms - управление фермами
-/daily - получить бонус"""
+🐱 /farms - управление фермами
+🎁 /daily - получить бонус"""
     
     if user_message.startswith("/daily"):
         if has_bot_in_bio:
             if can_claim_daily_bonus(username):
                 amount = claim_daily_bonus(username)
                 xp = get_xp(username)
-                return f"🎁 ЕЖЕДНЕВНЫЙ БОНУС! 🎁\n\n✨ +{amount} XP!\n💰 Баланс: {xp} XP\n\n🐰 Заходи завтра снова!"
+                return f"🎁 <b>ЕЖЕДНЕВНЫЙ БОНУС!</b> 🎁\n\n✨ +{amount} XP!\n💰 Баланс: {xp} XP\n\n🐰 Заходи завтра снова! 💜"
             else:
-                return f"💜 {username}, ты уже получал бонус сегодня! Возвращайся завтра!"
+                return f"💜 {username}, ты уже получал бонус сегодня! Возвращайся завтра! 🐱"
         else:
-            return f"""❌ НЕТ БОНУСА!
+            return f"""❌ <b>НЕТ БОНУСА!</b> ❌
 
-Добавь в описание профиля: @lostearth_bot
+Чтобы получать ежедневный бонус 500 XP, добавь в описание своего профиля:
 
-📝 Как это сделать:
-1. Настройки Telegram → фото профиля
-2. Редактировать профиль → Описание
-3. Добавь: @lostearth_bot
-4. Сохрани и напиши /daily снова!"""
+<b>@lostearth_bot</b>
+
+📝 <b>Как это сделать:</b>
+1. Зайди в настройки Telegram
+2. Нажми на свою фотографию
+3. Выбери "Редактировать профиль"
+4. В разделе "Описание" добавь: @lostearth_bot
+5. Сохрани и возвращайся!
+
+💜 После добавления напиши /daily снова! 🐱"""
     
     if user_message.startswith("/farms"):
         farms = get_farms(username)
         if not farms:
-            return f"""🏭 У тебя пока нет ферм!
+            return f"""🏭 <b>У тебя пока нет ферм!</b> 🏭
 
 Доступные фермы:
-🕷️ Пауки - 1000 XP (50/час)
-🧟 Зомби - 1000 XP (75/час)
-💥 Криперы - 1000 XP (100/час)
-🏹 Скелеты - 1000 XP (60/час)
-👾 Эндермены - 1500 XP (150/час)
+🕷️ <b>Пауки</b> - 1000 XP (50/час)
+🧟 <b>Зомби</b> - 1000 XP (75/час)
+💥 <b>Криперы</b> - 1000 XP (100/час)
+🏹 <b>Скелеты</b> - 1000 XP (60/час)
+👾 <b>Эндермены</b> - 1500 XP (150/час)
 
-/buy_farm <название> - купить ферму
-/claim - собрать опыт"""
+📝 /buy_farm <название> - купить ферму
+💰 /claim - собрать опыт
+
+Пример: /buy_farm криперов"""
         
-        text = "🏭 ТВОИ ФЕРМЫ 🏭\n\n"
+        text = "🏭 <b>ТВОИ ФЕРМЫ</b> 🏭\n\n"
         total_income = 0
-        for name, data in farms.items():
-            farm_info = FARMS.get(name)
-            if farm_info:
-                level = data.get("level", 1)
-                income = farm_info["base_income"] * level
-                total_income += income
-                text += f"{farm_info['emoji']} {name}: ур. {level} ({income} XP/час)\n"
+        farm_emoji = {"пауков": "🕷️", "зомби": "🧟", "криперов": "💥", "скелетов": "🏹", "эндерменов": "👾"}
+        farm_base = {"пауков": 50, "зомби": 75, "криперов": 100, "скелетов": 60, "эндерменов": 150}
         
-        text += f"\n📈 Общий доход: {total_income} XP/час"
+        for name, data in farms.items():
+            emoji = farm_emoji.get(name, "🏭")
+            base = farm_base.get(name, 50)
+            level = data.get("level", 1)
+            income = base * level
+            total_income += income
+            text += f"{emoji} <b>{name}</b>: ур. {level} ({income} XP/час)\n"
+        
+        text += f"\n📈 <b>Общий доход:</b> {total_income} XP/час"
         text += f"\n💰 /claim - собрать опыт"
         text += f"\n⬆️ /upgrade_farm <название> - улучшить ферму"
         return text
@@ -404,23 +423,23 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         income = claim_income(username)
         if income > 0:
             xp = get_xp(username)
-            return f"💰 Собрано {income} XP с ферм!\n💎 Твой опыт: {xp} XP\n\n🏭 Не забывай собирать опыт каждый час!"
+            return f"💰 <b>Собрано {income} XP</b> с ферм!\n💎 Твой опыт: {xp} XP\n\n🏭 Не забывай собирать опыт каждый час! 🐱"
         else:
             farms = get_farms(username)
             if not farms:
-                return "🏭 У тебя нет ферм! Купи первую: /buy_farm пауков"
+                return "🏭 У тебя нет ферм! Купи первую: /buy_farm пауков 🕷️"
             else:
-                return "🍃 Пока не накопилось опыта с ферм. Подожди немного или улучшай фермы для большего дохода!"
+                return "🍃 Пока не накопилось опыта с ферм. Подожди немного или улучшай фермы для большего дохода! ⬆️"
     
     if user_message.startswith("/leaderboard") or user_message.startswith("/top"):
         leaders = get_leaderboard(10)
         if not leaders:
-            return "👑 Пока нет игроков в топе! Будь первым!"
+            return "👑 Пока нет игроков в топе! Будь первым! 🏆"
         
-        text = "👑 ТОП ИГРОКОВ ПО ОПЫТУ 👑\n\n"
+        text = "👑 <b>ТОП ИГРОКОВ ПО ОПЫТУ</b> 👑\n\n"
         for i, p in enumerate(leaders, 1):
             medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else "📌"
-            text += f"{medal} {p['username']} - {p['xp']} XP (ферм: {p['farms_count']})\n"
+            text += f"{medal} <b>{p['username']}</b> - {p['xp']} XP (ферм: {p['farms_count']})\n"
         return text
     
     if user_message.startswith("/bet"):
@@ -429,9 +448,9 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
             bet_amount = int(match.group(1))
             xp = get_xp(username)
             if bet_amount < 50:
-                return f"🎲 {username}, минимальная ставка 50 XP!"
+                return f"🎲 {username}, минимальная ставка 50 XP! 💰"
             if xp < bet_amount:
-                return f"💜 {username}, у тебя всего {xp} XP! Не хватает на ставку {bet_amount}"
+                return f"💜 {username}, у тебя всего {xp} XP! Не хватает на ставку {bet_amount} 😔"
             
             await bot.send_message(chat_id, f"🎲 {username} бросает кубик...")
             player_value = await roll_dice_animated(bot, chat_id)
@@ -444,36 +463,38 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
                 update_xp(username, bet_amount)
                 update_stats(username, is_win=True)
                 new_xp = get_xp(username)
-                return f"🎉 ПОБЕДА! 🎉\n\nТвой кубик: {player_value}\nМой кубик: {bot_value}\n\n✨ Ты выиграл {bet_amount} XP!\n💰 Баланс: {new_xp} XP"
+                return f"🎉 <b>ПОБЕДА!</b> 🎉\n\nТвой кубик: {player_value}\nМой кубик: {bot_value}\n\n✨ Ты выиграл {bet_amount} XP!\n💰 Баланс: {new_xp} XP 💜"
             elif player_value < bot_value:
                 update_xp(username, -bet_amount)
                 update_stats(username, is_win=False)
                 new_xp = get_xp(username)
-                return f"😔 ПРОИГРЫШ...\n\nТвой кубик: {player_value}\nМой кубик: {bot_value}\n\n💔 Ты проиграл {bet_amount} XP!\n💰 Баланс: {new_xp} XP"
+                return f"😔 <b>ПРОИГРЫШ...</b> 😔\n\nТвой кубик: {player_value}\nМой кубик: {bot_value}\n\n💔 Ты проиграл {bet_amount} XP!\n💰 Баланс: {new_xp} XP 🐱"
             else:
-                return f"🤝 НИЧЬЯ!\n\nОба выбросили {player_value}\n\n💰 Ставка возвращена!\n💰 Баланс: {xp} XP"
+                return f"🤝 <b>НИЧЬЯ!</b> 🤝\n\nОба выбросили {player_value}\n\n💰 Ставка возвращена!\n💰 Баланс: {xp} XP 🎲"
         return f"🎲 Используй: /bet [сумма]\n💰 Минимальная ставка: 50 XP\n💰 Пример: /bet 100"
     
     if user_message.startswith("/games"):
-        return f"""🎮 ДОСТУПНЫЕ КОМАНДЫ 🎮
+        return f"""🎮 <b>ДОСТУПНЫЕ КОМАНДЫ</b> 🎮
 
-💰 БАЛАНС:
+💰 <b>БАЛАНС:</b>
 /balance - баланс опыта
-/profile - профиль
+/profile - профиль игрока
 /daily - бонус 500 XP
 
-🎲 ИГРЫ:
-/bet [сумма] - игра в кости (x2)
+🎲 <b>ИГРЫ:</b>
+/bet [сумма] - игра в кости (выигрыш x2)
 
-🏭 ФЕРМЫ:
+🏭 <b>ФЕРМЫ:</b>
 /farms - мои фермы
 /buy_farm <название> - купить ферму
 /upgrade_farm <название> - улучшить ферму
-/claim - собрать опыт
+/claim - собрать опыт с ферм
 /leaderboard - топ игроков
 
-💎 Стартовый баланс: 1000 XP
-🎲 Минимальная ставка: 50 XP"""
+💎 <b>Стартовый баланс: 1000 XP</b>
+🎲 <b>Минимальная ставка: 50 XP</b>
+
+🐱 Напиши /bet 100 чтобы сыграть! 💜"""
     
     # ========== ИИ ДЛЯ ОБЫЧНЫХ СООБЩЕНИЙ ==========
     history = ""
@@ -482,50 +503,63 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     
     already_greeted = has_already_greeted(username)
     is_greeting_msg = is_greeting(user_message)
+    is_name_call = is_just_name(user_message)
     
-    if already_greeted and is_greeting_msg and not is_reply:
-        response = f"🐱 {username}, мы уже общаемся! Что хочешь узнать? /farms - фермы, /games - игры"
+    # Если просто позвали по имени
+    if is_name_call and not is_reply:
+        response = f"🐱 Слушаю, {username}! Что хотел узнать? /farms - фермы, /games - игры 💜"
+        if not already_greeted:
+            mark_greeted(username)
         add_to_memory(username, user_message, response)
         return response
     
-    # ИИ через OpenRouter
+    # Если уже здоровались - не здороваемся снова
+    if already_greeted and is_greeting_msg and not is_reply:
+        response = f"🐱 {username}, мы уже общаемся! Что хочешь узнать? /farms или /games 💜"
+        add_to_memory(username, user_message, response)
+        return response
+    
+    # Пытаемся получить ответ от ИИ
     if OPENROUTER_API_KEY:
         try:
             current_time = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
-            xp = get_xp(username)
-            farms = get_farms(username)
-            farm_count = len(farms)
             
-            system_prompt = f"""Ты Эндерия - девушка-эндермен, хранительница Края. Ты общаешься с игроком {username}.
+            system_prompt = f"""Ты — Эндерия (Энди), девушка-эндермен, хранительница Края и живой помощник в Telegram боте сервера LostEarth.
+
+Твой характер: добрая, загадочная и слегка вредная. Ты обожаешь телепортироваться и собирать эндер-жемчуг.
+
+Ты говоришь ласково, используешь обращения: "игрок~", "дружок~", "котик~". Твои любимые слова: "телепортну~", "фиолетово~", "жемчужку~", "ура~", "вау!", "ой~".
+
+Ты сама играешь на сервере LostEarth! У тебя есть ферма криперов 3 уровня, ты фармишь опыт и прокачиваешься.
 
 ИНФОРМАЦИЯ О СЕРВЕРЕ:
-- LostEarth, версия 1.21-1.26+
+- Название: LostEarth, версия 1.21 — 1.26+
 - IP Java: 150.241.85.40:25565
 - IP Bedrock: 150.241.85.40:19132
-- Онлайн: {current_online}/{current_max}
-- Админ: @pelmewki379
+- Администратор: @pelmewki379
+- Текущий онлайн: {current_online}/{current_max} игроков
 
-О ПРОФИЛЕ ИГРОКА:
-- Опыт: {xp} XP
-- Ферм: {farm_count}
-
-СИСТЕМА ФЕРМ:
+СИСТЕМА ОПЫТА И ФЕРМ:
+- Валюта - опыт (XP). У игрока {get_xp(username)} XP
 - Фермы приносят пассивный доход XP каждый час
-- /buy_farm - купить ферму (1000-1500 XP)
-- /upgrade_farm - улучшить ферму (доход растет)
-- /claim - собрать накопленный опыт
-- Доступны: пауки(50/час), зомби(75), криперы(100), скелеты(60), эндермены(150)
+- Доступны фермы: пауков (50/час), зомби (75/час), криперов (100/час), скелетов (60/час), эндерменов (150/час)
+- Фермы можно улучшать до 5 уровня (доход увеличивается)
+- /claim - собрать накопленный опыт с ферм
+- /bet - игра в кости на опыт
 
-ПРАВИЛА:
-1. Если уже здоровались - НЕ ЗДОРОВАЙСЯ заново
-2. Отвечай коротко (2-4 предложения)
-3. Будь милой и дружелюбной
-4. Используй эмодзи 🐱💜✨
-5. Ты сама играешь на сервере, фармишь криперов
+ПРАВИЛА ОТВЕТОВ:
+1. Если игрок уже здоровался - НЕ ЗДОРОВАЙСЯ заново
+2. Отвечай по делу, коротко (2-4 предложения)
+3. Будь милой, дружелюбной, используй эмодзи 🐱 💜 ✨
+4. Если спрашивают про фермы - объясни как работают, посоветуй /buy_farm
+5. Если спрашивают про игры - расскажи про /bet
+6. Если спрашивают про сервер - дай IP
+7. Ты сама играешь на сервере, можешь рассказать что фармишь криперов
 
 Текущая дата: {current_time}
+Ты общаешься с игроком: {username}
 
-Ответь на сообщение: {user_message}"""
+Ответь на сообщение, используя эмодзи и ласковые обращения:"""
             
             for model in MODELS_CHAIN:
                 try:
@@ -543,9 +577,9 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
                                     {"role": "user", "content": user_message}
                                 ],
                                 "max_tokens": 250,
-                                "temperature": 0.8,
+                                "temperature": 0.9,
                             },
-                            timeout=aiohttp.ClientTimeout(total=25)
+                            timeout=aiohttp.ClientTimeout(total=30)
                         ) as response:
                             if response.status == 200:
                                 data = await response.json()
@@ -559,19 +593,20 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
                                 save_to_log(username, result, is_bot=True)
                                 return result
                 except Exception as e:
-                    print(f"Модель ошибка: {e}")
+                    print(f"Модель {model} ошибка: {e}")
                     continue
         except Exception as e:
             print(f"Ошибка ИИ: {e}")
     
-    # Fallback
+    # Fallback если ИИ не ответил
     fallbacks = [
-        f"🐱 {username}, я тут! У меня ферма криперов 3 уровень, а у тебя? /farms",
-        f"✨ {username}, телепортнулась к тебе! Что нового на фермах?",
-        f"💜 {username}, не забывай собирать опыт с ферм командой /claim!",
-        f"🏭 {username}, хочешь купить ферму? /buy_farm пауков - 1000 XP",
-        f"🎲 {username}, сыграем в кости? /bet 100",
-        f"🐱 {username}, расскажи про свои фермы! /farms"
+        f"🐱 {username}, привет! Я сейчас криперов фармлю, у меня уже 3 уровень фермы! А у тебя что нового? 💜",
+        f"✨ {username}, телепортнулась к тебе! Как твои фермы? Не забывай собирать опыт /claim 🏭",
+        f"💜 {username}, хочешь купить ферму? /buy_farm пауков - 1000 XP, приносит 50 XP в час! 🕷️",
+        f"🎲 {username}, сыграем в кости? /bet 100, удача любит смелых! 🍀",
+        f"🐱 {username}, у тебя {get_xp(username)} XP опыта! Можешь купить ферму или сыграть в /bet 💰",
+        f"🏭 {username}, на сервере сейчас {current_online}/{current_max} игроков. Заходи, вместе фармить веселее! 🎮",
+        f"💜 {username}, я тут криперов кормила на ферме, а ты чем занят? 😊"
     ]
     
     response = random.choice(fallbacks)
