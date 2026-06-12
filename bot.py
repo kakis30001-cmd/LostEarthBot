@@ -203,6 +203,48 @@ async def cmd_online(message: Message):
     online, max_players = await get_server_online()
     await message.answer(f"📊 <b>Онлайн: {online}/{max_players}</b> {random_cat()}", parse_mode="HTML")
 
+# Добавь эти команды в bot.p
+@dp.message(Command("daily"))
+async def daily_bonus(message: Message):
+    """Ежедневный бонус 100 алмазов"""
+    username = message.from_user.username or message.from_user.first_name
+    
+    if await can_claim_daily_bonus(username):
+        bonus = await claim_daily_bonus(username)
+        await message.answer(
+            f"{get_random_emoji()} <b>ЕЖЕДНЕВНЫЙ БОНУС!</b> {get_random_emoji()}\n\n"
+            f"Ты получил {bonus} 💎 алмазов!\n"
+            f"Баланс: {await get_balance(username)} 💎\n\n"
+            f"Заходи завтра снова! {get_random_emoji()}",
+            parse_mode="HTML"
+        )
+    else:
+        await message.answer(
+            f"{get_random_emoji()} {username}, ты уже получал бонус сегодня!\n"
+            f"Возвращайся завтра! {get_random_emoji()}",
+            parse_mode="HTML"
+        )
+
+@dp.message(Command("profile"))
+async def profile(message: Message):
+    """Показывает профиль игрока"""
+    username = message.from_user.username or message.from_user.first_name
+    balance = await get_balance(username)
+    stats = await get_stats(username)
+    
+    await message.answer(
+        f"{get_random_emoji()} <b>ПРОФИЛЬ ИГРОКА</b> {get_random_emoji()}\n\n"
+        f"👤 Имя: {username}\n"
+        f"💎 Баланс: {balance} алмазов\n"
+        f"🏆 Побед: {stats['wins']}\n"
+        f"💔 Поражений: {stats['losses']}\n"
+        f"📊 Всего игр: {stats['wins'] + stats['losses']}\n\n"
+        f"🎲 /dice - сыграть в кости\n"
+        f"💰 /bet [сумма] - сделать ставку\n"
+        f"🎁 /daily - получить бонус",
+        parse_mode="HTML"
+    )
+
 @dp.message(Command("stats"))
 async def stats_cmd(message: Message):
     username = message.from_user.first_name or "Игрок"
