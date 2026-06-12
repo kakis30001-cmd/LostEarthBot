@@ -3,27 +3,19 @@ import random
 import re
 import aiohttp
 import asyncio
-from datetime import datetime
+import asyncpg
+from datetime import datetime, date
 from collections import defaultdict, deque
 from dotenv import load_dotenv
 
-# ========== БАЗА ДАННЫХ ==========
-import asyncpg
-from datetime import date
+from prompts import get_system_prompt
 
-DATABASE_URL = os.getenv("DATABASE_URL")
+load_dotenv()
 
-if not DATABASE_URL:
-    PGUSER = os.getenv("PGUSER")
-    PGPASSWORD = os.getenv("PGPASSWORD")
-    PGHOST = os.getenv("PGHOST")
-    PGPORT = os.getenv("PGPORT", "5432")
-    PGDATABASE = os.getenv("PGDATABASE")
-    if PGUSER and PGPASSWORD and PGHOST and PGDATABASE:
-        DATABASE_URL = f"postgresql://{PGUSER}:{PGPASSWORD}@{PGHOST}:{PGPORT}/{PGDATABASE}"
+# ========== ПОДКЛЮЧЕНИЕ К POSTGRESQL (из твоего Railway) ==========
+DATABASE_URL = "postgresql://postgres:hgSCmLMXOynevPATDDMerzJwTMBxFamM@thomas.proxy.rlwy.net:41663/railway"
 
-balance_cache = {}
-
+# ========== ФУНКЦИИ БАЗЫ ДАННЫХ ==========
 async def init_db():
     try:
         conn = await asyncpg.connect(DATABASE_URL)
@@ -38,7 +30,7 @@ async def init_db():
             )
         """)
         await conn.close()
-        print("✅ База данных готова")
+        print("✅ PostgreSQL подключена, таблицы готовы")
         return True
     except Exception as e:
         print(f"❌ Ошибка БД: {e}")
@@ -52,9 +44,11 @@ async def get_balance(username: str) -> int:
         if row:
             return row[0]
         else:
-            await conn.execute("INSERT INTO players (username, balance) VALUES ($1, 100)", username)
+            async with asyncpg.connect(DATABASE_URL) as conn2:
+                await conn2.execute("INSERT INTO players (username, balance) VALUES ($1, 100)", username)
             return 100
-    except:
+    except Exception as e:
+        print(f"❌ Ошибка get_balance: {e}")
         return 100
 
 async def update_balance(username: str, delta: int):
@@ -62,8 +56,8 @@ async def update_balance(username: str, delta: int):
         conn = await asyncpg.connect(DATABASE_URL)
         await conn.execute("UPDATE players SET balance = balance + $1 WHERE username = $2", delta, username)
         await conn.close()
-    except:
-        pass
+    except Exception as e:
+        print(f"❌ Ошибка update_balance: {e}")
 
 async def can_claim_daily_bonus(username: str) -> bool:
     try:
@@ -116,11 +110,7 @@ async def get_top_players(limit: int = 10) -> list:
     except:
         return []
 
-# ========== ОСТАЛЬНОЙ КОД ==========
-from prompts import get_system_prompt
-
-load_dotenv()
-
+# ========== НАСТРОЙКИ ==========
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 MODELS_CHAIN = [
@@ -152,11 +142,11 @@ def save_to_log(username: str, message: str, is_bot: bool = False):
         pass
 
 def get_random_emoji():
-    emojis = ["💜", "🐱", "🐰", "✨", "🎲", "💎", "🎯", "⭐"]
+    emojis = ["💜", "🐱", "🐰", "✨", "🎲", "💎", "🎯", "⭐", "🌸", "🪙", "🎉", "😊"]
     return random.choice(emojis)
 
 # ========== ПАМЯТЬ ДИАЛОГОВ ==========
-user_memory = defaultdict(lambda: deque(maxlen=10))
+user_memory = defaultdict(lambda: deque(maxlen=15))
 user_greeted = {}
 
 def get_user_context(username: str) -> str:
@@ -185,7 +175,7 @@ def mark_greeted(username: str):
 
 def is_greeting(text: str) -> bool:
     text_lower = text.lower()
-    greetings = ["привет", "здравствуй", "хай", "hello", "приветик", "здарова"]
+    greetings = ["привет", "здравствуй", "хай", "hello", "приветик", "здарова", "доброе утро", "добрый день", "добрый вечер"]
     return any(g in text_lower for g in greetings)
 
 # ========== ИГРЫ ==========
@@ -198,40 +188,40 @@ async def game_dice_bet(username: str, bet_amount: int, bot, chat_id: int) -> st
     if balance < bet_amount:
         return f"{get_random_emoji()} {username}, у тебя всего {balance} алмазов! Не хватает на ставку {bet_amount} 💎"
     
-    await bot.send_message(chat_id, f"🎲 {username} бросает кубик...")
+    await bot.send_message(chat_id, f"{get_random_emoji()} {username} бросает кубик... 🎲")
     player_value = await roll_dice_animated(bot, chat_id)
     
-    await asyncio.sleep(1)
-    await bot.send_message(chat_id, f"🎲 Эндерия бросает кубик...")
+    await asyncio.sleep(1.5)
+    await bot.send_message(chat_id, f"{get_random_emoji()} Эндерия бросает кубик... 🎲")
     bot_value = await roll_dice_animated(bot, chat_id)
     
     if player_value > bot_value:
         await update_balance(username, bet_amount)
         await update_stats(username, is_win=True)
         new_balance = await get_balance(username)
-        return f"{get_random_emoji()} ПОБЕДА! 🎉\n\nТвой кубик: {player_value}\nМой кубик: {bot_value}\n\n✨ Ты выиграл {bet_amount} алмазов!\n💎 Баланс: {new_balance}"
+        return f"{get_random_emoji()} 🎉 ПОБЕДА! 🎉 {get_random_emoji()}\n\nТвой кубик: {player_value}\nМой кубик: {bot_value}\n\n✨ Ты выиграл {bet_amount} алмазов!\n💎 Баланс: {new_balance} {get_random_emoji()}"
     elif player_value < bot_value:
         await update_balance(username, -bet_amount)
         await update_stats(username, is_win=False)
         new_balance = await get_balance(username)
-        return f"{get_random_emoji()} ПРОИГРЫШ... 😔\n\nТвой кубик: {player_value}\nМой кубик: {bot_value}\n\n😭 Ты проиграл {bet_amount} алмазов!\n💎 Баланс: {new_balance}"
+        return f"{get_random_emoji()} 😔 ПРОИГРЫШ... 😔 {get_random_emoji()}\n\nТвой кубик: {player_value}\nМой кубик: {bot_value}\n\n💔 Ты проиграл {bet_amount} алмазов!\n💎 Баланс: {new_balance} {get_random_emoji()}"
     else:
-        return f"{get_random_emoji()} НИЧЬЯ! 🤝\n\nОба выбросили {player_value}\n\n💰 Ставка возвращена!\n💎 Баланс: {balance}"
+        return f"{get_random_emoji()} 🤝 НИЧЬЯ! 🤝 {get_random_emoji()}\n\nОба выбросили {player_value}\n\n💰 Ставка возвращена!\n💎 Баланс: {balance} {get_random_emoji()}"
 
 async def game_dice_battle(username: str, bot, chat_id: int) -> str:
-    await bot.send_message(chat_id, f"🎲 {username} бросает кубик...")
+    await bot.send_message(chat_id, f"{get_random_emoji()} {username} бросает кубик... 🎲")
     player_value = await roll_dice_animated(bot, chat_id)
     
-    await asyncio.sleep(1)
-    await bot.send_message(chat_id, f"🎲 Эндерия бросает кубик...")
+    await asyncio.sleep(1.5)
+    await bot.send_message(chat_id, f"{get_random_emoji()} Эндерия бросает кубик... 🎲")
     bot_value = await roll_dice_animated(bot, chat_id)
     
     if player_value > bot_value:
-        return f"{get_random_emoji()} ТЫ ПОБЕДИЛ! 🎉\n\nТвой кубик: {player_value}\nМой кубик: {bot_value}\n\n✨ Отличная игра!"
+        return f"{get_random_emoji()} 🏆 ТЫ ПОБЕДИЛ! 🏆 {get_random_emoji()}\n\nТвой кубик: {player_value}\nМой кубик: {bot_value}\n\n✨ Отличная игра! ✨"
     elif player_value < bot_value:
-        return f"{get_random_emoji()} Я ПОБЕДИЛА! 😊\n\nТвой кубик: {player_value}\nМой кубик: {bot_value}\n\n💪 В следующий раз повезёт!"
+        return f"{get_random_emoji()} 👑 Я ПОБЕДИЛА! 👑 {get_random_emoji()}\n\nТвой кубик: {player_value}\nМой кубик: {bot_value}\n\n💫 В следующий раз повезёт! 💫"
     else:
-        return f"{get_random_emoji()} НИЧЬЯ! 🤝\n\nОба выбросили {player_value}\n\n🎲 Сыграем ещё?"
+        return f"{get_random_emoji()} 🤝 НИЧЬЯ! 🤝 {get_random_emoji()}\n\nОба выбросили {player_value}\n\n🎲 Сыграем ещё? Напиши /dice {get_random_emoji()}"
 
 async def game_coinflip(username: str, bet_amount: int, choice: str) -> str:
     balance = await get_balance(username)
@@ -245,12 +235,12 @@ async def game_coinflip(username: str, bet_amount: int, choice: str) -> str:
         await update_balance(username, bet_amount)
         await update_stats(username, is_win=True)
         new_balance = await get_balance(username)
-        return f"{get_random_emoji()} ПОБЕДА! 🎉\n\nТвой выбор: {choice}\nВыпало: {coin} {coin_emoji}\n\n✨ Ты выиграл {bet_amount} алмазов!\n💎 Баланс: {new_balance}"
+        return f"{get_random_emoji()} 🎉 ПОБЕДА! 🎉 {get_random_emoji()}\n\nТвой выбор: {choice}\nВыпало: {coin} {coin_emoji}\n\n✨ Ты выиграл {bet_amount} алмазов!\n💎 Баланс: {new_balance} {get_random_emoji()}"
     else:
         await update_balance(username, -bet_amount)
         await update_stats(username, is_win=False)
         new_balance = await get_balance(username)
-        return f"{get_random_emoji()} ПРОИГРЫШ... 😔\n\nТвой выбор: {choice}\nВыпало: {coin} {coin_emoji}\n\n😭 Ты проиграл {bet_amount} алмазов!\n💎 Баланс: {new_balance}"
+        return f"{get_random_emoji()} 😔 ПРОИГРЫШ... 😔 {get_random_emoji()}\n\nТвой выбор: {choice}\nВыпало: {coin} {coin_emoji}\n\n💔 Ты проиграл {bet_amount} алмазов!\n💎 Баланс: {new_balance} {get_random_emoji()}"
 
 # ========== ОСНОВНАЯ ФУНКЦИЯ ==========
 async def get_enderia_response(user_message: str, username: str, is_reply: bool = False, chat_id: int = None, bot=None) -> str:
@@ -262,7 +252,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     # ========== ИГРОВЫЕ КОМАНДЫ ==========
     if user_message.startswith("/balance") or user_message.startswith("/bal"):
         balance = await get_balance(username)
-        response = f"{get_random_emoji()} {username}, твой баланс: {balance} 💎 алмазов!"
+        response = f"{get_random_emoji()} {username}, твой баланс: {balance} 💎 алмазов! {get_random_emoji()}"
         add_to_memory(username, user_message, response)
         return response
     
@@ -270,28 +260,28 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         if await can_claim_daily_bonus(username):
             bonus = await claim_daily_bonus(username)
             balance = await get_balance(username)
-            response = f"{get_random_emoji()} ЕЖЕДНЕВНЫЙ БОНУС! 🎁\n\n✨ +{bonus} 💎 алмазов!\n💎 Баланс: {balance} алмазов\n\nЗаходи завтра снова!"
+            response = f"{get_random_emoji()} 🎁 ЕЖЕДНЕВНЫЙ БОНУС! 🎁 {get_random_emoji()}\n\n✨ +{bonus} 💎 алмазов!\n💎 Баланс: {balance} алмазов\n\n🌸 Заходи завтра снова! 🌸"
         else:
-            response = f"{get_random_emoji()} {username}, ты уже получал бонус сегодня! Возвращайся завтра!"
+            response = f"{get_random_emoji()} {username}, ты уже получал бонус сегодня! Возвращайся завтра! 🌸"
         add_to_memory(username, user_message, response)
         return response
     
     if user_message.startswith("/profile"):
         balance = await get_balance(username)
         stats = await get_stats(username)
-        response = f"{get_random_emoji()} ПРОФИЛЬ ИГРОКА 👤\n\nИмя: {username}\n💎 Баланс: {balance} алмазов\n🏆 Побед: {stats['wins']}\n💔 Поражений: {stats['losses']}"
+        response = f"{get_random_emoji()} 👤 ПРОФИЛЬ ИГРОКА 👤 {get_random_emoji()}\n\n👤 Имя: {username}\n💎 Баланс: {balance} алмазов\n🏆 Побед: {stats['wins']}\n💔 Поражений: {stats['losses']}\n📊 Всего игр: {stats['wins'] + stats['losses']}\n\n{get_random_emoji()} Напиши /games чтобы играть! {get_random_emoji()}"
         add_to_memory(username, user_message, response)
         return response
     
     if user_message.startswith("/top"):
         top = await get_top_players(10)
         if not top:
-            response = "📊 Топ игроков пока пуст! Будь первым!"
+            response = f"{get_random_emoji()} 📊 Топ игроков пока пуст! Будь первым! 🎲 {get_random_emoji()}"
         else:
-            text = f"{get_random_emoji()} ТОП ИГРОКОВ ПО АЛМАЗАМ 🏆\n\n"
+            text = f"{get_random_emoji()} 🏆 ТОП ИГРОКОВ ПО АЛМАЗАМ 🏆 {get_random_emoji()}\n\n"
             for i, p in enumerate(top, 1):
                 medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else "•"
-                text += f"{medal} {p['username']} — {p['balance']} 💎\n"
+                text += f"{medal} {p['username']} — {p['balance']} 💎 (побед: {p['wins']})\n"
             response = text
         add_to_memory(username, user_message, response)
         return response
@@ -300,7 +290,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         if bot and chat_id:
             response = await game_dice_battle(username, bot, chat_id)
         else:
-            response = f"{get_random_emoji()} {username}, напиши /dice в чате со мной!"
+            response = f"{get_random_emoji()} {username}, напиши /dice в чате со мной! 🎲"
         add_to_memory(username, user_message, response)
         return response
     
@@ -308,9 +298,12 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         match = re.match(r"^/bet\s+(\d+)$", user_message)
         if match and bot and chat_id:
             bet_amount = int(match.group(1))
-            response = await game_dice_bet(username, bet_amount, bot, chat_id)
+            if bet_amount < 10:
+                response = f"{get_random_emoji()} {username}, минимальная ставка 10 алмазов! 💎"
+            else:
+                response = await game_dice_bet(username, bet_amount, bot, chat_id)
         else:
-            response = f"{get_random_emoji()} {username}, используй: /bet [сумма] (например /bet 50)"
+            response = f"{get_random_emoji()} {username}, используй: /bet [сумма] (например /bet 50) 🎲"
         add_to_memory(username, user_message, response)
         return response
     
@@ -319,90 +312,95 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         if match:
             choice = match.group(1)
             bet_amount = int(match.group(2))
-            response = await game_coinflip(username, bet_amount, choice)
+            if bet_amount < 10:
+                response = f"{get_random_emoji()} {username}, минимальная ставка 10 алмазов! 💎"
+            else:
+                response = await game_coinflip(username, bet_amount, choice)
         else:
-            response = f"{get_random_emoji()} {username}, используй: /coin орёл 50 или /coin решка 100"
+            response = f"{get_random_emoji()} {username}, используй: /coin орёл 50 или /coin решка 100 🪙"
         add_to_memory(username, user_message, response)
         return response
     
     if user_message.startswith("/games"):
-        response = f"""{get_random_emoji()} <b>ДОСТУПНЫЕ ИГРЫ</b> {get_random_emoji()}
+        response = f"""{get_random_emoji()} 🎮 <b>ДОСТУПНЫЕ ИГРЫ</b> 🎮 {get_random_emoji()}
 
 🎲 /dice - Битва кубиков (бесплатно)
-💰 /bet 50 - Ставка на кубик (выигрыш х2)
-🪙 /coin орёл 50 - Орёл/Решка
+💰 /bet [сумма] - Ставка на кубик (выигрыш х2)
+🪙 /coin [орёл/решка] [сумма] - Орёл/Решка на алмазы
 💎 /balance - Показать баланс
 🎁 /daily - Бонус 100💎 каждый день
 👤 /profile - Твой профиль
 🏆 /top - Топ игроков
 
-<i>Стартовый баланс: 100 алмазов 💎</i>"""
+✨ Стартовый баланс: 100 алмазов 💎
+🌸 Минимальная ставка: 10 алмазов
+
+{get_random_emoji()} Удачи в играх! {get_random_emoji()}"""
         add_to_memory(username, user_message, response)
         return response
     
-    # ========== ОБЫЧНЫЙ РАЗГОВОР ==========
+    # ========== ОБЫЧНЫЙ РАЗГОВОР С ПАМЯТЬЮ ==========
     history = get_user_context(username)
     already_greeted = has_already_greeted(username)
     is_greeting_msg = is_greeting(user_message)
     
     if already_greeted and is_greeting_msg and not is_reply:
-        response = f"{get_random_emoji()} {username}, мы уже общаемся! Что хотел узнать? Напиши /games чтобы поиграть!"
+        response = f"{get_random_emoji()} {username}, мы уже общаемся! Что хотел узнать про LostEarth? Хочешь поиграть? Напиши /games {get_random_emoji()}"
         add_to_memory(username, user_message, response)
         return response
     
     # Пытаемся получить ответ от ИИ
-    try:
-        current_time = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
-        system_prompt = get_system_prompt(username, current_time, current_online, current_max)
-        
-        full_prompt = f"""Вот история нашего диалога с {username}:
+    if OPENROUTER_API_KEY:
+        try:
+            current_time = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
+            system_prompt = get_system_prompt(username, current_time, current_online, current_max)
+            
+            full_prompt = f"""Вот история нашего диалога с {username}:
 {history if history else "Пока пусто"}
 
 Сейчас {username} написал: {user_message}
 
-Ответь как Эндерия, учитывая историю разговора. Если вы уже общались - НЕ ЗДОРОВАЙСЯ заново.
-Будь милой и дружелюбной. Если спросят про игры - расскажи о /games.
-Ответь 3-5 предложениями, закончи мысль. В конце эмодзи."""
-        
-        for model in MODELS_CHAIN:
-            try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.post(
-                        "https://openrouter.ai/api/v1/chat/completions",
-                        headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"},
-                        json={
-                            "model": model,
-                            "messages": [
-                                {"role": "system", "content": system_prompt},
-                                {"role": "user", "content": full_prompt}
-                            ],
-                            "max_tokens": 400,
-                            "temperature": 0.85,
-                        },
-                        timeout=aiohttp.ClientTimeout(total=25)
-                    ) as response:
-                        if response.status == 200:
-                            data = await response.json()
-                            result = data["choices"][0]["message"]["content"].strip()
-                            result = re.sub(r'<[^>]+>', '', result)
-                            
-                            # Проверяем, не обрезано ли сообщение
-                            if len(result) < 50 and "..." in result:
-                                # Если обрезано - добавляем ещё
-                                result += " 🌸💜"
-                            
-                            if not already_greeted:
-                                mark_greeted(username)
-                            
-                            add_to_memory(username, user_message, result)
-                            return result
-            except:
-                continue
-    except:
-        pass
+Ответь как Эндерия, учитывая историю разговора.
+ВАЖНО: Если вы уже общались - НЕ ЗДОРОВАЙСЯ заново!
+Будь милой, дружелюбной, используй эмодзи. Отвечай 3-5 предложениями."""
+            
+            for model in MODELS_CHAIN:
+                try:
+                    async with aiohttp.ClientSession() as session:
+                        async with session.post(
+                            "https://openrouter.ai/api/v1/chat/completions",
+                            headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"},
+                            json={
+                                "model": model,
+                                "messages": [
+                                    {"role": "system", "content": system_prompt},
+                                    {"role": "user", "content": full_prompt}
+                                ],
+                                "max_tokens": 500,
+                                "temperature": 0.9,
+                            },
+                            timeout=aiohttp.ClientTimeout(total=35)
+                        ) as response:
+                            if response.status == 200:
+                                data = await response.json()
+                                result = data["choices"][0]["message"]["content"].strip()
+                                result = re.sub(r'<[^>]+>', '', result)
+                                
+                                if len(result) < 30:
+                                    result += f" {get_random_emoji()} {get_random_emoji()}"
+                                
+                                if not already_greeted:
+                                    mark_greeted(username)
+                                
+                                add_to_memory(username, user_message, result)
+                                return result
+                except:
+                    continue
+        except:
+            pass
     
     # Fallback
-    fallback = f"{get_random_emoji()} {username}, я Эндерия — хранительница Края! Хочешь поиграть? Напиши /games 🎲"
+    fallback = f"{get_random_emoji()} {username}, я Эндерия — хранительница Края! ✨\n\nIP: 150.241.85.40:25565\nХочешь поиграть? Напиши /games 🎲 {get_random_emoji()}"
     add_to_memory(username, user_message, fallback)
     return fallback
 
