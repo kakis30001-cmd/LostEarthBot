@@ -33,7 +33,6 @@ from enderia import (
     set_server_online,
     save_to_log,
     roll_dice_animated,
-    game_dice_bet,
     init_player,
     last_active,
 )
@@ -183,8 +182,8 @@ def get_main_keyboard():
          InlineKeyboardButton(text="ЗАЯВКА", web_app=WebAppInfo(url=APPLY_URL), icon_custom_emoji_id=BUTTON_EMOJI_ID["rabbit_fly"])],
         [InlineKeyboardButton(text="ПРЕМИУМ", callback_data="menu_premium", icon_custom_emoji_id=BUTTON_EMOJI_ID["crown"]),
          InlineKeyboardButton(text="ЭНДЕРИЯ", callback_data="menu_enderia", icon_custom_emoji_id=BUTTON_EMOJI_ID["cat_ok"])],
-        [InlineKeyboardButton(text="🏭 ФЕРМЫ", callback_data="menu_farms", icon_custom_emoji_id=BUTTON_EMOJI_ID["house"]),
-         InlineKeyboardButton(text="👑 ТОП", callback_data="menu_top", icon_custom_emoji_id=BUTTON_EMOJI_ID["crown"])]
+        [InlineKeyboardButton(text="ФЕРМЫ", callback_data="menu_farms", icon_custom_emoji_id=BUTTON_EMOJI_ID["house"]),
+         InlineKeyboardButton(text="ТОП", callback_data="menu_top", icon_custom_emoji_id=BUTTON_EMOJI_ID["crown"])]
     ])
 
 def get_ip_keyboard():
@@ -214,17 +213,17 @@ async def start_cmd(message: Message):
 {EMOJI['crown']} <b>Текущий онлайн:</b> {online}/{max_players}
 
 {EMOJI['joystick']} <b>ИГРЫ:</b>
-🎲 /bet [сумма] - игра в кости (x2 выигрыш)
-👑 /balance - твой опыт
-👤 /profile - твой профиль
-🎁 /daily - бонус 500 XP
+/bet [сумма] - игра в кости (x2 выигрыш)
+/balance - твой опыт
+/profile - твой профиль
+/daily - бонус 500 XP
 
 {EMOJI['house']} <b>ФЕРМЫ ОПЫТА:</b>
-🏭 /farms - твои фермы
-💰 /buy_farm - купить ферму
-⬆️ /upgrade_farm - улучшить ферму
-📦 /claim - собрать опыт
-🏆 /leaderboard - топ игроков
+/farms - твои фермы
+/buy_farm - купить ферму
+/upgrade_farm - улучшить ферму
+/claim - собрать опыт
+/leaderboard - топ игроков
 
 {EMOJI['heart']} <b>Как получить бонус?</b>
 Добавь @lostearth_bot в описание профиля!
@@ -386,19 +385,20 @@ async def farms_cmd(message: Message):
     
     text = f"{EMOJI['house']} <b>ТВОИ ФЕРМЫ</b> {EMOJI['house']}\n\n"
     total_income = 0
+    farm_emojis = {
+        "пауков": "🕷️", "зомби": "🧟", "криперов": "💥", "скелетов": "🏹", "эндерменов": "👾"
+    }
+    farm_bases = {
+        "пауков": 50, "зомби": 75, "криперов": 100, "скелетов": 60, "эндерменов": 150
+    }
+    
     for name, data in farms.items():
-        farm_info = {
-            "пауков": {"base": 50, "emoji": "🕷️"},
-            "зомби": {"base": 75, "emoji": "🧟"},
-            "криперов": {"base": 100, "emoji": "💥"},
-            "скелетов": {"base": 60, "emoji": "🏹"},
-            "эндерменов": {"base": 150, "emoji": "👾"},
-        }.get(name, {"base": 50, "emoji": "🏭"})
-        
+        emoji_farm = farm_emojis.get(name, "🏭")
+        base = farm_bases.get(name, 50)
         level = data.get("level", 1)
-        income = farm_info["base"] * level
+        income = base * level
         total_income += income
-        text += f"{farm_info['emoji']} <b>{name}</b>: ур. {level} ({income} XP/час)\n"
+        text += f"{emoji_farm} <b>{name}</b>: ур. {level} ({income} XP/час)\n"
     
     text += f"\n{EMOJI['crown']} <b>Общий доход:</b> {total_income} XP/час\n"
     text += f"{EMOJI['note']} /claim - собрать опыт\n"
@@ -503,11 +503,11 @@ async def games_cmd(message: Message):
 {EMOJI['magic']} <b>/daily</b> - бонус 500 XP
 
 {EMOJI['house']} <b>ФЕРМЫ ОПЫТА:</b>
-🏭 /farms - твои фермы
-💰 /buy_farm - купить ферму
-⬆️ /upgrade_farm - улучшить ферму
-📦 /claim - собрать опыт
-🏆 /leaderboard - топ игроков
+/farms - твои фермы
+/buy_farm - купить ферму
+/upgrade_farm - улучшить ферму
+/claim - собрать опыт
+/leaderboard - топ игроков
 
 {EMOJI['crown']} <b>Стартовый баланс: 1000 XP</b>
 {EMOJI['joystick']} <b>Минимальная ставка: 50 XP</b>
@@ -558,25 +558,22 @@ async def handle_message(message: Message):
     username = message.from_user.username or message.from_user.first_name
     user_message = message.text
     
-    print(f"📥 Получено от {username}: {user_message}")
+    print(f"Получено от {username}: {user_message}")
     save_to_log(username, user_message, is_bot=False)
     
-    # Обновляем активность
-    from enderia import last_active
     last_active[username] = datetime.now()
-    
     user_bio = await get_user_bio(message.from_user.id)
     
     if user_message.startswith("/"):
         return
     
     if should_respond(user_message):
-        print(f"🎯 Эндерия отвечает {username}")
+        print(f"Эндерия отвечает {username}")
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
         response = await get_enderia_response(user_message, username, is_reply=False, chat_id=message.chat.id, bot=bot, user_bio=user_bio)
         if response:
             await message.reply(response, parse_mode="HTML")
-            print(f"✅ Ответ отправлен {username}")
+            print(f"Ответ отправлен {username}")
 
 # ========== КОЛБЭКИ ==========
 async def safe_callback_answer(callback: CallbackQuery, text: str = None, show_alert: bool = False):
@@ -587,12 +584,11 @@ async def safe_callback_answer(callback: CallbackQuery, text: str = None, show_a
             await callback.answer()
     except Exception as e:
         if "query is too old" not in str(e):
-            print(f"[ERROR] {e}")
+            print(f"Ошибка callback: {e}")
 
 @dp.callback_query()
 async def handle_callback(callback: CallbackQuery):
     data = callback.data
-    username = callback.from_user.username or callback.from_user.first_name
     
     if data == "menu_main":
         online, max_players = await get_server_online()
@@ -615,4 +611,4 @@ async def handle_callback(callback: CallbackQuery):
         await safe_callback_answer(callback, "Онлайн обновлён!")
     
     elif data == "menu_premium":
-        text = f"{EMOJI['crown']} <b>ПРЕМИУМ ДОСТУП</b> {EMOJI['crown']}\n\n{EMOJI['magic']} <b>Друид</b> - 50₽\n{EMOJI['note']} <b>Оракул</b> - 100₽\n{EM
+        text = f"{EMOJI['crown']} <b>ПРЕМИУМ ДОСТУП</b> {EMOJI['crown']}\n\n{EMOJI['magic']} <b>Друид</b> - 50₽\n{EMOJI['note']} <b>Оракул</b> - 100₽\n{EMOJI['crown']} <b>Монарх</b> - 200₽\n{EMOJI['rabbit_fly']} <b>Херувим</b> - 300₽ (полёт!)\n{EMOJI['house
