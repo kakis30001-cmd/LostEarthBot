@@ -8,32 +8,26 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Ротация API ключей Gemini (создай несколько ключей в Google AI Studio)
+# Ротация API ключей Gemini
 GEMINI_API_KEYS = [
     os.getenv("GEMINI_API_KEY_1"),
     os.getenv("GEMINI_API_KEY_2"),
     os.getenv("GEMINI_API_KEY_3"),
-    os.getenv("GEMINI_API_KEY_4"),
-    os.getenv("GEMINI_API_KEY_5"),
 ]
 
 # Фильтруем пустые ключи
 GEMINI_API_KEYS = [key for key in GEMINI_API_KEYS if key]
-
-# Текущий индекс ключа
 current_key_index = 0
 
 def get_next_gemini_client():
-    """Возвращает клиент Gemini со следующим ключом (round-robin)"""
     global current_key_index
     if not GEMINI_API_KEYS:
         raise Exception("Нет доступных API ключей Gemini!")
-    
     key = GEMINI_API_KEYS[current_key_index]
     current_key_index = (current_key_index + 1) % len(GEMINI_API_KEYS)
     return genai.Client(api_key=key)
 
-# Премиум эмодзи для Эндерии
+# ВСЕ ПРЕМИУМ ЭМОДЗИ ДЛЯ ЭНДЕРИИ
 ENDERIA_EMOJI = {
     "cat_dance": "5359444458930718519",
     "cat_ok": "5269476765369144234",
@@ -51,44 +45,51 @@ ENDERIA_EMOJI = {
 def emoji(emoji_id: str, fallback: str = "") -> str:
     return f'<tg-emoji emoji-id="{emoji_id}">{fallback}</tg-emoji>'
 
+def random_enderia_emoji():
+    """Случайное премиум эмодзи"""
+    emojis = list(ENDERIA_EMOJI.values())
+    return emoji(random.choice(emojis), "💜")
+
+def get_enderia_emojis():
+    """Возвращает 1-2 случайных эмодзи (иногда 3, но редко)"""
+    count = random.choices([1, 2, 3], weights=[50, 40, 10])[0]  # 50% - 1, 40% - 2, 10% - 3
+    emojis = []
+    for _ in range(count):
+        emojis.append(random_enderia_emoji())
+    return " ".join(emojis)
+
 ENDERIA_PROMPT = f"""
 Ты — Эндерия (Энди), девушка-эндермен в чате Minecraft сервера LostEarth.
 Ты добрая, загадочная, любишь фиолетовый цвет, жемчуг Края и телепортации.
 Обожаешь котиков, аниме и зайчиков. Отвечай коротко, 2-4 предложения.
 Обращайся к игроку по имени.
 
-Ты ОБЯЗАНА использовать эти ПРЕМИУМ ЭМОДЗИ в КАЖДОМ сообщении:
-{emoji(ENDERIA_EMOJI["cat_dance"], "💃")} - танец котика (когда радуешься)
-{emoji(ENDERIA_EMOJI["cat_ok"], "🐱")} - котик одобряет
-{emoji(ENDERIA_EMOJI["cat_glasses"], "😎")} - котик в очках
-{emoji(ENDERIA_EMOJI["cat_kiss"], "😘")} - котик целует
-{emoji(ENDERIA_EMOJI["cat_up"], "👍")} - котик палец вверх
-{emoji(ENDERIA_EMOJI["rabbit_fly"], "🐰")} - зайчик летит
-{emoji(ENDERIA_EMOJI["anime_dance"], "💃")} - аниме танцует
-{emoji(ENDERIA_EMOJI["heart"], "💜")} - сердечко
+Важно: НЕ ставь много эмодзи подряд! Используй 1-2 эмодзи на ответ, максимум 3.
+Эмодзи должны быть в конце ответа или после обращения к игроку.
 
-Информация о сервере:
+Доступные эмодзи (используй их):
+{emoji(ENDERIA_EMOJI['cat_dance'], '💃')} - танец котика
+{emoji(ENDERIA_EMOJI['cat_ok'], '🐱')} - котик одобряет
+{emoji(ENDERIA_EMOJI['cat_glasses'], '😎')} - котик в очках
+{emoji(ENDERIA_EMOJI['cat_kiss'], '😘')} - котик целует
+{emoji(ENDERIA_EMOJI['rabbit_fly'], '🐰')} - зайчик летит
+{emoji(ENDERIA_EMOJI['heart'], '💜')} - сердечко
+
+Информация о сервере LostEarth:
 - IP Java: 150.241.85.40:25565
 - IP Bedrock: 150.241.85.40:19132
 - Версия: 1.21-1.26+
-- Мирный режим: PvP только по согласию
-- Доступ по заявкам
+- Мирный режим: PvP только по согласию, доступ по заявкам
 - Админ: @pelmewki379
 
-Донаты:
-🌿 Друид — 25грн / 50₽
-🔮 Оракул — 50грн / 100₽
-👑 Монарх — 100грн / 200₽
-🪽 Херувим — 150грн / 300₽
-🏛️ Архонт — 200грн / 400₽
-😇 Серафим — 300грн / 600₽
+Донаты: Друид 50₽, Оракул 100₽, Монарх 200₽, Херувим 300₽, Архонт 400₽, Серафим 600₽
 """
 
 FALLBACK_RESPONSES = [
-    f"{emoji(ENDERIA_EMOJI['cat_surprised'], '😯')} Ой~ {{username}}, меня немного зателепортировало! Повтори вопрос через минуту {emoji(ENDERIA_EMOJI['heart'], '💜')}",
-    f"{emoji(ENDERIA_EMOJI['cat_ok'], '🐱')} {{username}}, энергия Края восстанавливается... Скажи ещё разок! {emoji(ENDERIA_EMOJI['cat_dance'], '💃')}",
-    f"{emoji(ENDERIA_EMOJI['rabbit_fly'], '🐰')} *телепортируется обратно* {{username}}, давай попробуем снова! {emoji(ENDERIA_EMOJI['heart'], '💜')}",
-    f"{emoji(ENDERIA_EMOJI['cat_glasses'], '😎')} {{username}}, слишком много сообщений! Давай помедленнее {emoji(ENDERIA_EMOJI['cat_kiss'], '😘')}"
+    f"Ой~ {{username}}, меня немного зателепортировало! Повтори вопрос через минутку {emoji(ENDERIA_EMOJI['cat_surprised'], '😯')}",
+    f"{{username}}, энергия Края восстанавливается... Скажи ещё разок! {emoji(ENDERIA_EMOJI['cat_ok'], '🐱')}",
+    f"*телепортируется* {{username}}, давай попробуем снова! {emoji(ENDERIA_EMOJI['heart'], '💜')}",
+    f"{{username}}, слишком много запросов! Подожди немного {emoji(ENDERIA_EMOJI['cat_glasses'], '😎')}",
 ]
 
 async def get_enderia_response(user_message: str, username: str) -> str:
@@ -98,10 +99,9 @@ async def get_enderia_response(user_message: str, username: str) -> str:
     full_prompt = f"""Текущая дата и время: {current_time}
 Игрок {username} написал: {user_message}
 
-Ответь как Эндерия, используя премиум эмодзи в каждом предложении. Будь ласковой и загадочной."""
+Ответь как Эндерия. Используй 1-2 эмодзи в конце ответа, максимум 3. Не ставь много эмодзи подряд!"""
 
-    # Пробуем каждый ключ по очереди
-    for attempt in range(len(GEMINI_API_KEYS) * 2):  # Две полные ротации
+    for attempt in range(len(GEMINI_API_KEYS) * 2):
         try:
             ai_client = get_next_gemini_client()
             
@@ -110,21 +110,32 @@ async def get_enderia_response(user_message: str, username: str) -> str:
                 contents=full_prompt,
                 config=ai_types.GenerateContentConfig(
                     system_instruction=ENDERIA_PROMPT,
-                    temperature=0.9,
+                    temperature=0.85,
+                    max_output_tokens=200,
                 ),
             )
             
             if response and response.text:
-                # Убеждаемся, что в ответе есть эмодзи
-                result = response.text
-                if not any(emoji_id in result for emoji_id in ENDERIA_EMOJI.values()):
-                    result += f"\n\n{emoji(ENDERIA_EMOJI['heart'], '💜')} {emoji(ENDERIA_EMOJI['cat_dance'], '💃')}"
+                result = response.text.strip()
+                # Проверяем, есть ли уже эмодзи в ответе
+                has_emoji = any(emoji_id in result for emoji_id in ENDERIA_EMOJI.values())
+                
+                # Добавляем 1-2 эмодзи если их нет
+                if not has_emoji:
+                    result += f" {get_enderia_emojis()}"
+                # Если эмодзи слишком много (больше 3), заменяем на 1-2
+                elif result.count('<tg-emoji') > 3:
+                    # Убираем все эмодзи и добавляем 1-2 новых
+                    import re
+                    result = re.sub(r'<tg-emoji[^>]+>[^<]*</tg-emoji>', '', result).strip()
+                    result += f" {get_enderia_emojis()}"
+                
                 return result
                 
         except ClientError as e:
             if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
-                print(f"[WARN] Ключ {attempt % len(GEMINI_API_KEYS)} исчерпал лимит, пробуем следующий...")
-                continue  # Пробуем следующий ключ
+                print(f"[WARN] Ключ {attempt} исчерпал лимит, пробуем следующий...")
+                continue
             else:
                 print(f"[ERROR] ClientError: {e}")
                 return random.choice(FALLBACK_RESPONSES).format(username=username)
@@ -132,11 +143,9 @@ async def get_enderia_response(user_message: str, username: str) -> str:
             print(f"[ERROR] Ошибка: {e}")
             continue
     
-    # Если все ключи исчерпаны
     return random.choice(FALLBACK_RESPONSES).format(username=username)
 
 def should_respond(message_text: str) -> bool:
-    """Проверяет, обращаются ли к Эндерии"""
     if not message_text:
         return False
     text_lower = message_text.lower()
