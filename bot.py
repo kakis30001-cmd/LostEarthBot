@@ -13,7 +13,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from dotenv import load_dotenv
 from flask import Flask, send_from_directory
 
-from enderia import get_enderia_response, should_respond, emoji, ENDERIA_EMOJI
+from enderia import get_enderia_response, should_respond, emoji, ENDERIA_EMOJI, GEMINI_API_KEYS
 
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv("BOT_TOKEN")
