@@ -14,7 +14,8 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from dotenv import load_dotenv
 from flask import Flask
 
-from enderia import get_enderia_response, should_respond, endi_emoji, ENDERIA_EMOJI
+from enderia import get_enderia_response, should_respond
+from prompts import endi_emoji, ENDERIA_EMOJI
 
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv("BOT_TOKEN")
@@ -35,17 +36,6 @@ def run_flask():
 bot = Bot(token=TELEGRAM_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
-# Память чата
-chat_memory = deque(maxlen=50)
-
-def add_to_memory(username: str, message: str):
-    chat_memory.append({
-        "time": datetime.now().strftime("%H:%M:%S"),
-        "username": username,
-        "message": message
-    })
-
-# Премиум эмодзи для кнопок
 BUTTON_EMOJI = {
     "door": "5873147866364514353",
     "note": "5870930744116776638",
@@ -63,7 +53,6 @@ BUTTON_EMOJI = {
 def button_emoji(emoji_id, fallback="✨"):
     return f'<tg-emoji emoji-id="{emoji_id}">{fallback}</tg-emoji>'
 
-# Конфигурация сервера
 SERVER = {
     "name": "LostEarth",
     "mode": "Мирный режим по заявкам",
@@ -173,7 +162,6 @@ async def handle_message(message: Message):
         return
     
     username = message.from_user.first_name or "Игрок"
-    add_to_memory(username, message.text)
     
     if should_respond(message.text):
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
