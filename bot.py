@@ -89,7 +89,7 @@ PREMIUM_EMOJI = {
 def premium_emoji(emoji_id: str, fallback: str = "") -> str:
     return f'<tg-emoji emoji-id="{emoji_id}">{fallback}</tg-emoji>'
 
-# Функции для премиум эмодзи (без обычных фоллбэков)
+# Функции для премиум эмодзи (БЕЗ ФОЛЛБЭКОВ)
 def get_cat_dance():
     return premium_emoji(PREMIUM_EMOJI["cat_dance"], "")
 
