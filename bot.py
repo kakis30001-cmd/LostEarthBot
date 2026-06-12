@@ -89,18 +89,32 @@ PREMIUM_EMOJI = {
 def premium_emoji(emoji_id: str, fallback: str = "") -> str:
     return f'<tg-emoji emoji-id="{emoji_id}">{fallback}</tg-emoji>'
 
-# Функции для премиум эмодзи (как в твоём примере)
-def random_cat():
-    cats = [PREMIUM_EMOJI["cat_dance"], PREMIUM_EMOJI["cat_ok"], PREMIUM_EMOJI["cat_up"], PREMIUM_EMOJI["cat_laugh"]]
-    return premium_emoji(random.choice(cats), "")
+# Функции для премиум эмодзи
+def get_cat_dance():
+    return premium_emoji(PREMIUM_EMOJI["cat_dance"], "")
 
-def random_rabbit():
+def get_cat_ok():
+    return premium_emoji(PREMIUM_EMOJI["cat_ok"], "")
+
+def get_cat_up():
+    return premium_emoji(PREMIUM_EMOJI["cat_up"], "")
+
+def get_cat_laugh():
+    return premium_emoji(PREMIUM_EMOJI["cat_laugh"], "")
+
+def get_cat_kiss():
+    return premium_emoji(PREMIUM_EMOJI["cat_kiss"], "")
+
+def get_cat_surprised():
+    return premium_emoji(PREMIUM_EMOJI["cat_surprised"], "")
+
+def get_rabbit_fly():
     return premium_emoji(PREMIUM_EMOJI["rabbit_fly"], "")
 
-def random_heart():
+def get_heart():
     return premium_emoji(PREMIUM_EMOJI["heart"], "")
 
-def random_anime():
+def get_anime_dance():
     return premium_emoji(PREMIUM_EMOJI["anime_dance"], "")
 
 def get_crown():
@@ -109,29 +123,36 @@ def get_crown():
 def get_house():
     return premium_emoji(PREMIUM_EMOJI["house"], "")
 
+def get_note():
+    return premium_emoji(PREMIUM_EMOJI["note"], "")
+
 def get_magic():
     return premium_emoji(PREMIUM_EMOJI["magic"], "")
 
 def get_joystick():
     return premium_emoji(PREMIUM_EMOJI["joystick"], "")
 
-def get_note():
-    return premium_emoji(PREMIUM_EMOJI["note"], "")
-
 def get_check():
     return premium_emoji(PREMIUM_EMOJI["check"], "")
 
-def get_back():
+def get_back_arrow():
     return premium_emoji(PREMIUM_EMOJI["back"], "")
 
 def get_door():
     return premium_emoji(PREMIUM_EMOJI["door"], "")
 
-def get_cat_surprised():
-    return premium_emoji(PREMIUM_EMOJI["cat_surprised"], "")
+def random_cat():
+    cats = [get_cat_dance(), get_cat_ok(), get_cat_up(), get_cat_laugh(), get_cat_kiss()]
+    return random.choice(cats)
 
-def get_cat_dance():
-    return premium_emoji(PREMIUM_EMOJI["cat_dance"], "")
+def random_rabbit():
+    return get_rabbit_fly()
+
+def random_heart():
+    return get_heart()
+
+def random_anime():
+    return get_anime_dance()
 
 # ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
 async def get_user_bio(user_id: int) -> str:
@@ -205,7 +226,7 @@ async def get_server_online():
     set_server_online(online, max_players)
     return online, max_players
 
-# ========== КЛАВИАТУРЫ (как в примере) ==========
+# ========== КЛАВИАТУРЫ ==========
 def get_main_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="IP И ОНЛАЙН", callback_data="menu_ip", icon_custom_emoji_id=PREMIUM_EMOJI["door"])],
@@ -226,7 +247,7 @@ def get_back_keyboard():
         [InlineKeyboardButton(text="НАЗАД", callback_data="menu_main", icon_custom_emoji_id=PREMIUM_EMOJI["back"])]
     ])
 
-# ========== ХЕНДЛЕРЫ (все эмодзи через premium_emoji) ==========
+# ========== ХЕНДЛЕРЫ (ТОЛЬКО ПРЕМИУМ ЭМОДЗИ) ==========
 @dp.message(CommandStart())
 async def start_cmd(message: Message):
     online, max_players = await get_server_online()
@@ -248,7 +269,7 @@ async def start_cmd(message: Message):
 {get_magic()} <b>Стартовый баланс: 100 алмазов</b>
 {get_joystick()} <b>Минимальная ставка: 10 алмазов</b>
 
-{random_heart()} <b>Как получить бонус?</b>
+{get_heart()} <b>Как получить бонус?</b>
 Добавь в описание профиля: @lostearth_bot
 
 {random_rabbit()} {random_anime()} {random_cat()}"""
@@ -267,12 +288,12 @@ async def stats_cmd(message: Message):
         await message.answer(
             f"{random_cat()} <b>{username}, я помню наш диалог!</b>\n\n"
             f"{get_note()} Запомнено сообщений: {size}\n"
-            f"{random_heart()} Очистить память: /clear_memory",
+            f"{get_heart()} Очистить память: /clear_memory",
             parse_mode="HTML"
         )
     else:
         await message.answer(
-            f"{random_heart()} <b>{username}, мы ещё не общались!</b>\n\n"
+            f"{get_heart()} <b>{username}, мы ещё не общались!</b>\n\n"
             f"{random_cat()} Напиши /games чтобы поиграть!",
             parse_mode="HTML"
         )
@@ -290,7 +311,7 @@ async def clear_memory_cmd(message: Message):
 
 @dp.message(Command("help"))
 async def help_cmd(message: Message):
-    text = f"""{random_heart()} <b>Помощь по боту LostEarth</b> {random_heart()}
+    text = f"""{get_heart()} <b>Помощь по боту LostEarth</b> {get_heart()}
 
 {get_house()} <b>Команды сервера:</b>
 /start - Главное меню
@@ -302,7 +323,7 @@ async def help_cmd(message: Message):
 /profile - Твой профиль
 /daily - Ежедневный бонус 100
 
-{random_heart()} <b>Как получить бонус?</b>
+{get_heart()} <b>Как получить бонус?</b>
 Добавь в описание профиля: @lostearth_bot
 
 {get_magic()} <b>Правила игры:</b>
@@ -330,13 +351,13 @@ async def profile_cmd(message: Message):
 {get_house()} Имя: {username}
 {get_crown()} Баланс: {balance} алмазов
 {get_joystick()} Побед: {stats['wins']}
-{random_heart()} Поражений: {stats['losses']}
+{get_heart()} Поражений: {stats['losses']}
 {get_note()} Всего игр: {stats['wins'] + stats['losses']}
 
 {get_magic()} <b>Ежедневный бонус: +100 алмазов</b>
 {get_note()} Добавь в описание: @lostearth_bot
 
-{random_cat()} Напиши /daily чтобы получить бонус! {random_heart()}"""
+{random_cat()} Напиши /daily чтобы получить бонус! {get_heart()}"""
     await message.answer(text, parse_mode="HTML")
 
 @dp.message(Command("daily"))
@@ -361,7 +382,7 @@ async def daily_cmd(message: Message):
 4. В разделе "Описание" добавь: @lostearth_bot
 5. Сохрани и возвращайся!
 
-{random_heart()} После добавления напиши /daily снова! {random_cat()}"""
+{get_heart()} После добавления напиши /daily снова! {random_cat()}"""
         await message.answer(text, parse_mode="HTML")
         return
     
@@ -374,10 +395,10 @@ async def daily_cmd(message: Message):
         save_players(data)
         balance = get_balance(username)
         
-        text = f"{get_magic()} <b>ЕЖЕДНЕВНЫЙ БОНУС!</b> {get_magic()}\n\n{get_crown()} +100 алмазов!\n{get_house()} Баланс: {balance} алмазов\n\n{random_rabbit()} Заходи завтра снова! {random_heart()}"
+        text = f"{get_magic()} <b>ЕЖЕДНЕВНЫЙ БОНУС!</b> {get_magic()}\n\n{get_crown()} +100 алмазов!\n{get_house()} Баланс: {balance} алмазов\n\n{random_rabbit()} Заходи завтра снова! {get_heart()}"
         await message.answer(text, parse_mode="HTML")
     else:
-        text = f"{random_heart()} {username}, ты уже получал бонус сегодня! Возвращайся завтра! {random_cat()}"
+        text = f"{get_heart()} {username}, ты уже получал бонус сегодня! Возвращайся завтра! {random_cat()}"
         await message.answer(text, parse_mode="HTML")
 
 @dp.message(Command("bet"))
@@ -401,7 +422,7 @@ async def bet_cmd(message: Message):
         return
     
     if balance < bet_amount:
-        await message.answer(f"{random_heart()} {username}, у тебя всего {balance} алмазов! Не хватает на ставку {bet_amount} {get_crown()}", parse_mode="HTML")
+        await message.answer(f"{get_heart()} {username}, у тебя всего {balance} алмазов! Не хватает на ставку {bet_amount} {get_crown()}", parse_mode="HTML")
         return
     
     await message.answer(f"{get_joystick()} {username} бросает кубик...")
@@ -420,7 +441,7 @@ async def bet_cmd(message: Message):
             f"Твой кубик: {player_value}\n"
             f"Мой кубик: {bot_value}\n\n"
             f"{get_magic()} Ты выиграл {bet_amount} алмазов!\n"
-            f"{get_crown()} Баланс: {new_balance} {random_heart()}",
+            f"{get_crown()} Баланс: {new_balance} {get_heart()}",
             parse_mode="HTML"
         )
     elif player_value < bot_value:
@@ -431,13 +452,13 @@ async def bet_cmd(message: Message):
             f"{get_cat_surprised()} <b>ПРОИГРЫШ...</b> {get_cat_surprised()}\n\n"
             f"Твой кубик: {player_value}\n"
             f"Мой кубик: {bot_value}\n\n"
-            f"{random_heart()} Ты проиграл {bet_amount} алмазов!\n"
+            f"{get_heart()} Ты проиграл {bet_amount} алмазов!\n"
             f"{get_crown()} Баланс: {new_balance} {random_cat()}",
             parse_mode="HTML"
         )
     else:
         await message.answer(
-            f"{random_heart()} <b>НИЧЬЯ!</b> {random_heart()}\n\n"
+            f"{get_heart()} <b>НИЧЬЯ!</b> {get_heart()}\n\n"
             f"Оба выбросили {player_value}\n\n"
             f"{get_crown()} Ставка возвращена!\n"
             f"{get_house()} Баланс: {balance} {get_joystick()}",
@@ -450,7 +471,7 @@ async def games_cmd(message: Message):
 
 {get_crown()} <b>/bet [сумма]</b> - Ставка на кубик (выигрыш х2)
 {get_house()} <b>/balance</b> - Показать баланс
-{random_heart()} <b>/profile</b> - Твой профиль
+{get_heart()} <b>/profile</b> - Твой профиль
 {get_magic()} <b>/daily</b> - Ежедневный бонус 100
 
 {get_magic()} <b>Правила игры:</b>
@@ -460,7 +481,7 @@ async def games_cmd(message: Message):
 
 {get_crown()} <b>Стартовый баланс: 100 алмазов</b>
 
-{random_heart()} <b>Ежедневный бонус:</b>
+{get_heart()} <b>Ежедневный бонус:</b>
 Добавь @lostearth_bot в описание профиля!
 
 {get_joystick()} Напиши /bet 50 чтобы сыграть! {random_cat()}"""
@@ -505,7 +526,7 @@ async def safe_callback_answer(callback: CallbackQuery, text: str = None, show_a
 @dp.callback_query(lambda c: c.data == "menu_main")
 async def menu_main(callback: CallbackQuery):
     online, max_players = await get_server_online()
-    text = f"""{random_heart()} <b>Главное меню</b>\n\n{get_crown()} Онлайн: {online}/{max_players}\n\n{random_cat()} Напиши /games чтобы поиграть в кости!"""
+    text = f"""{get_heart()} <b>Главное меню</b>\n\n{get_crown()} Онлайн: {online}/{max_players}\n\n{random_cat()} Напиши /games чтобы поиграть в кости!"""
     try:
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_main_keyboard())
     except Exception as e:
@@ -561,7 +582,7 @@ async def menu_premium(callback: CallbackQuery):
 {get_house()} <b>Архонт</b> - 400₽
 {random_cat()} <b>Серафим</b> - 600₽
 
-{random_heart()} <b>По вопросам:</b> @pelmewki379
+{get_heart()} <b>По вопросам:</b> @pelmewki379
 
 {random_cat()} <i>Хочешь полёт? Бери Херувима!</i>"""
     try:
@@ -572,7 +593,7 @@ async def menu_premium(callback: CallbackQuery):
 
 @dp.callback_query(lambda c: c.data == "menu_enderia")
 async def menu_enderia(callback: CallbackQuery):
-    text = f"""{random_heart()} <b>Эндерия - твой живой помощник</b> {random_heart()}
+    text = f"""{get_heart()} <b>Эндерия - твой живой помощник</b> {get_heart()}
 
 {random_cat()} <b>Кто я?</b>
 Я девушка-эндермен, хранительница Края.
@@ -587,7 +608,7 @@ async def menu_enderia(callback: CallbackQuery):
 Добавь @lostearth_bot в описание профиля!
 
 {random_rabbit()} <i>Просто позови меня по имени!</i>
-{random_heart()}"""
+{get_heart()}"""
     try:
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_back_keyboard())
     except Exception as e:
