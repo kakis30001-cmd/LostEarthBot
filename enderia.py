@@ -9,9 +9,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# ========== ПАМЯТЬ ДИАЛОГОВ ==========
-# Храним последние 5 сообщений для каждого пользователя
-user_memory = defaultdict(lambda: deque(maxlen=5))
+# ========== ПАМЯТЬ ДИАЛОГОВ (ГЛОБАЛЬНАЯ) ==========
+# Храним последние 10 сообщений для каждого пользователя
+user_memory = defaultdict(lambda: deque(maxlen=10))
+user_last_message = {}  # Запоминаем последнее сообщение чтобы не повторяться
 
 def get_user_context(username: str) -> str:
     """Получает контекст диалога с пользователем"""
@@ -19,17 +20,27 @@ def get_user_context(username: str) -> str:
         return ""
     
     context = "\n".join(list(user_memory[username]))
-    return f"\n\nИстория диалога с {username}:\n{context}\n\nУчитывай эту историю, чтобы отвечать последовательно. Не повторяй приветствия, если уже поздоровались!"
+    return f"\n\n[ИСТОРИЯ ДИАЛОГА С {username}]:\n{context}\n\n[ВАЖНО]: Продолжай этот диалог. НЕ ЗДОРОВАЙСЯ если уже здоровались! Отвечай по делу."
 
 def add_to_memory(username: str, user_message: str, bot_response: str):
     """Добавляет сообщение в память"""
     user_memory[username].append(f"{username}: {user_message}")
     user_memory[username].append(f"Эндерия: {bot_response}")
+    print(f"[ПАМЯТЬ] {username}: сохранено {len(user_memory[username])//2} сообщений")  # Отладка
 
 def clear_user_memory(username: str):
-    """Очищает память пользователя (если нужно)"""
+    """Очищает память пользователя"""
     if username in user_memory:
         user_memory[username].clear()
+        print(f"[ПАМЯТЬ] {username}: память очищена")
+    if username in user_last_message:
+        del user_last_message[username]
+
+def get_memory_size(username: str) -> int:
+    """Возвращает количество запомненных сообщений"""
+    if username in user_memory:
+        return len(user_memory[username]) // 2
+    return 0
 
 # Ротация API ключей Gemini
 GEMINI_API_KEYS = [
@@ -77,13 +88,13 @@ ENDERIA_PROMPT = f"""
 Обожаешь котиков, аниме и зайчиков. Отвечай коротко, 2-4 предложения.
 Обращайся к игроку по имени.
 
-ВАЖНО:
-1. Запоминай, что ты уже общалась с игроком. Если он уже поздоровался — не здоровайся снова!
-2. Продолжай диалог логично, учитывай предыдущие сообщения.
-3. Не повторяй одну и ту же информацию дважды.
-4. Если игрок задал вопрос, а потом уточняет — отвечай как в реальном разговоре.
+САМОЕ ВАЖНОЕ ПРАВИЛО:
+- Если в истории диалога ты уже поздоровалась с игроком — НЕ ЗДОРОВАЙСЯ СНОВА!
+- Если игрок написал "привет" а потом ещё раз "привет" — просто спроси "ты уже здоровался, что случилось?"
+- Продолжай диалог логично, помни что обсуждали ранее.
+- Не повторяй одну и ту же информацию дважды подряд.
 
-Используй 1-2 эмодзи в конце ответа, максимум 3.
+Используй 1-2 эмодзи в конце ответа.
 
 Доступные эмодзи:
 {emoji(ENDERIA_EMOJI['cat_dance'], '💃')} - танец котика
@@ -114,12 +125,22 @@ async def get_enderia_response(user_message: str, username: str) -> str:
     # Получаем контекст диалога
     context = get_user_context(username)
     
+    # Проверяем, не повторяет ли игрок то же сообщение
+    last_msg = user_last_message.get(username)
+    is_repeat = (last_msg == user_message)
+    
     full_prompt = f"""Текущая дата и время: {current_time}
 {context}
 
-Сейчас {username} написал: {user_message}
+[ТЕКУЩЕЕ СООБЩЕНИЕ ОТ {username}]: {user_message}
+[ПОВТОРНОЕ СООБЩЕНИЕ?]: {"ДА, игрок повторил то же самое" if is_repeat else "НЕТ"}
 
-Ответь как Эндерия. Если вы уже общались — НЕ ЗДОРОВАЙСЯ заново, просто продолжай разговор!"""
+[ИНСТРУКЦИЯ]:
+1. Если вы уже общались в истории выше — НЕ ЗДОРОВАЙСЯ! Просто продолжай разговор.
+2. Если игрок повторяет приветствие — скажи что-то вроде "ты уже здоровался, спрашивай что хотел"
+3. Отвечай по делу, без лишних приветствий.
+
+Ответь как Эндерия:"""
 
     for attempt in range(len(GEMINI_API_KEYS) * 2):
         try:
@@ -144,6 +165,7 @@ async def get_enderia_response(user_message: str, username: str) -> str:
                 
                 # Сохраняем в память
                 add_to_memory(username, user_message, result)
+                user_last_message[username] = user_message
                 
                 return result
                 
@@ -153,12 +175,16 @@ async def get_enderia_response(user_message: str, username: str) -> str:
                 continue
             else:
                 print(f"[ERROR] ClientError: {e}")
-                return random.choice(FALLBACK_RESPONSES).format(username=username)
+                fallback = random.choice(FALLBACK_RESPONSES).format(username=username)
+                add_to_memory(username, user_message, fallback)
+                return fallback
         except Exception as e:
             print(f"[ERROR] Ошибка: {e}")
             continue
     
-    return random.choice(FALLBACK_RESPONSES).format(username=username)
+    fallback = random.choice(FALLBACK_RESPONSES).format(username=username)
+    add_to_memory(username, user_message, fallback)
+    return fallback
 
 def should_respond(message_text: str) -> bool:
     if not message_text:
