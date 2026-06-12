@@ -20,7 +20,7 @@ from enderia import (
     clear_user_memory, 
     get_memory_size, 
     set_server_online,
-    add_to_chat_memory,
+    add_to_chat_memory,  # ЭТА ФУНКЦИЯ ТЕПЕРЬ БУДЕТ ВЫЗЫВАТЬСЯ ДЛЯ КАЖДОГО СООБЩЕНИЯ
     get_chat_context
 )
 from prompts import get_enderia_emojis
@@ -55,7 +55,7 @@ def run_flask():
 bot = Bot(token=TELEGRAM_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
-# ========== ПРЕМИУМ ЭМОДЗИ (только существующие) ==========
+# ========== ПРЕМИУМ ЭМОДЗИ ==========
 PREMIUM_EMOJI = {
     "door": "5873147866364514353",
     "note": "5870930744116776638",
@@ -194,6 +194,8 @@ async def start_cmd(message: Message):
 
 {random_heart()} <b>Я Эндерия - твой живой помощник!</b>
 
+📊 <b>Текущий онлайн:</b> {online}/{max_players}
+
 {random_cat()} <b>Просто напиши моё имя:</b> Энди, Эндерия, Эндер
 
 {random_rabbit()} {random_anime()} {get_enderia_emojis()}"""
@@ -243,6 +245,7 @@ async def help_cmd(message: Message):
 /online - Показать онлайн
 /stats - Статистика диалога
 /clear_memory - Очистить память
+/log - Показать лог чата
 /help - Справка
 
 {random_cat()} <b>Как общаться:</b>
@@ -251,32 +254,41 @@ async def help_cmd(message: Message):
 {random_rabbit()} <i>Задавай вопросы!</i>"""
     await message.answer(text, parse_mode="HTML")
 
-@dp.message()
-async def handle_message(message: Message):
-    if not message.text:
-        return
-    
-    username = message.from_user.first_name or "Игрок"
-    user_message = message.text
-    
-    print(f"📝 Получено сообщение от {username}: {user_message[:50]}...")
-    
-    add_to_chat_memory(username, user_message, is_bot=False)
-    
-    is_mentioned = should_respond(user_message)
-    is_reply_to_bot = (message.reply_to_message and message.reply_to_message.from_user.id == bot.id)
-    
-    if is_mentioned or is_reply_to_bot:
-        print(f"🎯 Эндерия должна ответить (упоминание={is_mentioned}, реплай={is_reply_to_bot})")
-        await bot.send_chat_action(chat_id=message.chat.id, action="typing")
-        response = await get_enderia_response(user_message, username, is_reply=is_reply_to_bot)
-        if response:
-            print(f"💬 Ответ Эндерии: {response[:50]}...")
-            await message.reply(response, parse_mode="HTML")
-            add_to_chat_memory(username, response, is_bot=True)
-    else:
-        print(f"⏭️ Пропускаем (не упоминание и не реплай)")
+@dp.message(Command("log"))
+async def show_log(message: Message):
+    """Показать последние сообщения из лога чата"""
+    try:
+        from enderia import HISTORY_FILE
+        import os
+        
+        if not os.path.exists(HISTORY_FILE):
+            await message.answer("❌ Лог файл не найден. Бот ещё не сохранял сообщения.")
+            return
+        
+        with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+        
+        if not lines:
+            await message.answer("📭 Лог пуст")
+            return
+        
+        # Последние 30 строк
+        last_lines = lines[-30:] if len(lines) > 30 else lines
+        text = "📜 <b>Последние сообщения в логе чата:</b>\n\n<code>"
+        for line in last_lines:
+            if len(line) > 200:
+                line = line[:200] + "...\n"
+            text += line
+        text += "</code>"
+        
+        if len(text) > 4000:
+            text = text[:4000] + "..."
+        
+        await message.answer(text, parse_mode="HTML")
+    except Exception as e:
+        await message.answer(f"❌ Ошибка: {e}")
 
+# ========== ГЛАВНЫЙ ОБРАБОТЧИК СООБЩЕНИЙ ==========
 @dp.message()
 async def handle_message(message: Message):
     if not message.text:
@@ -284,18 +296,28 @@ async def handle_message(message: Message):
     
     username = message.from_user.first_name or "Игрок"
     user_message = message.text
+    chat_id = message.chat.id
+    chat_title = message.chat.title or "Личка"
     
-    add_to_chat_memory(username, user_message, is_bot=False)
+    # ===== СОХРАНЯЕМ КАЖДОЕ СООБЩЕНИЕ В ЛОГ (ДАЖЕ ЕСЛИ НЕ ОБРАЩАЮТСЯ К ЭНДЕРИИ) =====
+    # Добавляем информацию о чате
+    log_line = f"[Чат: {chat_title}] {username}: {user_message}"
+    add_to_chat_memory(username, user_message, is_bot=False, extra_info=f"[Чат: {chat_title}]")
     
+    print(f"📝 [ЛОГ] {chat_title} | {username}: {user_message[:50]}...")
+    
+    # Проверяем, обращаются ли к Эндерии
     is_mentioned = should_respond(user_message)
     is_reply_to_bot = (message.reply_to_message and message.reply_to_message.from_user.id == bot.id)
     
+    # Отвечаем только если обратились по имени или ответили на сообщение бота
     if is_mentioned or is_reply_to_bot:
+        print(f"🎯 Эндерия отвечает {username} (упоминание={is_mentioned}, реплай={is_reply_to_bot})")
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
         response = await get_enderia_response(user_message, username, is_reply=is_reply_to_bot)
         if response:
             await message.reply(response, parse_mode="HTML")
-            add_to_chat_memory(username, response, is_bot=True)
+            # Ответ бота тоже сохраняется в add_to_chat_memory внутри get_enderia_response
 
 # ========== КОЛБЭКИ ==========
 async def safe_callback_answer(callback: CallbackQuery, text: str = None, show_alert: bool = False):
@@ -396,6 +418,8 @@ async def menu_enderia(callback: CallbackQuery):
 • Режимы игры (Мирный и SMP)
 • Донаты и цены
 
+📜 <b>Команда /log</b> - показывает историю чата
+
 {random_rabbit()} <i>Просто позови меня по имени!</i>
 {random_heart()}"""
     try:
@@ -415,6 +439,7 @@ async def main():
     print("🚀 БОТ LOSTEARTH ЗАПУЩЕН")
     print(f"🎨 Премиум эмодзи загружено: {len(PREMIUM_EMOJI)}")
     print(f"🤖 Бот: @{bot_info.username}")
+    print(f"📁 Лог-файл: chat_history/chat.log")
     print("=" * 50)
     
     try:
