@@ -26,12 +26,8 @@ current_online = 0
 current_max = 0
 
 # ========== ИГРОВЫЕ ПЕРЕМЕННЫЕ ==========
-# Активные игры
 active_games = {}  # {chat_id: {"type": "guess_number", "target": number, "username": name}}
-# Балансы игроков (алмазы)
 player_balance = defaultdict(lambda: 100)  # У всех 100 алмазов старт
-# Активные ставки
-active_bets = {}  # {username: {"amount": int, "game": str}}
 
 def set_server_online(online: int, max_players: int):
     global current_online, current_max
@@ -56,28 +52,27 @@ def add_to_chat_memory(username: str, message: str, is_bot: bool = False):
 
 # ========== ПРЕМИУМ ЭМОДЗИ ==========
 def get_random_emoji():
+    from prompts import ENDERIA_EMOJI
     emojis = list(ENDERIA_EMOJI.values())
     emoji_id = random.choice(emojis)
     return f'<tg-emoji emoji-id="{emoji_id}">💜</tg-emoji>'
 
 def get_dice_emoji(value: int):
-    dice_emojis = {
-        1: "🎲 1",
-        2: "🎲 2",
-        3: "🎲 3",
-        4: "🎲 4",
-        5: "🎲 5",
-        6: "🎲 6"
+    dice_faces = {
+        1: "⚀",
+        2: "⚁", 
+        3: "⚂",
+        4: "⚃",
+        5: "⚄",
+        6: "⚅"
     }
-    return dice_emojis.get(value, "🎲")
+    return dice_faces.get(value, "🎲")
 
 # ========== ИГРОВЫЕ ФУНКЦИИ ==========
 def roll_dice() -> int:
-    """Бросает кубик, возвращает число от 1 до 6"""
     return random.randint(1, 6)
 
 async def game_guess_number_start(username: str, chat_id: int) -> str:
-    """Начинает игру 'Угадай число'"""
     target = random.randint(1, 10)
     active_games[chat_id] = {
         "type": "guess_number",
@@ -85,11 +80,9 @@ async def game_guess_number_start(username: str, chat_id: int) -> str:
         "username": username,
         "attempts": 0
     }
-    dice_emoji = get_random_emoji()
-    return f"{dice_emoji} Загадала число от 1 до 10, {username}! Попробуй угадать! Пиши просто число 🎲\n{get_random_emoji()}"
+    return f"{get_random_emoji()} Загадала число от 1 до 10, {username}! Попробуй угадать! Пиши просто число 🎲 {get_random_emoji()}"
 
 async def game_guess_number_check(chat_id: int, guess: int, username: str) -> tuple[str, bool]:
-    """Проверяет угадывание числа"""
     if chat_id not in active_games or active_games[chat_id]["type"] != "guess_number":
         return "", False
     
@@ -101,83 +94,62 @@ async def game_guess_number_check(chat_id: int, guess: int, username: str) -> tu
     target = game["target"]
     
     if guess == target:
-        # Победа
         del active_games[chat_id]
         return f"{get_random_emoji()} {username}, ты угадал! 🎉 Это было число {target}! Потрачено попыток: {game['attempts']} {get_random_emoji()}", True
     elif guess < target:
-        return f"{get_random_emoji()} {username}, загаданное число БОЛЬШЕ! Попробуй ещё 🐱", False
+        return f"{get_random_emoji()} {username}, загаданное число БОЛЬШЕ! Попробуй ещё 🐱 {get_random_emoji()}", False
     else:
-        return f"{get_random_emoji()} {username}, загаданное число МЕНЬШЕ! Попробуй ещё 🐱", False
+        return f"{get_random_emoji()} {username}, загаданное число МЕНЬШЕ! Попробуй ещё 🐱 {get_random_emoji()}", False
 
-async def game_dice_bet(username: str, bet_amount: int, chat_id: int) -> str:
-    """Игра в кости на алмазы"""
-    # Проверяем баланс
+async def game_dice_bet(username: str, bet_amount: int) -> str:
     if player_balance[username] < bet_amount:
-        return f"{get_random_emoji()} {username}, у тебя всего {player_balance[username]} алмазов! Не хватает на ставку {bet_amount} 💎"
+        return f"{get_random_emoji()} {username}, у тебя всего {player_balance[username]} алмазов! Не хватает на ставку {bet_amount} 💎 {get_random_emoji()}"
     
     if bet_amount <= 0:
-        return f"{get_random_emoji()} {username}, ставка должна быть больше 0! 🐱"
+        return f"{get_random_emoji()} {username}, ставка должна быть больше 0! 🐱 {get_random_emoji()}"
     
-    # Бросаем кубики
     player_dice = roll_dice()
     bot_dice = roll_dice()
     
-    player_dice_emoji = get_dice_emoji(player_dice)
-    bot_dice_emoji = get_dice_emoji(bot_dice)
-    
     if player_dice > bot_dice:
-        # Игрок выиграл
         win_amount = bet_amount * 2
         player_balance[username] += bet_amount
-        result_text = f"🎉 ПОБЕДА! 🎉\n\n{username}: {player_dice_emoji}\nЭндерия: {bot_dice_emoji}\n\nТы выиграл {bet_amount} алмазов! +{bet_amount} 💎"
-        return f"{get_random_emoji()} {result_text}\n{get_random_emoji()}"
+        return f"{get_random_emoji()} 🎲 ПОБЕДА! 🎲 {get_random_emoji()}\n\n{username}: {get_dice_emoji(player_dice)} {player_dice}\nЭндерия: {get_dice_emoji(bot_dice)} {bot_dice}\n\n✨ Ты выиграл {bet_amount} алмазов! +{bet_amount} 💎\nБаланс: {player_balance[username]} 💎 {get_random_emoji()}"
     elif player_dice < bot_dice:
-        # Игрок проиграл
         player_balance[username] -= bet_amount
-        result_text = f"😔 ПРОИГРЫШ... 😔\n\n{username}: {player_dice_emoji}\nЭндерия: {bot_dice_emoji}\n\nТы проиграл {bet_amount} алмазов! -{bet_amount} 💎"
-        return f"{get_random_emoji()} {result_text}\n{get_random_emoji()}"
+        return f"{get_random_emoji()} 🎲 ПРОИГРЫШ... 🎲 {get_random_emoji()}\n\n{username}: {get_dice_emoji(player_dice)} {player_dice}\nЭндерия: {get_dice_emoji(bot_dice)} {bot_dice}\n\n😔 Ты проиграл {bet_amount} алмазов! -{bet_amount} 💎\nБаланс: {player_balance[username]} 💎 {get_random_emoji()}"
     else:
-        # Ничья
-        result_text = f"🤝 НИЧЬЯ! 🤝\n\n{username}: {player_dice_emoji}\nЭндерия: {bot_dice_emoji}\n\nСтавка возвращена! {bet_amount} 💎"
-        return f"{get_random_emoji()} {result_text}\n{get_random_emoji()}"
+        return f"{get_random_emoji()} 🎲 НИЧЬЯ! 🎲 {get_random_emoji()}\n\n{username}: {get_dice_emoji(player_dice)} {player_dice}\nЭндерия: {get_dice_emoji(bot_dice)} {bot_dice}\n\n🤝 Ставка возвращена! {bet_amount} 💎\nБаланс: {player_balance[username]} 💎 {get_random_emoji()}"
 
-async def game_dice_battle(username: str, chat_id: int) -> str:
-    """Битва кубиков без ставки (просто игра)"""
+async def game_dice_battle(username: str) -> str:
     player_dice = roll_dice()
     bot_dice = roll_dice()
     
-    player_dice_emoji = get_dice_emoji(player_dice)
-    bot_dice_emoji = get_dice_emoji(bot_dice)
-    
     if player_dice > bot_dice:
-        return f"{get_random_emoji()} 🎲 БИТВА КУБИКОВ 🎲 {get_random_emoji()}\n\n{username}: {player_dice_emoji}\nЭндерия: {bot_dice_emoji}\n\n✨ Ты победил! ✨ {get_random_emoji()}"
+        return f"{get_random_emoji()} 🎲 БИТВА КУБИКОВ 🎲 {get_random_emoji()}\n\n{username}: {get_dice_emoji(player_dice)} {player_dice}\nЭндерия: {get_dice_emoji(bot_dice)} {bot_dice}\n\n✨ Ты победил! ✨ {get_random_emoji()}"
     elif player_dice < bot_dice:
-        return f"{get_random_emoji()} 🎲 БИТВА КУБИКОВ 🎲 {get_random_emoji()}\n\n{username}: {player_dice_emoji}\nЭндерия: {bot_dice_emoji}\n\n💔 Я победила! В следующий раз повезёт! 💔 {get_random_emoji()}"
+        return f"{get_random_emoji()} 🎲 БИТВА КУБИКОВ 🎲 {get_random_emoji()}\n\n{username}: {get_dice_emoji(player_dice)} {player_dice}\nЭндерия: {get_dice_emoji(bot_dice)} {bot_dice}\n\n💔 Я победила! В следующий раз повезёт! 💔 {get_random_emoji()}"
     else:
-        return f"{get_random_emoji()} 🎲 БИТВА КУБИКОВ 🎲 {get_random_emoji()}\n\n{username}: {player_dice_emoji}\nЭндерия: {bot_dice_emoji}\n\n🤝 Ничья! Боевая! 🤝 {get_random_emoji()}"
+        return f"{get_random_emoji()} 🎲 БИТВА КУБИКОВ 🎲 {get_random_emoji()}\n\n{username}: {get_dice_emoji(player_dice)} {player_dice}\nЭндерия: {get_dice_emoji(bot_dice)} {bot_dice}\n\n🤝 Ничья! Боевая! 🤝 {get_random_emoji()}"
 
-async def game_coinflip(username: str, bet_amount: int, choice: str, chat_id: int) -> str:
-    """Орёл или решка на алмазы"""
+async def game_coinflip(username: str, bet_amount: int, choice: str) -> str:
     if player_balance[username] < bet_amount:
-        return f"{get_random_emoji()} {username}, у тебя всего {player_balance[username]} алмазов! Не хватает на ставку {bet_amount} 💎"
+        return f"{get_random_emoji()} {username}, у тебя всего {player_balance[username]} алмазов! Не хватает на ставку {bet_amount} 💎 {get_random_emoji()}"
     
     if bet_amount <= 0:
-        return f"{get_random_emoji()} {username}, ставка должна быть больше 0! 🐱"
+        return f"{get_random_emoji()} {username}, ставка должна быть больше 0! 🐱 {get_random_emoji()}"
     
-    # Монетка
     coin = random.choice(["орёл", "решка"])
     coin_emoji = "🦅" if coin == "орёл" else "🪙"
     
     if choice.lower() == coin:
-        win_amount = bet_amount * 2
         player_balance[username] += bet_amount
-        return f"{get_random_emoji()} 🪙 МОНЕТКА 🪙 {get_random_emoji()}\n\n{username}: {choice}\nЭндерия: {coin} {coin_emoji}\n\n✨ Ты угадал! +{bet_amount} алмазов! ✨\nБаланс: {player_balance[username]} 💎"
+        return f"{get_random_emoji()} 🪙 МОНЕТКА 🪙 {get_random_emoji()}\n\n{username}: {choice}\nЭндерия: {coin} {coin_emoji}\n\n✨ Ты угадал! +{bet_amount} алмазов! ✨\nБаланс: {player_balance[username]} 💎 {get_random_emoji()}"
     else:
         player_balance[username] -= bet_amount
-        return f"{get_random_emoji()} 🪙 МОНЕТКА 🪙 {get_random_emoji()}\n\n{username}: {choice}\nЭндерия: {coin} {coin_emoji}\n\n😔 Ты не угадал! -{bet_amount} алмазов! 😔\nБаланс: {player_balance[username]} 💎"
+        return f"{get_random_emoji()} 🪙 МОНЕТКА 🪙 {get_random_emoji()}\n\n{username}: {choice}\nЭндерия: {coin} {coin_emoji}\n\n😔 Ты не угадал! -{bet_amount} алмазов! 😔\nБаланс: {player_balance[username]} 💎 {get_random_emoji()}"
 
 def get_balance(username: str) -> str:
-    """Показывает баланс игрока"""
     return f"{get_random_emoji()} {username}, твой баланс: {player_balance[username]} 💎 алмазов! {get_random_emoji()}"
 
 # ========== ПАМЯТЬ ДИАЛОГОВ ==========
@@ -245,7 +217,7 @@ async def ask_model(model: str, system_prompt: str, user_prompt: str) -> tuple[s
         return "", False
 
 # ========== ОСНОВНАЯ ФУНКЦИЯ ==========
-async def get_enderia_response(user_message: str, username: str, is_reply: bool = False) -> str:
+async def get_enderia_response(user_message: str, username: str, is_reply: bool = False, chat_id: int = None) -> str:
     global current_online, current_max
     
     print(f"🔍 Эндерия вызвана: {username} написал '{user_message}'")
@@ -255,51 +227,54 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     
     # ========== ОБРАБОТКА ИГР ==========
     
-    # Команда /balance или /bal - показать баланс
+    # /balance или /bal
     if user_message.startswith("/balance") or user_message.startswith("/bal"):
         response = get_balance(username)
         add_to_memory(username, user_message, response)
         save_to_log(username, response, is_bot=True)
         return response
     
-    # Команда /dice - битва кубиков
+    # /dice
     if user_message.startswith("/dice"):
-        response = await game_dice_battle(username, message.chat.id)
+        response = await game_dice_battle(username)
         add_to_memory(username, user_message, response)
         save_to_log(username, response, is_bot=True)
         return response
     
-    # Команда /bet [сумма] - ставка на кубик
+    # /bet [сумма]
     bet_match = re.match(r"^/bet\s+(\d+)$", user_message)
     if bet_match:
         bet_amount = int(bet_match.group(1))
-        response = await game_dice_bet(username, bet_amount, message.chat.id)
+        response = await game_dice_bet(username, bet_amount)
         add_to_memory(username, user_message, response)
         save_to_log(username, response, is_bot=True)
         return response
     
-    # Команда /coin [орёл/решка] [сумма]
+    # /coin [орёл/решка] [сумма]
     coin_match = re.match(r"^/coin\s+(орёл|решка)\s+(\d+)$", user_message.lower())
     if coin_match:
         choice = coin_match.group(1)
         bet_amount = int(coin_match.group(2))
-        response = await game_coinflip(username, bet_amount, choice, message.chat.id)
+        response = await game_coinflip(username, bet_amount, choice)
         add_to_memory(username, user_message, response)
         save_to_log(username, response, is_bot=True)
         return response
     
-    # Команда /guess - начать игру "Угадай число"
+    # /guess
     if user_message.lower() == "/guess":
-        response = await game_guess_number_start(username, message.chat.id)
+        if chat_id:
+            response = await game_guess_number_start(username, chat_id)
+        else:
+            response = f"{get_random_emoji()} {username}, нажми /guess в чате, где хочешь играть! {get_random_emoji()}"
         add_to_memory(username, user_message, response)
         save_to_log(username, response, is_bot=True)
         return response
     
     # Проверка угадывания числа
-    if message.chat.id in active_games and active_games[message.chat.id]["type"] == "guess_number":
+    if chat_id and chat_id in active_games and active_games[chat_id]["type"] == "guess_number":
         try:
             guess = int(user_message.strip())
-            response, ended = await game_guess_number_check(message.chat.id, guess, username)
+            response, ended = await game_guess_number_check(chat_id, guess, username)
             if response:
                 add_to_memory(username, user_message, response)
                 save_to_log(username, response, is_bot=True)
@@ -307,7 +282,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         except ValueError:
             pass
     
-    # Команда /games - список игр
+    # /games
     if user_message.lower() == "/games":
         response = f"""{get_random_emoji()} <b>ДОСТУПНЫЕ ИГРЫ</b> {get_random_emoji()}
 
@@ -328,31 +303,21 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     is_greeting_msg = is_greeting(user_message)
     
     if already_greeted and is_greeting_msg and not is_reply:
-        response = f"{get_random_emoji()} {username}, мы уже общаемся! Что хотел узнать про LostEarth? {get_random_emoji()}"
+        response = f"{get_random_emoji()} {username}, мы уже общаемся! Что хотел узнать про LostEarth? Хочешь поиграть? Напиши /games {get_random_emoji()}"
         add_to_memory(username, user_message, response)
         save_to_log(username, response, is_bot=True)
         return response
     
-    if not OPENROUTER_API_KEY:
-        print("❌ НЕТ API КЛЮЧА! Использую fallback ответы.")
-        fallbacks = [
-            f"{get_random_emoji()} {username}, я Эндерия — хранительница Края! ✨ На LostEarth есть два режима: 🕊️ Мирный (PvP по согласию) и ⚔️ SMP (можно рейдить)! IP: 150.241.85.40:25565. Хочешь поиграть? Напиши /games! {get_random_emoji()}",
-            f"{get_random_emoji()} {username}, привет! У нас есть игры: /dice (кубики), /bet (ставки), /coin (орёл/решка), /guess (угадай число). Проверим удачу? {get_random_emoji()}",
-        ]
-        response = random.choice(fallbacks)
-        add_to_memory(username, user_message, response)
-        save_to_log(username, response, is_bot=True)
-        return response
-    
+    # Пытаемся получить ответ от ИИ
     try:
         current_time = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
         system_prompt = get_system_prompt(username, current_time, current_online, current_max)
         
         full_prompt = f"""Игрок {username} написал: {user_message}
 
-Ответь как Эндерия (4-6 предложений). Используй премиум эмодзи через теги <tg-emoji emoji-id="...">. Будь милой и дружелюбной.
+Ответь как Эндерия (3-5 предложений). Используй премиум эмодзи. Будь милой и дружелюбной.
 Если спросят про игры - расскажи о /dice, /bet, /coin, /guess.
-В конце поставь 1-2 премиум эмодзи."""
+В конце поставь премиум эмодзи."""
         
         for model in MODELS_CHAIN:
             try:
@@ -360,7 +325,6 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
                 result, success = await ask_model(model, system_prompt, full_prompt)
                 
                 if success and result and len(result) > 10:
-                    # Добавляем премиум эмодзи если их нет
                     if "<tg-emoji" not in result:
                         result += f" {get_random_emoji()}"
                     
