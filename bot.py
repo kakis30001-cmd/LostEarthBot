@@ -611,4 +611,60 @@ async def handle_callback(callback: CallbackQuery):
         await safe_callback_answer(callback, "Онлайн обновлён!")
     
     elif data == "menu_premium":
-        text = f"{EMOJI['crown']} <b>ПРЕМИУМ ДОСТУП</b> {EMOJI['crown']}\n\n{EMOJI['magic']} <b>Друид</b> - 50₽\n{EMOJI['note']} <b>Оракул</b> - 100₽\n{EMOJI['crown']} <b>Монарх</b> - 200₽\n{EMOJI['rabbit_fly']} <b>Херувим</b> - 300₽ (полёт!)\n{EMOJI['house
+        text = f"{EMOJI['crown']} <b>ПРЕМИУМ ДОСТУП</b> {EMOJI['crown']}\n\n{EMOJI['magic']} <b>Друид</b> - 50₽\n{EMOJI['note']} <b>Оракул</b> - 100₽\n{EMOJI['crown']} <b>Монарх</b> - 200₽\n{EMOJI['rabbit_fly']} <b>Херувим</b> - 300₽ (полёт!)\n{EMOJI['house']} <b>Архонт</b> - 400₽\n{random_cat()} <b>Серафим</b> - 600₽\n\n{EMOJI['heart']} <b>По вопросам:</b> @pelmewki379\n\n{random_cat()} <i>Хочешь полёт? Бери Херувима!</i>"
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_back_keyboard())
+        await safe_callback_answer(callback)
+    
+    elif data == "menu_enderia":
+        text = f"{EMOJI['heart']} <b>Эндерия - твой живой помощник</b> {EMOJI['heart']}\n\n{random_cat()} <b>Кто я?</b>\nЯ девушка-эндермен, хранительница Края. Сама играю на сервере и фармлю опыт!\n\n{EMOJI['note']} <b>Как ко мне обратиться:</b>\nНапиши: Эндер, Эндерия, Энди\n\n{EMOJI['joystick']} <b>Игры и фермы:</b>\n/bet, /balance, /profile, /daily\n/farms, /buy_farm, /upgrade_farm, /claim\n\n{EMOJI['magic']} <b>Ежедневный бонус 500 XP</b>\nДобавь @lostearth_bot в описание профиля!\n\n{EMOJI['rabbit_fly']} <i>Строй фермы, копи опыт, становись лучшим!</i>\n{EMOJI['heart']}"
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_back_keyboard())
+        await safe_callback_answer(callback)
+    
+    elif data == "menu_farms":
+        username = callback.from_user.username or callback.from_user.first_name
+        farms = get_farms(username)
+        if not farms:
+            text = f"{EMOJI['house']} <b>У тебя пока нет ферм!</b>\n\nКупи первую ферму: /buy_farm пауков"
+        else:
+            total_income = calculate_income(farms)
+            text = f"{EMOJI['house']} <b>Твои фермы</b>\n\n💰 Доход: {total_income} XP/час\n/claim - собрать опыт"
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_back_keyboard())
+        await safe_callback_answer(callback)
+    
+    elif data == "menu_top":
+        leaders = get_leaderboard(5)
+        if not leaders:
+            text = f"{EMOJI['crown']} Пока нет игроков в топе!"
+        else:
+            text = f"{EMOJI['crown']} <b>ТОП 5 ИГРОКОВ</b> {EMOJI['crown']}\n\n"
+            for i, p in enumerate(leaders, 1):
+                medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else "📌"
+                text += f"{medal} {p['username']} - {p['xp']} XP\n"
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_back_keyboard())
+        await safe_callback_answer(callback)
+
+# ========== ЗАПУСК ==========
+async def main():
+    flask_thread = Thread(target=run_flask, daemon=True)
+    flask_thread.start()
+    
+    bot_info = await bot.get_me()
+    print("=" * 50)
+    print("БОТ LOSTEARTH ЗАПУЩЕН")
+    print(f"Бот: @{bot_info.username}")
+    print("Игры: /bet, /balance, /profile, /daily")
+    print("Фермы: /farms, /buy_farm, /upgrade_farm, /claim")
+    print("=" * 50)
+    
+    try:
+        await dp.start_polling(bot)
+    except Exception as e:
+        if "Conflict" in str(e):
+            print("Конфликт, перезапуск через 5 секунд...")
+            await asyncio.sleep(5)
+            await dp.start_polling(bot)
+        else:
+            raise e
+
+if __name__ == "__main__":
+    asyncio.run(main())
