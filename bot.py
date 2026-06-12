@@ -131,25 +131,49 @@ async def get_server_online():
     last_update["online"] = now
     return online, max_players
 
-# ========== КЛАВИАТУРЫ ==========
+# ========== КЛАВИАТУРЫ С ПРЕМИУМ ЭМОДЗИ ==========
 def get_main_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="IP И ОНЛАЙН", callback_data="menu_ip")],
-        [InlineKeyboardButton(text="ПРАВИЛА", web_app=WebAppInfo(url=RULES_URL)),
-         InlineKeyboardButton(text="ЗАЯВКА", web_app=WebAppInfo(url=APPLY_URL))],
-        [InlineKeyboardButton(text="ПРЕМИУМ", callback_data="menu_premium"),
-         InlineKeyboardButton(text="ЭНДЕРИЯ", callback_data="menu_enderia")]
+        [InlineKeyboardButton(
+            text=f"{emoji(ENDERIA_EMOJI['house'], '🏠')} IP И ОНЛАЙН", 
+            callback_data="menu_ip"
+        )],
+        [InlineKeyboardButton(
+            text=f"{emoji(ENDERIA_EMOJI['announcement'], '📜')} ПРАВИЛА", 
+            web_app=WebAppInfo(url=RULES_URL)
+        ),
+        InlineKeyboardButton(
+            text=f"{emoji(ENDERIA_EMOJI['rabbit_fly'], '🐰')} ЗАЯВКА", 
+            web_app=WebAppInfo(url=APPLY_URL)
+        )],
+        [InlineKeyboardButton(
+            text=f"{emoji(ENDERIA_EMOJI['crown'], '👑')} ПРЕМИУМ", 
+            callback_data="menu_premium"
+        ),
+        InlineKeyboardButton(
+            text=f"{emoji(ENDERIA_EMOJI['enderia_heart'], '💜')} ЭНДЕРИЯ", 
+            callback_data="menu_enderia"
+        )]
     ])
 
 def get_ip_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔄 ОБНОВИТЬ", callback_data="refresh_online")],
-        [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="menu_main")]
+        [InlineKeyboardButton(
+            text=f"{emoji(ENDERIA_EMOJI['check'], '✅')} ОБНОВИТЬ", 
+            callback_data="refresh_online"
+        )],
+        [InlineKeyboardButton(
+            text=f"{emoji(ENDERIA_EMOJI['down'], '◀️')} НАЗАД", 
+            callback_data="menu_main"
+        )]
     ])
 
 def get_back_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="menu_main")]
+        [InlineKeyboardButton(
+            text=f"{emoji(ENDERIA_EMOJI['down'], '◀️')} НАЗАД", 
+            callback_data="menu_main"
+        )]
     ])
 
 # ========== ИГРЫ ==========
