@@ -21,10 +21,19 @@ MODELS_CHAIN = [
     "nvidia/nemotron-3-nano-30b-a3b",
 ]
 
-# ========== НАСТРОЙКИ ФАЙЛОВОЙ ПАМЯТИ ==========
+# ========== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ==========
+current_online = 0
+current_max = 0
+
+def set_server_online(online: int, max_players: int):
+    global current_online, current_max
+    current_online = online
+    current_max = max_players
+
+# ========== НАСТРОЙКИ ФАЙЛОВОЙ ПАМЯТИ ЧАТА ==========
 HISTORY_DIR = "chat_history"
 HISTORY_FILE = os.path.join(HISTORY_DIR, "chat.log")
-MAX_HISTORY_LINES = 1000  # Храним последние 1000 сообщений
+MAX_HISTORY_LINES = 1000
 
 # Создаём папку если её нет
 os.makedirs(HISTORY_DIR, exist_ok=True)
@@ -34,8 +43,9 @@ if not os.path.exists(HISTORY_FILE):
     with open(HISTORY_FILE, "w", encoding="utf-8") as f:
         f.write(f"# История чата LostEarth\n# Создан: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
 
-def save_to_chat_history(username: str, message: str, is_bot: bool = False):
-    """Сохраняет сообщение в файл истории чата"""
+# ========== ФУНКЦИИ ДЛЯ РАБОТЫ С ФАЙЛОВОЙ ПАМЯТЬЮ ==========
+def add_to_chat_memory(username: str, message: str, is_bot: bool = False):
+    """Добавляет сообщение в файл истории чата"""
     try:
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         prefix = "🤖 Эндерия" if is_bot else f"👤 {username}"
@@ -50,7 +60,6 @@ def save_to_chat_history(username: str, message: str, is_bot: bool = False):
         
         # Оставляем только последние MAX_HISTORY_LINES строк
         if len(lines) > MAX_HISTORY_LINES:
-            # Сохраняем заголовок (первые 2 строки) и последние N строк
             header = lines[:2] if lines[0].startswith("#") else []
             body = lines[2:] if header else lines
             lines = header + body[-MAX_HISTORY_LINES:]
@@ -86,8 +95,8 @@ def get_chat_history(limit: int = 50) -> str:
         print(f"❌ Ошибка чтения истории: {e}")
         return ""
 
-def get_detailed_chat_context(limit: int = 30) -> str:
-    """Возвращает подробный контекст чата для Эндерии"""
+def get_chat_context(limit: int = 30) -> str:
+    """Возвращает контекст чата для Эндерии"""
     history = get_chat_history(limit)
     if not history:
         return ""
@@ -105,8 +114,6 @@ def get_detailed_chat_context(limit: int = 30) -> str:
 Если кто-то обратился к тебе по имени - ответь.
 Если видишь вопрос про сервер - можешь ответить.
 НЕ ПИШИ слишком длинные сообщения. Будь лаконичной (2-4 предложения).
-
-Твоя роль: ты участник чата Minecraft сервера LostEarth. Общайся естественно!
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
@@ -199,7 +206,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     
     current_time = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
     user_ctx = get_user_context(username)
-    chat_ctx = get_detailed_chat_context(limit=40)  # Берём последние 40 сообщений из чата
+    chat_ctx = get_chat_context(limit=40)
     already_greeted = has_already_greeted(username)
     is_greeting_msg = is_greeting(user_message)
     
@@ -215,8 +222,8 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         emojis = get_enderia_emojis()
         response = f"{emojis} {username}, мы уже общаемся! Что хотел узнать про LostEarth? 💜"
         add_to_memory(username, user_message, response)
-        save_to_chat_history(username, user_message, is_bot=False)
-        save_to_chat_history(username, response, is_bot=True)
+        add_to_chat_memory(username, user_message, is_bot=False)
+        add_to_chat_memory(username, response, is_bot=True)
         return response
     
     # Определяем инструкцию по приветствию
@@ -241,7 +248,6 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
 Отвечай как Эндерия (2-4 предложения). 
 - Учитывай ВСЮ историю чата выше
 - Если кто-то уже задал вопрос - можешь поддержать разговор
-- НЕ ПИШИ "кстати всю информацию можно посмотреть в /start" - это ботовая фраза
 - Отвечай как обычный игрок, а не как служебный бот
 - НЕ используй HTML теги
 - ОТВЕЧАЙ ТОЛЬКО НА РУССКОМ ЯЗЫКЕ
@@ -256,7 +262,6 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         result, success = await ask_model(model, system_prompt, full_prompt)
         
         if success and result and len(result) > 10:
-            # Проверяем, что ответ на русском
             has_russian = any(ord(c) > 1024 for c in result)
             if not has_russian:
                 print(f"⚠️ Модель {model} ответила не на русском, пробуем дальше")
@@ -264,33 +269,28 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
                 
             print(f"✅ УСПЕХ! Модель {model} ответила по-русски!")
             
-            # Убираем все HTML теги
             result = re.sub(r'<[^>]+>', '', result)
             
-            # Добавляем эмодзи если их нет
             if not any(emoji_id in result for emoji_id in ENDERIA_EMOJI.values()):
                 result += f" {get_enderia_emojis()}"
             
-            # Отмечаем что поздоровались
             if not already_greeted and not is_reply:
                 mark_greeted(username)
             
-            # Сохраняем в память и в файл
             add_to_memory(username, user_message, result)
-            save_to_chat_history(username, user_message, is_bot=False)
-            save_to_chat_history(username, result, is_bot=True)
+            add_to_chat_memory(username, user_message, is_bot=False)
+            add_to_chat_memory(username, result, is_bot=True)
             
             return result
         
         await asyncio.sleep(0.3)
     
-    # Если все модели не ответили
     print("❌ Все модели не ответили!")
     emojis = get_enderia_emojis()
     fallback = random.choice(FALLBACK_RESPONSES).format(emojis=emojis, username=username)
     add_to_memory(username, user_message, fallback)
-    save_to_chat_history(username, user_message, is_bot=False)
-    save_to_chat_history(username, fallback, is_bot=True)
+    add_to_chat_memory(username, user_message, is_bot=False)
+    add_to_chat_memory(username, fallback, is_bot=True)
     return fallback
 
 def should_respond(message_text: str) -> bool:
@@ -299,12 +299,3 @@ def should_respond(message_text: str) -> bool:
     text_lower = message_text.lower()
     keywords = ["эндер", "эндерия", "энди", "ендер", "энд"]
     return any(keyword in text_lower for keyword in keywords)
-
-# Глобальные переменные для онлайна
-current_online = 0
-current_max = 0
-
-def set_server_online(online: int, max_players: int):
-    global current_online, current_max
-    current_online = online
-    current_max = max_players
