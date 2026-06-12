@@ -33,11 +33,11 @@ def get_history_context(user_id: int, chat_id: int) -> str:
     key = get_history_key(user_id, chat_id)
     if key not in chat_history or not chat_history[key]:
         return ""
-    context = "Predyduschy dialog:\n"
+    context = "Предыдущий диалог:\n"
     for msg in chat_history[key][-10:]:
         context += f"{msg['username']}: {msg['message']}\n"
         if msg['response']:
-            context += f"Enderia: {msg['response']}\n"
+            context += f"Эндерия: {msg['response']}\n"
     return context
 
 async def get_enderia_response(user_id: int, chat_id: int, user_message: str, username: str, online: int = 0) -> str:
@@ -46,9 +46,9 @@ async def get_enderia_response(user_id: int, chat_id: int, user_message: str, us
         history_context = get_history_context(user_id, chat_id)
         
         if history_context:
-            full_instruction = f"{ENDERIA_SYSTEM_PROMPT}\n\n{history_context}\n\nTime: {current_time}\nOnline: {online} players\n{username}: {user_message}\n\nAnswer as Enderia (short, 2-4 sentences, with premium emojis):"
+            full_instruction = f"{ENDERIA_SYSTEM_PROMPT}\n\n{history_context}\n\nТекущая дата: {current_time}\nОнлайн: {online} игроков\n{username}: {user_message}\n\nОтветь как Эндерия (коротко, 2-4 предложения, с премиум эмодзи):"
         else:
-            full_instruction = f"{ENDERIA_SYSTEM_PROMPT}\n\nTime: {current_time}\nOnline: {online} players\n{username}: {user_message}\n\nAnswer as Enderia (short, 2-4 sentences, with premium emojis):"
+            full_instruction = f"{ENDERIA_SYSTEM_PROMPT}\n\nТекущая дата: {current_time}\nОнлайн: {online} игроков\n{username}: {user_message}\n\nОтветь как Эндерия (коротко, 2-4 предложения, с премиум эмодзи):"
         
         response = ai_client.models.generate_content(
             model="gemini-2.5-flash-lite",
@@ -63,17 +63,14 @@ async def get_enderia_response(user_id: int, chat_id: int, user_message: str, us
         result = response.text if response.text else None
         if result:
             add_to_history(user_id, chat_id, username, user_message, result)
-        else:
-            add_to_history(user_id, chat_id, username, user_message, None)
-        
         return result
     except Exception as e:
-        print(f"Gemini error: {e}")
+        print(f"Gemini ошибка: {e}")
         return None
 
 def should_respond(message_text: str) -> bool:
     if not message_text:
         return False
     text_lower = message_text.lower()
-    keywords = ["ender", "enderia", "endi", "enдер", "эндер", "эндерия", "энди", "ендер"]
+    keywords = ["эндер", "эндерия", "энди", "ендер", "энд", "ендеря"]
     return any(k in text_lower for k in keywords)
