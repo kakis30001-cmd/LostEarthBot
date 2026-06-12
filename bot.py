@@ -40,7 +40,6 @@ dp = Dispatcher(storage=MemoryStorage())
 
 # ========== ВСЕ ПРЕМИУМ ЭМОДЗИ ==========
 PREMIUM_EMOJI = {
-    # Основные
     "door": "5873147866364514353",
     "note": "5870930744116776638",
     "rabbit_fly": "5217576088506505749",
@@ -55,32 +54,24 @@ PREMIUM_EMOJI = {
     "start": "5870921127685001066",
     "cat_surprised": "5269649173946345008",
     "magic": "5474144592817318927",
-    "microphone": "5870831513192369918",
-    "cat_money": "5267058870580191916",
-    # Дополнительные для разнообразия
     "cat_up": "5269698007724499331",
     "cat_kiss": "6325462176660195024",
-    "cat_laugh": "5276391181679366784",
     "heart": "5199427253225667842",
-    "anime_dance": "6325682031741109665",
 }
 
 def premium_emoji(emoji_id: str, fallback: str = "") -> str:
     return f'<tg-emoji emoji-id="{emoji_id}">{fallback}</tg-emoji>'
 
-# Функция для случайного премиум эмодзи
+# Функции для 1 эмодзи (не больше!)
 def random_cat():
-    cats = [PREMIUM_EMOJI["cat_dance"], PREMIUM_EMOJI["cat_ok"], PREMIUM_EMOJI["cat_glasses"], 
-            PREMIUM_EMOJI["cat_up"], PREMIUM_EMOJI["cat_kiss"], PREMIUM_EMOJI["cat_laugh"]]
+    cats = [PREMIUM_EMOJI["cat_dance"], PREMIUM_EMOJI["cat_ok"], PREMIUM_EMOJI["cat_up"]]
     return premium_emoji(random.choice(cats), "🐱")
 
 def random_rabbit():
-    rabbits = [PREMIUM_EMOJI["rabbit_fly"]]
-    return premium_emoji(random.choice(rabbits), "🐰")
+    return premium_emoji(PREMIUM_EMOJI["rabbit_fly"], "🐰")
 
 def random_heart():
-    hearts = [PREMIUM_EMOJI["heart"]]
-    return premium_emoji(random.choice(hearts), "💜")
+    return premium_emoji(PREMIUM_EMOJI["heart"], "💜")
 
 # ========== КОНФИГУРАЦИЯ ==========
 SERVER = {
@@ -99,6 +90,7 @@ APPLY_URL = f"{BASE_URL}/apply"
 
 online_cache = {}
 last_update = {}
+last_online_data = {}
 
 # ========== MINECRAFT API ==========
 async def get_java_status(ip: str, port: int = 25565):
@@ -228,18 +220,16 @@ def get_back_keyboard():
 async def start_cmd(message: Message):
     text = f"""{premium_emoji(PREMIUM_EMOJI['start'], '✨')} <b>Добро пожаловать на {SERVER['name']}</b>
 
-{premium_emoji(PREMIUM_EMOJI['house'], '🏠')} <b>{SERVER['mode']}</b>
+🏠 <b>{SERVER['mode']}</b>
 
-{random_cat()} <b>Я Эндерия - напиши моё имя, и я отвечу!</b>
-
-{random_heart()} {random_cat()} {random_rabbit()}"""
+{random_cat()} <b>Я Эндерия - напиши моё имя, и я отвечу!</b>"""
     await message.answer(text, parse_mode="HTML", reply_markup=get_main_keyboard())
 
 @dp.message(Command("online"))
 async def cmd_online(message: Message):
     online, max_players = await get_server_online()
     await message.answer(
-        f"{premium_emoji(PREMIUM_EMOJI['joystick'], '📊')} <b>Онлайн: {online}/{max_players}</b> {random_cat()}", 
+        f"{premium_emoji(PREMIUM_EMOJI['joystick'], '📊')} <b>Онлайн: {online}/{max_players}</b>", 
         parse_mode="HTML"
     )
 
@@ -261,7 +251,7 @@ async def handle_message(message: Message):
 @dp.callback_query(lambda c: c.data == "menu_main")
 async def menu_main(callback: CallbackQuery):
     await callback.message.edit_text(
-        f"{premium_emoji(PREMIUM_EMOJI['magic'], '✨')} <b>Главное меню</b> {random_heart()}", 
+        f"{premium_emoji(PREMIUM_EMOJI['magic'], '✨')} <b>Главное меню</b>", 
         parse_mode="HTML", 
         reply_markup=get_main_keyboard()
     )
@@ -277,14 +267,19 @@ async def menu_ip(callback: CallbackQuery):
 📊 Онлайн: {online}/{max_players}
 📱 BEDROCK: <code>{SERVER['bedrock_ip']}:{SERVER['bedrock_port']}</code>
 
-{random_rabbit()} <i>Приятной игры!</i> {random_heart()}"""
+{random_rabbit()} <i>Приятной игры!</i>"""
+    
+    last_online_data[callback.message.chat.id] = {
+        "online": online,
+        "max": max_players,
+        "message_id": callback.message.message_id
+    }
+    
     await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_ip_keyboard())
     await callback.answer()
 
 @dp.callback_query(lambda c: c.data == "refresh_online")
 async def refresh_online(callback: CallbackQuery):
-    online_cache.clear()
-    last_update.clear()
     online, max_players = await get_server_online()
     status = "🟢 ONLINE" if online > 0 else "🔴 OFFLINE"
     text = f"""{premium_emoji(PREMIUM_EMOJI['crown'], '👑')} <b>LOSTEARTH</b> | {status}
@@ -293,37 +288,57 @@ async def refresh_online(callback: CallbackQuery):
 📊 Онлайн: {online}/{max_players}
 📱 BEDROCK: <code>{SERVER['bedrock_ip']}:{SERVER['bedrock_port']}</code>
 
-{random_rabbit()} <i>Приятной игры!</i> {random_heart()}"""
-    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_ip_keyboard())
-    await callback.answer()
+{random_rabbit()} <i>Приятной игры!</i>"""
+    
+    chat_id = callback.message.chat.id
+    last_data = last_online_data.get(chat_id, {})
+    
+    if (last_data.get("online") == online and 
+        last_data.get("max") == max_players and
+        callback.message.text == text):
+        await callback.answer("✨ Онлайн не изменился!", show_alert=False)
+        return
+    
+    last_online_data[chat_id] = {
+        "online": online,
+        "max": max_players,
+        "message_id": callback.message.message_id
+    }
+    
+    try:
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_ip_keyboard())
+        await callback.answer("🔄 Онлайн обновлён!")
+    except Exception as e:
+        if "message is not modified" in str(e):
+            await callback.answer("✨ Онлайн не изменился!", show_alert=False)
+        else:
+            await callback.answer("⚠️ Ошибка обновления", show_alert=False)
 
 @dp.callback_query(lambda c: c.data == "menu_premium")
 async def menu_premium(callback: CallbackQuery):
-    text = f"""{premium_emoji(PREMIUM_EMOJI['cat_dance'], '💎')} <b>ПРЕМИУМ ДОСТУП</b> {premium_emoji(PREMIUM_EMOJI['cat_money'], '💰')}
+    text = f"""💎 <b>ПРЕМИУМ ДОСТУП</b>
 
-{premium_emoji(PREMIUM_EMOJI['magic'], '🌿')} <b>Друид</b> - 25грн / 50₽
-{premium_emoji(PREMIUM_EMOJI['cat_glasses'], '🔮')} <b>Оракул</b> - 50грн / 100₽
-{premium_emoji(PREMIUM_EMOJI['crown'], '👑')} <b>Монарх</b> - 100грн / 200₽
-{premium_emoji(PREMIUM_EMOJI['rabbit_fly'], '🪽')} <b>Херувим</b> - 150грн / 300₽
-{premium_emoji(PREMIUM_EMOJI['house'], '🏛️')} <b>Архонт</b> - 200грн / 400₽
-{premium_emoji(PREMIUM_EMOJI['cat_dance'], '😇')} <b>Серафим</b> - 300грн / 600₽
+🌿 Друид - 25грн / 50₽
+🔮 Оракул - 50грн / 100₽
+👑 Монарх - 100грн / 200₽
+🪽 Херувим - 150грн / 300₽
+🏛️ Архонт - 200грн / 400₽
+😇 Серафим - 300грн / 600₽
 
-📩 По вопросам: @pelmewki379
-{random_heart()} {random_cat()}"""
+📩 По вопросам: @pelmewki379"""
     await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_back_keyboard())
     await callback.answer()
 
 @dp.callback_query(lambda c: c.data == "menu_enderia")
 async def menu_enderia(callback: CallbackQuery):
-    text = f"""{random_heart()} <b>Эндерия</b> {random_heart()}
+    text = f"""{random_heart()} <b>Эндерия</b>
 
 {random_cat()} Я девушка-эндермен из LostEarth!
 
 💬 <b>Как ко мне обратиться:</b>
 Напиши: Эндер, Эндерия, Энди, Ендер
 
-{random_rabbit()} <i>Просто позови меня по имени, и я отвечу!</i>
-{random_cat()} {random_heart()} {random_rabbit()}"""
+{random_rabbit()} <i>Просто позови меня по имени, и я отвечу!</i>"""
     await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_back_keyboard())
     await callback.answer()
 
@@ -337,7 +352,15 @@ async def main():
     print(f"🎨 Премиум эмодзи загружено: {len(PREMIUM_EMOJI)}")
     print("=" * 50)
     
-    await dp.start_polling(bot)
+    try:
+        await dp.start_polling(bot)
+    except Exception as e:
+        if "Conflict" in str(e):
+            print("⚠️ Конфликт бота. Перезапуск через 5 секунд...")
+            await asyncio.sleep(5)
+            await dp.start_polling(bot)
+        else:
+            raise e
 
 if __name__ == "__main__":
     asyncio.run(main())
