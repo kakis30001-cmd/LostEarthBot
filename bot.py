@@ -5,6 +5,7 @@ import struct
 import json
 from datetime import datetime
 from threading import Thread
+from collections import deque
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import CommandStart, Command
@@ -13,7 +14,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from dotenv import load_dotenv
 from flask import Flask
 
-from enderia import get_enderia_response, should_respond
+from enderia import get_enderia_response, should_respond, endi_emoji, ENDERIA_EMOJI
 
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv("BOT_TOKEN")
@@ -34,6 +35,17 @@ def run_flask():
 bot = Bot(token=TELEGRAM_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
+# Память чата
+chat_memory = deque(maxlen=50)
+
+def add_to_memory(username: str, message: str):
+    chat_memory.append({
+        "time": datetime.now().strftime("%H:%M:%S"),
+        "username": username,
+        "message": message
+    })
+
+# Премиум эмодзи для кнопок
 BUTTON_EMOJI = {
     "door": "5873147866364514353",
     "note": "5870930744116776638",
@@ -51,6 +63,7 @@ BUTTON_EMOJI = {
 def button_emoji(emoji_id, fallback="✨"):
     return f'<tg-emoji emoji-id="{emoji_id}">{fallback}</tg-emoji>'
 
+# Конфигурация сервера
 SERVER = {
     "name": "LostEarth",
     "mode": "Мирный режим по заявкам",
@@ -160,6 +173,7 @@ async def handle_message(message: Message):
         return
     
     username = message.from_user.first_name or "Игрок"
+    add_to_memory(username, message.text)
     
     if should_respond(message.text):
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
@@ -215,8 +229,8 @@ async def menu_premium(callback: CallbackQuery):
 
 @dp.callback_query(lambda c: c.data == "menu_enderia")
 async def menu_enderia(callback: CallbackQuery):
-    text = (button_emoji(BUTTON_EMOJI["cat_dance"], "💜") + " <b>Эндерия</b>\n\n" +
-            button_emoji(BUTTON_EMOJI["cat_ok"], "🐱") + " <b>Я девушка-эндермен из LostEarth!</b>\n\n" +
+    text = (endi_emoji(ENDERIA_EMOJI["cat_dance"], "💜") + " <b>Эндерия</b>\n\n" +
+            endi_emoji(ENDERIA_EMOJI["cat_ok"], "🐱") + " <b>Я девушка-эндермен из LostEarth!</b>\n\n" +
             "Напиши: Эндер, Эндерия, Энди - я отвечу")
     await callback.message.edit_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="НАЗАД", callback_data="menu_main", icon_custom_emoji_id=BUTTON_EMOJI["back"])]]))
     await callback.answer()
