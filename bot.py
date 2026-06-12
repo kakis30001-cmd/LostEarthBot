@@ -13,14 +13,11 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKe
 from aiogram.fsm.storage.memory import MemoryStorage
 from dotenv import load_dotenv
 from flask import Flask
-from google import genai
-from google.genai import types as ai_types
 
-from prompts import ENDERIA_SYSTEM_PROMPT, emoji, ENDERIA_EMOJI
+from enderia import get_enderia_response, should_respond
 
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv("BOT_TOKEN")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 if not TELEGRAM_TOKEN:
     raise ValueError("❌ BOT_TOKEN не найден!")
@@ -40,12 +37,8 @@ def run_flask():
 bot = Bot(token=TELEGRAM_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
-# ========== GEMINI ==========
-ai_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
-
 # ========== ПАМЯТЬ ЧАТА ==========
-chat_memory = deque(maxlen=100)
-dialog_history = {}
+chat_memory = deque(maxlen=50)
 
 def add_to_memory(username: str, message: str):
     chat_memory.append({
@@ -54,37 +47,7 @@ def add_to_memory(username: str, message: str):
         "message": message
     })
 
-def get_chat_context() -> str:
-    if not chat_memory:
-        return ""
-    result = ""
-    for msg in list(chat_memory)[-30:]:
-        result += f"{msg['username']}: {msg['message']}\n"
-    return result
-
-def get_history_key(user_id: int, chat_id: int) -> str:
-    return f"{user_id}_{chat_id}"
-
-def add_to_history(user_id: int, chat_id: int, username: str, message: str, response: str = None):
-    key = get_history_key(user_id, chat_id)
-    if key not in dialog_history:
-        dialog_history[key] = []
-    dialog_history[key].append({"username": username, "message": message, "response": response})
-    if len(dialog_history[key]) > 20:
-        dialog_history[key] = dialog_history[key][-20:]
-
-def get_history_context(user_id: int, chat_id: int) -> str:
-    key = get_history_key(user_id, chat_id)
-    if key not in dialog_history or not dialog_history[key]:
-        return ""
-    context = "Предыдущий диалог:\n"
-    for msg in dialog_history[key][-10:]:
-        context += f"{msg['username']}: {msg['message']}\n"
-        if msg['response']:
-            context += f"Эндерия: {msg['response']}\n"
-    return context
-
-# ========== ПРЕМИУМ ЭМОДЗИ ДЛЯ КНОПОК ==========
+# ========== ПРЕМИУМ ЭМОДЗИ ДЛЯ КНОПОК (ТОЛЬКО ID) ==========
 BUTTON_EMOJI = {
     "door": "5873147866364514353",
     "note": "5870930744116776638",
@@ -100,8 +63,8 @@ BUTTON_EMOJI = {
     "start": "5870921127685001066",
 }
 
-def button_emoji(sticker_id: str, fallback: str = "") -> str:
-    return f'<tg-emoji emoji-id="{sticker_id}">{fallback}</tg-emoji>'
+def button_emoji(emoji_id: str, fallback: str = "") -> str:
+    return f'<tg-emoji emoji-id="{emoji_id}">{fallback}</tg-emoji>'
 
 # ========== КОНФИГУРАЦИЯ СЕРВЕРА ==========
 SERVER = {
@@ -179,61 +142,20 @@ async def get_server_online():
     last_update["online"] = now
     return online, max_players
 
-# ========== ЭНДЕРИЯ ==========
-async def get_enderia_response(user_id: int, chat_id: int, user_message: str, username: str, online: int) -> str:
-    if not ai_client:
-        return None
-    
-    try:
-        current_time = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
-        history = get_history_context(user_id, chat_id)
-        
-        if history:
-            full_instruction = f"{ENDERIA_SYSTEM_PROMPT}\n\n{history}\n\nТекущая дата и время: {current_time}\nСейчас на сервере онлайн: {online} игроков\nИгрок {username} написал: {user_message}\n\nОтветь как Эндерия (мило, с ПРЕМИУМ ЭМОДЗИ, коротко 2-4 предложения):"
-        else:
-            full_instruction = f"{ENDERIA_SYSTEM_PROMPT}\n\nТекущая дата и время: {current_time}\nСейчас на сервере онлайн: {online} игроков\nИгрок {username} написал: {user_message}\n\nОтветь как Эндерия (мило, с ПРЕМИУМ ЭМОДЗИ, коротко 2-4 предложения):"
-        
-        response = ai_client.models.generate_content(
-            model="gemini-2.5-flash-lite",
-            contents=user_message,
-            config=ai_types.GenerateContentConfig(
-                system_instruction=full_instruction,
-                temperature=0.9,
-            ),
-        )
-        
-        result = response.text if response.text else None
-        if result:
-            add_to_history(user_id, chat_id, username, user_message, result)
-        else:
-            add_to_history(user_id, chat_id, username, user_message, None)
-        
-        return result
-    except Exception as e:
-        print(f"Gemini ошибка: {e}")
-        return None
-
-def should_respond(message_text: str) -> bool:
-    if not message_text:
-        return False
-    text_lower = message_text.lower()
-    keywords = ["эндер", "эндерия", "энди", "ендер", "энд", "ендеря"]
-    return any(k in text_lower for k in keywords)
-
 # ========== КЛАВИАТУРЫ ==========
 def get_main_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🌐 IP И ОНЛАЙН", callback_data="menu_ip", icon_custom_emoji_id=BUTTON_EMOJI["door"])],
-        [InlineKeyboardButton(text="📜 ПРАВИЛА", web_app=WebAppInfo(url=RULES_URL), icon_custom_emoji_id=BUTTON_EMOJI["note"]),
-         InlineKeyboardButton(text="📝 ЗАЯВКА", web_app=WebAppInfo(url=APPLY_URL), icon_custom_emoji_id=BUTTON_EMOJI["rabbit_fly"])],
-        [InlineKeyboardButton(text="💎 ПРЕМИУМ", callback_data="menu_premium", icon_custom_emoji_id=BUTTON_EMOJI["cat_dance"]),
-         InlineKeyboardButton(text="💜 ЭНДЕРИЯ", callback_data="menu_enderia", icon_custom_emoji_id=BUTTON_EMOJI["cat_ok"])]
+        [InlineKeyboardButton(text="IP И ОНЛАЙН", callback_data="menu_ip", icon_custom_emoji_id=BUTTON_EMOJI["door"])],
+        [InlineKeyboardButton(text="ПРАВИЛА", web_app=WebAppInfo(url=RULES_URL), icon_custom_emoji_id=BUTTON_EMOJI["note"]),
+         InlineKeyboardButton(text="ЗАЯВКА", web_app=WebAppInfo(url=APPLY_URL), icon_custom_emoji_id=BUTTON_EMOJI["rabbit_fly"])],
+        [InlineKeyboardButton(text="ПРЕМИУМ", callback_data="menu_premium", icon_custom_emoji_id=BUTTON_EMOJI["cat_dance"]),
+         InlineKeyboardButton(text="ЭНДЕРИЯ", callback_data="menu_enderia", icon_custom_emoji_id=BUTTON_EMOJI["cat_ok"])]
     ])
 
 def get_ip_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔄 ОБНОВИТЬ", callback_data="refresh_online", icon_custom_emoji_id=BUTTON_EMOJI["check"])],
-        [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="menu_main", icon_custom_emoji_id=BUTTON_EMOJI["back"])]
+        [InlineKeyboardButton(text="ОБНОВИТЬ", callback_data="refresh_online", icon_custom_emoji_id=BUTTON_EMOJI["check"])],
+        [InlineKeyboardButton(text="НАЗАД", callback_data="menu_main", icon_custom_emoji_id=BUTTON_EMOJI["back"])]
     ])
 
 # ========== ХЕНДЛЕРЫ ==========
@@ -257,15 +179,12 @@ async def handle_message(message: Message):
         return
     
     username = message.from_user.first_name or "Игрок"
-    user_id = message.from_user.id
-    chat_id = message.chat.id
-    
     add_to_memory(username, message.text)
     
     if should_respond(message.text):
-        await bot.send_chat_action(chat_id=chat_id, action="typing")
+        await bot.send_chat_action(chat_id=message.chat.id, action="typing")
         online, _ = await get_server_online()
-        response = await get_enderia_response(user_id, chat_id, message.text, username, online)
+        response = await get_enderia_response(message.from_user.id, message.chat.id, message.text, username, online)
         
         if response:
             await message.reply(response, parse_mode="HTML")
@@ -337,8 +256,9 @@ async def main():
     flask_thread.start()
     
     print("=" * 50)
-    print("🚀 ЭНДЕРИЯ ЗАПУЩЕНА")
-    print("💜 Использую премиум эмодзи!")
+    print("🚀 БОТ LOSTEARTH ЗАПУЩЕН")
+    print("📱 Правила WebApp: " + RULES_URL)
+    print("📝 Заявка WebApp: " + APPLY_URL)
     print("=" * 50)
     
     await dp.start_polling(bot)
