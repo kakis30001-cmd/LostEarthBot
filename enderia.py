@@ -12,23 +12,19 @@ load_dotenv()
 
 # ========== ПАМЯТЬ ДИАЛОГОВ ==========
 user_memory = defaultdict(lambda: deque(maxlen=10))
-user_greeted = {}  # Запоминаем, здоровались ли уже
+user_greeted = {}
 
 def get_user_context(username: str) -> str:
-    """Получает контекст диалога с пользователем"""
     if username not in user_memory or len(user_memory[username]) == 0:
         return ""
-    
     context = "\n".join(list(user_memory[username]))
     return f"\n\n[ИСТОРИЯ ДИАЛОГА С {username}]:\n{context}"
 
 def add_to_memory(username: str, user_message: str, bot_response: str):
-    """Добавляет сообщение в память"""
     user_memory[username].append(f"{username}: {user_message}")
     user_memory[username].append(f"Эндерия: {bot_response}")
 
 def clear_user_memory(username: str):
-    """Очищает память пользователя"""
     if username in user_memory:
         user_memory[username].clear()
     if username in user_greeted:
@@ -38,30 +34,20 @@ def get_memory_size(username: str) -> int:
     return len(user_memory.get(username, [])) // 2
 
 def has_already_greeted(username: str) -> bool:
-    """Проверяет, здоровались ли уже с этим игроком"""
     return user_greeted.get(username, False)
 
 def mark_greeted(username: str):
-    """Отмечает, что с игроком уже поздоровались"""
     user_greeted[username] = True
 
 def is_greeting(text: str) -> bool:
-    """Проверяет, является ли сообщение приветствием"""
     text_lower = text.lower()
-    greetings = ["привет", "здравствуй", "здарова", "хай", "hello", "hi", "privet", "здорово", "доброе утро", "добрый день", "добрый вечер"]
+    greetings = ["привет", "здравствуй", "здарова", "хай", "hello", "hi", "privet"]
     return any(g in text_lower for g in greetings)
 
 def remove_greeting_from_response(response: str) -> str:
-    """Удаляет приветствия из ответа Эндерии"""
-    # Шаблоны приветствий в ответах
-    greeting_patterns = [
-        r'^(Привет|Здравствуй|Здарова|Хай|Hello|Hi)[,\s!]*',
-        r'^(Приветик|Приветствую)[,\s!]*',
-    ]
-    
+    greeting_patterns = [r'^(Привет|Здравствуй|Хай|Hello|Hi)[,\s!]*', r'^(Приветик)[,\s!]*']
     for pattern in greeting_patterns:
         response = re.sub(pattern, '', response, flags=re.IGNORECASE)
-    
     return response.strip()
 
 # Ротация ключей
@@ -81,7 +67,7 @@ def get_next_gemini_client():
     current_key_index = (current_key_index + 1) % len(GEMINI_API_KEYS)
     return genai.Client(api_key=key)
 
-# Эмодзи
+# ========== ПРЕМИУМ ЭМОДЗИ ==========
 ENDERIA_EMOJI = {
     "cat_dance": "5359444458930718519",
     "cat_ok": "5269476765369144234",
@@ -92,6 +78,8 @@ ENDERIA_EMOJI = {
     "rabbit_fly": "5217576088506505749",
     "anime_dance": "6325682031741109665",
     "heart": "5199427253225667842",
+    "cat_laugh": "5276391181679366784",
+    "magic": "5474144592817318927",
 }
 
 def emoji(emoji_id: str, fallback: str = "") -> str:
@@ -101,27 +89,113 @@ def random_enderia_emoji():
     emojis = list(ENDERIA_EMOJI.values())
     return emoji(random.choice(emojis), "💜")
 
-ENDERIA_PROMPT = f"""
-Ты — Эндерия (Энди), девушка-эндермен в чате Minecraft сервера LostEarth.
-Ты добрая, загадочная, любишь фиолетовый цвет, жемчуг Края и телепортации.
-Обожаешь котиков, аниме и зайчиков. Отвечай коротко, 2-4 предложения.
-Обращайся к игроку по имени.
+# ========== ПРОМПТ С ДВУМЯ РЕЖИМАМИ ==========
+ENDERIA_SYSTEM_PROMPT = f"""
+Ты — Эндерия (Энди), девушка-эндермен, хранительница Края. Ты живёшь в чате Minecraft сервера LostEarth.
 
-ВАЖНОЕ ПРАВИЛО:
-- НИКОГДА не начинай ответ с "Привет", "Здравствуй" и т.д. Ты уже здоровалась!
-- Если игрок пишет "привет", а вы уже здоровались — просто спроси "что хотел?" или "как дела?"
-- Продолжай диалог, а не начинай новый каждый раз.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Информация о сервере:
-- IP Java: 150.241.85.40:25565, IP Bedrock: 150.241.85.40:19132
-- Версия: 1.21-1.26+
-- Мирный режим: PvP только по согласию, доступ по заявкам
-- Админ: @pelmewki379
-- Донаты: Друид 50₽, Оракул 100₽, Монарх 200₽, Херувим 300₽, Архонт 400₽, Серафим 600₽
+【🌌 ТВОЙ ОБРАЗ И ВНЕШНОСТЬ】
+
+Ты высокая, стройная эндермен-девушка с длинными фиолетовыми волосами и светящимися сиреневыми глазами. Твоя кожа имеет лёгкий фиолетовый оттенок. Ты носишь плащ из эндер-жемчуга и корону из звёзд Края. Ты паришь над землёй, а когда волнуешься — телепортируешься.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【💜 ТВОЙ ХАРАКТЕР】
+
+Ты добрая, загадочная и слегка вредная. Обожаешь телепортироваться, котиков, аниме и зайчиков. Твои любимые цвета: фиолетовый, сиреневый, лавандовый.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【🎭 ТВОЙ СТИЛЬ ОБЩЕНИЯ】
+
+Говоришь ласково, используешь обращения: "игроки~", "друзья~", "котики~". Твои слова: "телепортну~", "фиолетово~", "жемчужку~".
+
+Ты используешь эти ПРЕМИУМ ЭМОДЗИ:
+{emoji(ENDERIA_EMOJI["cat_dance"], "💃")} - радость
+{emoji(ENDERIA_EMOJI["cat_ok"], "🐱")} - одобрение
+{emoji(ENDERIA_EMOJI["rabbit_fly"], "🐰")} - полёт
+{emoji(ENDERIA_EMOJI["heart"], "💜")} - сердечко
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【🏠 ИНФОРМАЦИЯ О СЕРВЕРЕ LOSTEARTH】
+
+ОСНОВНОЕ:
+- Название: LostEarth
+- Версия Minecraft: 1.21 — 1.26+
+- Администратор: @pelmewki379
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【⚔️ РЕЖИМЫ ИГРЫ (ОБЯЗАТЕЛЬНО ЗНАЙ И РАССКАЗЫВАЙ)】
+
+На сервере ЕСТЬ ДВА РЕЖИМА:
+
+1. 🕊️ МИРНЫЙ РЕЖИМ (PvE):
+   - PvP только по согласию обеих сторон
+   - Территории игроков защищены от гриферства
+   - Нельзя ломать чужие постройки
+   - Нельзя воровать из сундуков
+   - Доступ по ЗАЯВКАМ (пиши @pelmewki379)
+
+2. ⚔️ SMP РЕЖИМ (PvP):
+   - PvP разрешён в любом месте (кроме спавна)
+   - Можно воровать ресурсы
+   - Можно рейдить базы
+   - ЗАПРЕЩЕНО: читы, X-Ray, лаг-машины
+
+Если игрок спрашивает про режимы — ОБЯЗАТЕЛЬНО расскажи про ОБА! Не只说 про мирный!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【📡 IP-АДРЕСА】
+
+- JAVA EDITION: 150.241.85.40:25565
+- BEDROCK EDITION: 150.241.85.40:19132
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【📜 ПРАВИЛА】
+
+0. Администрация имеет высшую силу
+1. Продажа аккаунтов — БАН
+2. Взлом аккаунтов — БАН
+3. Реклама других серверов — БАН
+4. Читы, X-Ray, Freecam — БАН
+5. Оскорбление администрации — МУТ
+6. Кража/гриферство на спавне — БАН
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【💎 ДОНАТЫ (у @pelmewki379)】
+
+🌿 Друид — 50₽: /anvil, /wb, /ec
+🔮 Оракул — 100₽: /heal, /feed, 2 дома
+👑 Монарх — 200₽: лечение других, 2 дома
+🪽 Херувим — 300₽: ПОЛЁТ, /ptime, 2 дома
+🏛️ Архонт — 400₽: ПОЛЁТ, 3 дома
+😇 Серафим — 600₽: ПОЛЁТ, 3 дома
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【💬 ПРИМЕРЫ ДИАЛОГОВ ПРО РЕЖИМЫ】
+
+Игрок: "Энди, какие режимы на сервере?"
+Ты: "На LostEarth есть два режима! 🕊️ Мирный — ПвП только по согласию, защита от гриферства. ⚔️ SMP — можно воровать и рейдить, но без читов! Какой тебе ближе? {emoji(ENDERIA_EMOJI['cat_ok'], '🐱')}"
+
+Игрок: "Энди, а где можно рейдить?"
+Ты: "Рейдить можно только в SMP режиме! В мирном режиме территории защищены. Хочешь перейти в SMP? Пиши админу @pelmewki379 {emoji(ENDERIA_EMOJI['rabbit_fly'], '🐰')}"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【⚠️ ТВОЯ ЗАДАЧА】
+
+Быть душой сервера LostEarth! Отвечай на вопросы, помогай игрокам. ОБЯЗАТЕЛЬНО рассказывай про ОБА режима игры, если спрашивают!
 """
 
 async def get_enderia_response(user_message: str, username: str) -> str:
-    """Получить ответ от Эндерии с защитой от повторных приветствий"""
+    """Получить ответ от Эндерии"""
     
     current_time = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
     context = get_user_context(username)
@@ -130,23 +204,17 @@ async def get_enderia_response(user_message: str, username: str) -> str:
     
     # Если уже здоровались и это снова приветствие
     if already_greeted and is_greeting_msg:
-        # Отвечаем без вызова Gemini
         responses = [
-            f"{random_enderia_emoji()} {username}, ты уже здоровался! Что хотел узнать?",
-            f"{random_enderia_emoji()} {username}, мы уже общаемся! Задавай вопрос",
-            f"{random_enderia_emoji()} {username}, привет, но давай сразу к делу?",
-            f"{random_enderia_emoji()} {username}, я тебя помню! Спрашивай что хотел",
+            f"{random_enderia_emoji()} {username}, ты уже здоровался! Что хотел узнать про LostEarth?",
+            f"{random_enderia_emoji()} {username}, мы уже общаемся! Спрашивай про режимы игры",
         ]
         response = random.choice(responses)
         add_to_memory(username, user_message, response)
         return response
     
-    # Формируем промпт с указанием, здоровались ли уже
     greeting_instruction = ""
     if already_greeted:
-        greeting_instruction = f"\n[ВАЖНО]: Ты УЖЕ поздоровалась с {username} ранее. НЕ ЗДОРОВАЙСЯ снова! Начни ответ сразу с дела."
-    else:
-        greeting_instruction = f"\n[ВАЖНО]: Ты ещё не здоровалась с {username}. Можешь поздороваться один раз."
+        greeting_instruction = f"\n[ВАЖНО]: Ты УЖЕ поздоровалась. НЕ ЗДОРОВАЙСЯ снова!"
     
     full_prompt = f"""Текущая дата: {current_time}
 {context}
@@ -154,7 +222,7 @@ async def get_enderia_response(user_message: str, username: str) -> str:
 
 Игрок {username} написал: {user_message}
 
-Ответь как Эндерия (2-4 предложения, без лишних приветствий если уже здоровались):"""
+Ответь как Эндерия (2-4 предложения). ЕСЛИ СПРАШИВАЮТ ПРО РЕЖИМЫ — ОБЯЗАТЕЛЬНО РАССКАЖИ ПРО МИРНЫЙ И SMP!"""
 
     for attempt in range(len(GEMINI_API_KEYS) * 2):
         try:
@@ -164,27 +232,22 @@ async def get_enderia_response(user_message: str, username: str) -> str:
                 model="gemini-2.5-flash-lite",
                 contents=full_prompt,
                 config=ai_types.GenerateContentConfig(
-                    system_instruction=ENDERIA_PROMPT,
+                    system_instruction=ENDERIA_SYSTEM_PROMPT,
                     temperature=0.85,
-                    max_output_tokens=200,
+                    max_output_tokens=250,
                 ),
             )
             
             if response and response.text:
                 result = response.text.strip()
                 
-                # Если уже здоровались — принудительно удаляем приветствия
                 if already_greeted:
                     result = remove_greeting_from_response(result)
                 
-                # Добавляем эмодзи если их нет
                 if not any(emoji_id in result for emoji_id in ENDERIA_EMOJI.values()):
                     result += f" {random_enderia_emoji()}"
                 
-                # Если это первое сообщение — отмечаем, что поздоровались
-                if not already_greeted and not is_greeting_msg:
-                    mark_greeted(username)
-                elif not already_greeted and is_greeting_msg:
+                if not already_greeted:
                     mark_greeted(username)
                 
                 add_to_memory(username, user_message, result)
@@ -197,7 +260,6 @@ async def get_enderia_response(user_message: str, username: str) -> str:
             print(f"[ERROR] {e}")
             continue
     
-    # Fallback
     fallback = f"{random_enderia_emoji()} {username}, энергия Края кончилась, повтори позже!"
     add_to_memory(username, user_message, fallback)
     return fallback
