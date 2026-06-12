@@ -14,21 +14,33 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from dotenv import load_dotenv
 from flask import Flask, send_from_directory
 
-from enderia import get_enderia_response, should_respond
+from enderia import get_enderia_response, should_respond, clear_user_memory, get_memory_size
 
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv("BOT_TOKEN")
 
-# ========== FLASK ДЛЯ WEBAPP ==========
-app = Flask(__name__, static_folder='.')
+# ========== FLASK ДЛЯ WEBAPP (файлы в папке static) ==========
+app = Flask(__name__, static_folder='static', static_url_path='/static')
 
 @app.route('/')
 def serve_rules():
-    return send_from_directory('.', 'rules.html')
+    return send_from_directory('static', 'rules.html')
+
+@app.route('/rules.html')
+def serve_rules_html():
+    return send_from_directory('static', 'rules.html')
 
 @app.route('/apply')
 def serve_apply():
-    return send_from_directory('.', 'apply.html')
+    return send_from_directory('static', 'apply.html')
+
+@app.route('/apply.html')
+def serve_apply_html():
+    return send_from_directory('static', 'apply.html')
+
+@app.route('/static/<path:path>')
+def serve_static(path):
+    return send_from_directory('static', path)
 
 def run_flask():
     port = int(os.environ.get("PORT", 8080))
@@ -38,7 +50,7 @@ def run_flask():
 bot = Bot(token=TELEGRAM_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
-# ========== ВСЕ ПРЕМИУМ ЭМОДЗИ ==========
+# ========== ПРЕМИУМ ЭМОДЗИ ==========
 PREMIUM_EMOJI = {
     "door": "5873147866364514353",
     "note": "5870930744116776638",
@@ -62,7 +74,6 @@ PREMIUM_EMOJI = {
 def premium_emoji(emoji_id: str, fallback: str = "") -> str:
     return f'<tg-emoji emoji-id="{emoji_id}">{fallback}</tg-emoji>'
 
-# Функции для 1 эмодзи (не больше!)
 def random_cat():
     cats = [PREMIUM_EMOJI["cat_dance"], PREMIUM_EMOJI["cat_ok"], PREMIUM_EMOJI["cat_up"]]
     return premium_emoji(random.choice(cats), "🐱")
@@ -85,8 +96,8 @@ SERVER = {
 }
 
 BASE_URL = os.getenv("BASE_URL", "https://lostearthbot-production.up.railway.app")
-RULES_URL = f"{BASE_URL}/"
-APPLY_URL = f"{BASE_URL}/apply"
+RULES_URL = f"{BASE_URL}/rules.html"
+APPLY_URL = f"{BASE_URL}/apply.html"
 
 online_cache = {}
 last_update = {}
@@ -150,7 +161,7 @@ async def get_server_online():
     last_update["online"] = now
     return online, max_players
 
-# ========== КЛАВИАТУРЫ С ПРЕМИУМ ЭМОДЗИ ==========
+# ========== КЛАВИАТУРЫ ==========
 def get_main_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
         [
@@ -230,6 +241,40 @@ async def cmd_online(message: Message):
     online, max_players = await get_server_online()
     await message.answer(
         f"{premium_emoji(PREMIUM_EMOJI['joystick'], '📊')} <b>Онлайн: {online}/{max_players}</b>", 
+        parse_mode="HTML"
+    )
+
+@dp.message(Command("stats"))
+async def stats_cmd(message: Message):
+    username = message.from_user.first_name or "Игрок"
+    size = get_memory_size(username)
+    
+    if size > 0:
+        await message.answer(
+            f"{random_cat()} <b>{username}, я помню наш диалог!</b>\n\n"
+            f"📊 Запомнено сообщений: {size}\n"
+            f"💜 Могу ответить на любые вопросы по LostEarth!\n\n"
+            f"✨ Если хочешь очистить память - напиши /clear_memory",
+            parse_mode="HTML"
+        )
+    else:
+        await message.answer(
+            f"{random_heart()} <b>{username}, мы ещё не общались!</b>\n\n"
+            f"📝 Напиши что-нибудь с моим именем (Энди, Эндерия, Эндер)\n"
+            f"🐱 И я запомню наш разговор!",
+            parse_mode="HTML"
+        )
+
+@dp.message(Command("clear_memory"))
+async def clear_memory_cmd(message: Message):
+    username = message.from_user.first_name or "Игрок"
+    old_size = get_memory_size(username)
+    clear_user_memory(username)
+    await message.answer(
+        f"{random_cat()} ✨ <b>Память очищена!</b>\n\n"
+        f"📊 Было запомнено: {old_size} сообщений\n"
+        f"💜 Теперь можем начать разговор заново!\n\n"
+        f"🐰 Напиши что-нибудь, и я познакомлюсь с тобой снова",
         parse_mode="HTML"
     )
 
