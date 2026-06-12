@@ -36,12 +36,22 @@ HISTORY_FILE = os.path.join(HISTORY_DIR, "chat.log")
 MAX_HISTORY_LINES = 1000
 
 # Создаём папку если её нет
-os.makedirs(HISTORY_DIR, exist_ok=True)
+try:
+    os.makedirs(HISTORY_DIR, exist_ok=True)
+    print(f"✅ Папка {HISTORY_DIR} создана/существует")
+except Exception as e:
+    print(f"❌ Ошибка создания папки: {e}")
 
 # Если файла нет - создаём
 if not os.path.exists(HISTORY_FILE):
-    with open(HISTORY_FILE, "w", encoding="utf-8") as f:
-        f.write(f"# История чата LostEarth\n# Создан: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+    try:
+        with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+            f.write(f"# История чата LostEarth\n# Создан: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+        print(f"✅ Файл {HISTORY_FILE} создан")
+    except Exception as e:
+        print(f"❌ Ошибка создания файла: {e}")
+else:
+    print(f"✅ Файл {HISTORY_FILE} уже существует")
 
 # ========== ФУНКЦИИ ДЛЯ РАБОТЫ С ФАЙЛОВОЙ ПАМЯТЬЮ ==========
 def add_to_chat_memory(username: str, message: str, is_bot: bool = False):
@@ -51,22 +61,30 @@ def add_to_chat_memory(username: str, message: str, is_bot: bool = False):
         prefix = "🤖 Эндерия" if is_bot else f"👤 {username}"
         line = f"[{timestamp}] {prefix}: {message}\n"
         
+        # Отладочный вывод
+        print(f"💾 Сохраняю в чат-лог: {line[:100]}...")
+        
         # Читаем существующие строки
-        with open(HISTORY_FILE, "r", encoding="utf-8") as f:
-            lines = f.readlines()
+        if os.path.exists(HISTORY_FILE):
+            with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+        else:
+            lines = []
         
         # Добавляем новую строку
         lines.append(line)
         
         # Оставляем только последние MAX_HISTORY_LINES строк
         if len(lines) > MAX_HISTORY_LINES:
-            header = lines[:2] if lines[0].startswith("#") else []
+            header = lines[:2] if lines and lines[0].startswith("#") else []
             body = lines[2:] if header else lines
             lines = header + body[-MAX_HISTORY_LINES:]
         
         # Записываем обратно
         with open(HISTORY_FILE, "w", encoding="utf-8") as f:
             f.writelines(lines)
+        
+        print(f"✅ Сохранено, всего строк: {len(lines)}")
             
     except Exception as e:
         print(f"❌ Ошибка сохранения истории: {e}")
@@ -75,10 +93,13 @@ def get_chat_history(limit: int = 50) -> str:
     """Возвращает последние N сообщений из истории чата"""
     try:
         if not os.path.exists(HISTORY_FILE):
+            print(f"⚠️ Файл {HISTORY_FILE} не существует")
             return ""
         
         with open(HISTORY_FILE, "r", encoding="utf-8") as f:
             lines = f.readlines()
+        
+        print(f"📖 Читаю историю чата, всего строк: {len(lines)}")
         
         # Пропускаем заголовки (строки начинающиеся с #)
         messages = [l.strip() for l in lines if not l.startswith("#") and l.strip()]
@@ -111,9 +132,6 @@ def get_chat_context(limit: int = 30) -> str:
 
 ВАЖНО: Прочитай всю историю чата выше. Ты видишь, что пишут игроки. 
 Отвечай естественно, как участник чата. Учитывай контекст разговора.
-Если кто-то обратился к тебе по имени - ответь.
-Если видишь вопрос про сервер - можешь ответить.
-НЕ ПИШИ слишком длинные сообщения. Будь лаконичной (2-4 предложения).
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
@@ -206,7 +224,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     
     current_time = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
     user_ctx = get_user_context(username)
-    chat_ctx = get_chat_context(limit=40)
+    chat_ctx = get_chat_context(limit=30)
     already_greeted = has_already_greeted(username)
     is_greeting_msg = is_greeting(user_message)
     
@@ -244,14 +262,9 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
 Игрок {username} написал: {user_message}
 Это ответ на сообщение бота: {"ДА" if is_reply else "НЕТ"}
 
-ТЫ - УЧАСТНИК ЧАТА! Общайся естественно, как живой человек в беседе.
-Отвечай как Эндерия (2-4 предложения). 
-- Учитывай ВСЮ историю чата выше
-- Если кто-то уже задал вопрос - можешь поддержать разговор
-- Отвечай как обычный игрок, а не как служебный бот
-- НЕ используй HTML теги
-- ОТВЕЧАЙ ТОЛЬКО НА РУССКОМ ЯЗЫКЕ
-- В конце поставь 1-2 эмодзи"""
+Отвечай как Эндерия (2-4 предложения). Будь естественной.
+НЕ используй HTML теги. ОТВЕЧАЙ ТОЛЬКО НА РУССКОМ ЯЗЫКЕ.
+В конце поставь 1-2 эмодзи."""
 
     system_prompt = get_system_prompt(username, current_time, current_online, current_max)
     
