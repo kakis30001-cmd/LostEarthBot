@@ -138,41 +138,86 @@ async def get_server_online():
     last_update["online"] = now
     return online, max_players
 
-# ========== КЛАВИАТУРЫ ==========
+# ========== ПРЕМИУМ ЭМОДЗИ ==========
+PREMIUM_EMOJI = {
+    "door": "5873147866364514353",
+    "note": "5870930744116776638",
+    "rabbit_fly": "5217576088506505749",
+    "cat_dance": "5359444458930718519",
+    "cat_ok": "5269476765369144234",
+    "check": "5870633910337015697",
+    "back": "5875082500023258804",
+    "cat_glasses": "5267088110717544191",
+    "joystick": "5870717606364713020",
+    "crown": "5807868868886009920",
+    "house": "5873147866364514353",
+    "start": "5870921127685001066",
+    "cat_surprised": "5269649173946345008",
+    "magic": "5474144592817318927",
+    "microphone": "5870831513192369918",
+    "cat_money": "5267058870580191916",
+    "heart": "5199427253225667842",  # Добавил сердечко
+}
+
+def premium_emoji(emoji_id: str, fallback: str = "") -> str:
+    # Правильный синтаксис для Telegram Premium эмодзи
+    return f'<tg-emoji emoji-id="{emoji_id}">{fallback}</tg-emoji>'
+
+# ========== КЛАВИАТУРЫ (ИСПРАВЛЕНЫ) ==========
 def get_main_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(
-            text=f"{premium_emoji(PREMIUM_EMOJI['door'], '🚪')} IP И ОНЛАЙН", 
-            callback_data="menu_ip"
-        )],
-        [InlineKeyboardButton(
-            text=f"{premium_emoji(PREMIUM_EMOJI['note'], '📜')} ПРАВИЛА", 
-            web_app=WebAppInfo(url=f"{BASE_URL}/rules.html")
-        ),
-        InlineKeyboardButton(
-            text=f"{premium_emoji(PREMIUM_EMOJI['rabbit_fly'], '📝')} ЗАЯВКА", 
-            web_app=WebAppInfo(url=f"{BASE_URL}/apply.html")
-        )],
-        [InlineKeyboardButton(
-            text=f"{premium_emoji(PREMIUM_EMOJI['cat_dance'], '💎')} ПРЕМИУМ", 
-            callback_data="menu_premium"
-        ),
-        InlineKeyboardButton(
-            text=f"{premium_emoji(ENDERIA_EMOJI['heart'], '💜')} ЭНДЕРИЯ", 
-            callback_data="menu_enderia"
-        )]
+        [
+            InlineKeyboardButton(
+                text=f"{premium_emoji(PREMIUM_EMOJI['door'], '🚪')} IP И ОНЛАЙН", 
+                callback_data="menu_ip"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=f"{premium_emoji(PREMIUM_EMOJI['note'], '📜')} ПРАВИЛА", 
+                web_app=WebAppInfo(url=f"{BASE_URL}/rules.html")
+            ),
+            InlineKeyboardButton(
+                text=f"{premium_emoji(PREMIUM_EMOJI['rabbit_fly'], '📝')} ЗАЯВКА", 
+                web_app=WebAppInfo(url=f"{BASE_URL}/apply.html")
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=f"{premium_emoji(PREMIUM_EMOJI['cat_dance'], '💎')} ПРЕМИУМ", 
+                callback_data="menu_premium"
+            ),
+            InlineKeyboardButton(
+                text=f"{premium_emoji(PREMIUM_EMOJI['heart'], '💜')} ЭНДЕРИЯ", 
+                callback_data="menu_enderia"
+            )
+        ]
     ])
 
 def get_ip_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(
-            text=f"{premium_emoji(PREMIUM_EMOJI['check'], '🔄')} ОБНОВИТЬ", 
-            callback_data="refresh_online"
-        )],
-        [InlineKeyboardButton(
-            text=f"{premium_emoji(PREMIUM_EMOJI['back'], '◀️')} НАЗАД", 
-            callback_data="menu_main"
-        )]
+        [
+            InlineKeyboardButton(
+                text=f"{premium_emoji(PREMIUM_EMOJI['check'], '🔄')} ОБНОВИТЬ", 
+                callback_data="refresh_online"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=f"{premium_emoji(PREMIUM_EMOJI['back'], '◀️')} НАЗАД", 
+                callback_data="menu_main"
+            )
+        ]
+    ])
+
+def get_back_keyboard():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text=f"{premium_emoji(PREMIUM_EMOJI['back'], '◀️')} НАЗАД", 
+                callback_data="menu_main"
+            )
+        ]
     ])
 
 # ========== ХЕНДЛЕРЫ ==========
