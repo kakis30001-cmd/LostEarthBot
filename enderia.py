@@ -28,9 +28,9 @@ async def get_enderia_response(user_message: str, username: str) -> str:
     # Формируем полную инструкцию
     full_instruction = f"{ENDERIA_PROMPT} Текущая дата и время: {current_time}. Игрок {username} написал: {user_message}"
     
-    # Отправляем запрос в Gemini
+    # Используем gemini-2.5-flash-lite (больше запросов)
     response = ai_client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="gemini-2.5-flash-lite",
         contents=user_message,
         config=ai_types.GenerateContentConfig(
             system_instruction=full_instruction,
