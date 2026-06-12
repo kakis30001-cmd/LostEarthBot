@@ -7,6 +7,14 @@ from datetime import datetime
 from collections import defaultdict, deque
 from dotenv import load_dotenv
 
+# Импортируем всё из prompts.py
+from prompts import (
+    get_system_prompt, 
+    get_enderia_emojis, 
+    FALLBACK_RESPONSES,
+    ENDERIA_EMOJI
+)
+
 load_dotenv()
 
 # ========== OPENROUTER НАСТРОЙКИ ==========
@@ -14,11 +22,11 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 # ТОП-5 МОДЕЛЕЙ С ЛУЧШИМ РУССКИМ ЯЗЫКОМ
 MODELS_CHAIN = [
-    "openai/gpt-oss-120b",                    # 1. OpenAI, лучший русский (почти как ChatGPT)
-    "nousresearch/hermes-3-405b-instruct",    # 2. 405B, очень умная, отличный русский
-    "meta-llama/llama-3.3-70b-instruct",      # 3. 70B, стабильный хороший русский
-    "qwen/qwen3-next-80b-a3b-instruct",       # 4. Qwen от Alibaba, отличный русский
-    "nvidia/nemotron-3-nano-30b-a3b",         # 5. NVIDIA, хороший русский, быстрая
+    "openai/gpt-oss-120b",                    # 1. OpenAI, лучший русский
+    "nousresearch/hermes-3-405b-instruct",    # 2. 405B, очень умная
+    "meta-llama/llama-3.3-70b-instruct",      # 3. 70B, стабильный
+    "qwen/qwen3-next-80b-a3b-instruct",       # 4. Qwen от Alibaba
+    "nvidia/nemotron-3-nano-30b-a3b",         # 5. NVIDIA, быстрая
 ]
 
 # ========== ПАМЯТЬ ДИАЛОГОВ ==========
@@ -66,80 +74,6 @@ def is_greeting(text: str) -> bool:
     greetings = ["привет", "здравствуй", "здарова", "хай", "hello", "hi", "privet"]
     return any(g in text_lower for g in greetings)
 
-# ========== ПРЕМИУМ ЭМОДЗИ ==========
-ENDERIA_EMOJI = {
-    "cat_dance": "5359444458930718519",
-    "cat_ok": "5269476765369144234",
-    "cat_glasses": "5267088110717544191",
-    "cat_kiss": "6325462176660195024",
-    "cat_up": "5269698007724499331",
-    "cat_surprised": "5269649173946345008",
-    "rabbit_fly": "5217576088506505749",
-    "anime_dance": "6325682031741109665",
-    "heart": "5199427253225667842",
-    "cat_laugh": "5276391181679366784",
-    "magic": "5474144592817318927",
-}
-
-def emoji(emoji_id: str, fallback: str = "") -> str:
-    return f'<tg-emoji emoji-id="{emoji_id}">{fallback}</tg-emoji>'
-
-def random_enderia_emoji():
-    emojis = list(ENDERIA_EMOJI.values())
-    return emoji(random.choice(emojis), "")
-
-def get_enderia_emojis():
-    count = random.choices([1, 2], weights=[70, 30])[0]
-    emojis = []
-    for _ in range(count):
-        emojis.append(random_enderia_emoji())
-    return " ".join(emojis)
-
-# ========== СИСТЕМНЫЙ ПРОМПТ ==========
-def get_system_prompt(username: str, current_time: str) -> str:
-    return f"""Ты — Эндерия (Энди), девушка-эндермен в чате Minecraft сервера LostEarth.
-
-Твой образ: высокая эндермен-девушка с фиолетовыми волосами и светящимися глазами. Ты паришь и телепортируешься.
-
-Твой характер: добрая, загадочная. Обожаешь котиков, аниме и зайчиков.
-
-Стиль общения: говори ласково, используй обращения "игрок~", "дружок~". Отвечай коротко, 2-4 предложения.
-
-ИНФОРМАЦИЯ О СЕРВЕРЕ LostEarth:
-
-Версия: 1.21 — 1.26+
-Админ: @pelmewki379
-
-РЕЖИМЫ ИГРЫ (ОБЯЗАТЕЛЬНО ЗНАЙ ОБА):
-
-1. МИРНЫЙ РЕЖИМ (PvE):
-   - PvP только по согласию
-   - Защита от гриферства
-   - Нельзя ломать чужие постройки
-   - Доступ по ЗАЯВКАМ (@pelmewki379)
-
-2. SMP РЕЖИМ (PvP):
-   - PvP везде (кроме спавна)
-   - Можно воровать и рейдить
-   - Запрещены читы и X-Ray
-
-IP-АДРЕСА:
-- JAVA: 150.241.85.40:25565
-- BEDROCK: 150.241.85.40:19132
-
-ДОНАТЫ (у @pelmewki379):
-Друид 50₽, Оракул 100₽, Монарх 200₽, Херувим 300₽, Архонт 400₽, Серафим 600₽
-
-ПРАВИЛА:
-- Запрещены читы, X-Ray → БАН
-- Запрещена реклама → БАН
-- Оскорбление админа → МУТ
-
-Игрок: {username}
-Текущая дата: {current_time}
-
-ОТВЕЧАЙ ТОЛЬКО НА РУССКОМ ЯЗЫКЕ! НЕ используй HTML теги в ответе! Только текст и обычные эмодзи. Эмодзи ставь в конце ответа."""
-
 # ========== ЗАПРОС К МОДЕЛИ ==========
 async def ask_model(model: str, system_prompt: str, user_prompt: str) -> tuple[str, bool]:
     """Отправляет запрос к модели. Возвращает (ответ, успех)"""
@@ -172,7 +106,6 @@ async def ask_model(model: str, system_prompt: str, user_prompt: str) -> tuple[s
                     result = data["choices"][0]["message"]["content"].strip()
                     return result, True
                 else:
-                    error_text = await response.text()
                     print(f"❌ Модель {model} ошибка {response.status}")
                     return "", False
                     
@@ -201,7 +134,8 @@ async def get_enderia_response(user_message: str, username: str) -> str:
     
     # Если уже здоровались и это снова приветствие
     if already_greeted and is_greeting_msg:
-        response = f"{get_enderia_emojis()} {username}, ты уже здоровался! Что хотел узнать про LostEarth?"
+        emojis = get_enderia_emojis()
+        response = f"{emojis} {username}, ты уже здоровался! Что хотел узнать про LostEarth?"
         add_to_memory(username, user_message, response)
         return response
     
@@ -225,7 +159,7 @@ async def get_enderia_response(user_message: str, username: str) -> str:
         result, success = await ask_model(model, system_prompt, full_prompt)
         
         if success and result and len(result) > 10:
-            # Проверяем, что ответ на русском (хотя бы есть русские буквы)
+            # Проверяем, что ответ на русском
             has_russian = any(ord(c) > 1024 for c in result)
             if not has_russian:
                 print(f"⚠️ Модель {model} ответила не на русском, пробуем дальше")
@@ -249,15 +183,10 @@ async def get_enderia_response(user_message: str, username: str) -> str:
         
         await asyncio.sleep(0.3)
     
-    # Если все модели не ответили по-русски
-    print("❌ Все модели не ответили по-русски!")
-    fallbacks = [
-        f"{get_enderia_emojis()} {username}, связь с Краем потеряна! Повтори позже 💜",
-        f"{get_enderia_emojis()} {username}, на LostEarth есть два режима: Мирный (PvP по согласию) и SMP (можно рейдить)! 🐱",
-        f"{get_enderia_emojis()} {username}, IP Java: 150.241.85.40:25565, Bedrock: 19132. Заходи играть! 🐰",
-        f"{get_enderia_emojis()} {username}, донаты: Друид 50₽, Оракул 100₽, Монарх 200₽, Херувим 300₽, Архонт 400₽, Серафим 600₽ 💜",
-    ]
-    fallback = random.choice(fallbacks)
+    # Если все модели не ответили
+    print("❌ Все модели не ответили!")
+    emojis = get_enderia_emojis()
+    fallback = random.choice(FALLBACK_RESPONSES).format(emojis=emojis, username=username)
     add_to_memory(username, user_message, fallback)
     return fallback
 
