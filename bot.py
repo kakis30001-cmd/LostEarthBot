@@ -22,6 +22,7 @@ from enderia import (
     set_server_online,
     save_to_log
 )
+from database import init_db, get_balance, get_stats, get_top_players
 from prompts import get_enderia_emojis
 
 load_dotenv()
@@ -93,6 +94,10 @@ def random_heart():
 
 def random_anime():
     return premium_emoji(PREMIUM_EMOJI["anime_dance"], "💃")
+
+def get_random_emoji():
+    emojis = ["💜", "🐱", "🐰", "✨", "🎲", "🪙", "💎", "🎯", "⭐"]
+    return random.choice(emojis)
 
 # ========== КОНФИГУРАЦИЯ ==========
 SERVER = {
@@ -183,17 +188,23 @@ def get_back_keyboard():
 async def start_cmd(message: Message):
     online, max_players = await get_server_online()
     
-    text = f"""{random_heart()} <b>Добро пожаловать на {SERVER['name']}</b>
+    text = f"""✨ <b>Добро пожаловать на {SERVER['name']}</b>
 
-{random_cat()} <b>{SERVER['mode']}</b>
+🏠 <b>{SERVER['mode']}</b>
 
-{random_heart()} <b>Я Эндерия - твой живой помощник!</b>
+{random_cat()} <b>Я Эндерия - твой живой помощник!</b>
 
 📊 <b>Текущий онлайн:</b> {online}/{max_players}
 
-{random_cat()} <b>Просто напиши моё имя:</b> Энди, Эндерия, Эндер
+🎮 <b>Игры с Эндерией:</b>
+/dice - Битва кубиков (бесплатно)
+/bet 50 - Ставка на кубик (х2)
+/coin орёл 50 - Орёл/Решка
+/balance - Твой баланс
+/daily - Ежедневный бонус 100💎
+/profile - Твой профиль
 
-🎮 <b>Команда /games</b> - поиграть со мной!
+💎 <b>Стартовый баланс: 100 алмазов</b>
 
 {random_rabbit()} {random_anime()} {get_enderia_emojis()}"""
     await message.answer(text, parse_mode="HTML", reply_markup=get_main_keyboard())
@@ -202,48 +213,6 @@ async def start_cmd(message: Message):
 async def cmd_online(message: Message):
     online, max_players = await get_server_online()
     await message.answer(f"📊 <b>Онлайн: {online}/{max_players}</b> {random_cat()}", parse_mode="HTML")
-
-# Добавь эти команды в bot.p
-@dp.message(Command("daily"))
-async def daily_bonus(message: Message):
-    """Ежедневный бонус 100 алмазов"""
-    username = message.from_user.username or message.from_user.first_name
-    
-    if await can_claim_daily_bonus(username):
-        bonus = await claim_daily_bonus(username)
-        await message.answer(
-            f"{get_random_emoji()} <b>ЕЖЕДНЕВНЫЙ БОНУС!</b> {get_random_emoji()}\n\n"
-            f"Ты получил {bonus} 💎 алмазов!\n"
-            f"Баланс: {await get_balance(username)} 💎\n\n"
-            f"Заходи завтра снова! {get_random_emoji()}",
-            parse_mode="HTML"
-        )
-    else:
-        await message.answer(
-            f"{get_random_emoji()} {username}, ты уже получал бонус сегодня!\n"
-            f"Возвращайся завтра! {get_random_emoji()}",
-            parse_mode="HTML"
-        )
-
-@dp.message(Command("profile"))
-async def profile(message: Message):
-    """Показывает профиль игрока"""
-    username = message.from_user.username or message.from_user.first_name
-    balance = await get_balance(username)
-    stats = await get_stats(username)
-    
-    await message.answer(
-        f"{get_random_emoji()} <b>ПРОФИЛЬ ИГРОКА</b> {get_random_emoji()}\n\n"
-        f"👤 Имя: {username}\n"
-        f"💎 Баланс: {balance} алмазов\n"
-        f"🏆 Побед: {stats['wins']}\n"
-        f"💔 Поражений: {stats['losses']}\n"
-        f"📊 Всего игр: {stats['wins'] + stats['losses']}\n\n"
-        f"🎲 /dice - сыграть в кости\n"
-        f"💰 /bet [сумма] - сделать ставку\n"
-        f"🎁 /daily - получить бонус",
-        parse_mode="HTML"
-    )
 
 @dp.message(Command("stats"))
 async def stats_cmd(message: Message):
@@ -259,8 +228,7 @@ async def stats_cmd(message: Message):
     else:
         await message.answer(
             f"{random_heart()} <b>{username}, мы ещё не общались!</b>\n\n"
-            f"{random_cat()} Напиши Энди или ответь на моё сообщение\n"
-            f"🎮 Или попробуй /games чтобы поиграть!",
+            f"{random_cat()} Напиши Энди или /games чтобы поиграть!",
             parse_mode="HTML"
         )
 
@@ -271,23 +239,86 @@ async def clear_memory_cmd(message: Message):
     clear_user_memory(username)
     await message.answer(
         f"{random_cat()} ✨ <b>Память очищена!</b>\n\n"
-        f"📊 Было запомнено: {old_size} сообщений\n"
-        f"{random_heart()} Теперь можем начать заново!",
+        f"📊 Было запомнено: {old_size} сообщений",
         parse_mode="HTML"
     )
+
+@dp.message(Command("daily"))
+async def daily_bonus_cmd(message: Message):
+    from database import can_claim_daily_bonus, claim_daily_bonus, get_balance
+    username = message.from_user.username or message.from_user.first_name
+    
+    if await can_claim_daily_bonus(username):
+        bonus = await claim_daily_bonus(username)
+        balance = await get_balance(username)
+        await message.answer(
+            f"{random_heart()} <b>ЕЖЕДНЕВНЫЙ БОНУС!</b> {random_heart()}\n\n"
+            f"✨ Ты получил {bonus} 💎 алмазов!\n"
+            f"💎 Баланс: {balance} алмазов\n\n"
+            f"{random_cat()} Заходи завтра снова!",
+            parse_mode="HTML"
+        )
+    else:
+        await message.answer(
+            f"{random_cat()} Ты уже получал бонус сегодня!\n"
+            f"💎 Возвращайся завтра! {random_heart()}",
+            parse_mode="HTML"
+        )
+
+@dp.message(Command("profile"))
+async def profile_cmd(message: Message):
+    from database import get_balance, get_stats
+    username = message.from_user.username or message.from_user.first_name
+    balance = await get_balance(username)
+    stats = await get_stats(username)
+    
+    await message.answer(
+        f"{random_heart()} <b>ПРОФИЛЬ ИГРОКА</b> {random_heart()}\n\n"
+        f"👤 Имя: {username}\n"
+        f"💎 Баланс: {balance} алмазов\n"
+        f"🏆 Побед: {stats['wins']}\n"
+        f"💔 Поражений: {stats['losses']}\n"
+        f"📊 Всего игр: {stats['wins'] + stats['losses']}\n\n"
+        f"🎲 /dice - сыграть в кости\n"
+        f"💰 /bet [сумма] - сделать ставку\n"
+        f"🎁 /daily - получить бонус",
+        parse_mode="HTML"
+    )
+
+@dp.message(Command("top"))
+async def top_cmd(message: Message):
+    from database import get_top_players
+    top = await get_top_players(10)
+    
+    if not top:
+        await message.answer("📊 Топ игроков пока пуст! Будь первым! 🎲")
+        return
+    
+    text = f"{random_heart()} <b>ТОП ИГРОКОВ ПО АЛМАЗАМ</b> {random_heart()}\n\n"
+    for i, player in enumerate(top, 1):
+        medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else "•"
+        text += f"{medal} <b>{player['username']}</b> — {player['balance']} 💎 (🏆{player['wins']} | 💔{player['losses']})\n"
+    
+    await message.answer(text, parse_mode="HTML")
 
 @dp.message(Command("help"))
 async def help_cmd(message: Message):
     text = f"""{random_heart()} <b>Помощь по боту LostEarth</b>
 
-🔹 <b>Команды:</b>
+🔹 <b>Команды сервера:</b>
 /start - Главное меню
 /online - Показать онлайн
 /stats - Статистика диалога
 /clear_memory - Очистить память
-/log - Показать лог чата
-/games - Список игр
-/help - Справка
+
+🎮 <b>Игры с Эндерией:</b>
+/dice - Битва кубиков (бесплатно)
+/bet 50 - Ставка на кубик (выигрыш х2)
+/coin орёл 50 - Орёл/Решка на алмазы
+/balance - Показать баланс
+/daily - Ежедневный бонус 100💎
+/profile - Твой профиль
+/top - Топ игроков
 
 {random_cat()} <b>Как общаться:</b>
 Напиши: Энди, Эндерия, Эндер
@@ -295,80 +326,33 @@ async def help_cmd(message: Message):
 {random_rabbit()} <i>Задавай вопросы или играй!</i>"""
     await message.answer(text, parse_mode="HTML")
 
-@dp.message(Command("log"))
-async def show_log(message: Message):
-    try:
-        if not os.path.exists("chat.log"):
-            await message.answer("❌ Лог файл не найден. Бот ещё не сохранял сообщения.")
-            return
-        
-        with open("chat.log", "r", encoding="utf-8") as f:
-            lines = f.readlines()
-        
-        if not lines:
-            await message.answer("📭 Лог пуст")
-            return
-        
-        last_lines = lines[-30:] if len(lines) > 30 else lines
-        text = "📜 <b>Последние сообщения в логе чата:</b>\n\n<code>"
-        for line in last_lines:
-            if len(line) > 200:
-                line = line[:200] + "...\n"
-            text += line
-        text += "</code>"
-        
-        if len(text) > 4000:
-            text = text[:4000] + "..."
-        
-        await message.answer(text, parse_mode="HTML")
-    except Exception as e:
-        await message.answer(f"❌ Ошибка: {e}")
-
-@dp.message(Command("games"))
-async def games_cmd(message: Message):
-    text = f"""{random_heart()} <b>ДОСТУПНЫЕ ИГРЫ</b> {random_heart()}
-
-🎲 <b>/dice</b> - Битва кубиков с Эндерией
-💰 <b>/bet 50</b> - Ставка на кубик (выигрыш х2)
-🪙 <b>/coin орёл 50</b> - Орёл/Решка на алмазы
-🎯 <b>/guess</b> - Угадай число от 1 до 10
-💎 <b>/balance</b> - Показать баланс алмазов
-
-<i>Стартовый баланс: 100 алмазов 💎</i>
-
-{random_rabbit()} <i>Проверим удачу?</i> {random_cat()}"""
-    await message.answer(text, parse_mode="HTML")
-
 @dp.message()
 async def handle_message(message: Message):
     if not message.text:
         return
     
-    username = message.from_user.first_name or "Игрок"
+    username = message.from_user.username or message.from_user.first_name
     user_message = message.text
     
     print(f"📥 Получено от {username}: {user_message}")
     save_to_log(username, user_message, is_bot=False)
     
-    # Обработка команд игр (даже без упоминания Энди)
+    # Игровые команды (без упоминания)
     if user_message.startswith("/"):
         cmd = user_message.lower().split()[0]
-        if cmd in ["/dice", "/bet", "/coin", "/guess", "/balance", "/bal", "/games"]:
-            response = await get_enderia_response(user_message, username, is_reply=False, chat_id=message.chat.id)
+        if cmd in ["/dice", "/bet", "/coin", "/balance", "/bal", "/daily", "/profile", "/top"]:
+            response = await get_enderia_response(user_message, username, is_reply=False, chat_id=message.chat.id, bot=bot)
             if response:
                 await message.reply(response, parse_mode="HTML")
             return
     
-    # Проверяем, обращаются ли к Эндерии по имени
+    # Обычные сообщения с упоминанием
     if should_respond(user_message):
         print(f"🎯 Эндерия отвечает {username}")
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
-        response = await get_enderia_response(user_message, username, is_reply=False, chat_id=message.chat.id)
+        response = await get_enderia_response(user_message, username, is_reply=False, chat_id=message.chat.id, bot=bot)
         if response:
             await message.reply(response, parse_mode="HTML")
-            print(f"✅ Ответ отправлен {username}")
-    else:
-        print(f"⏭️ Пропускаем (не упоминание)")
 
 # ========== КОЛБЭКИ ==========
 async def safe_callback_answer(callback: CallbackQuery, text: str = None, show_alert: bool = False):
@@ -384,7 +368,7 @@ async def safe_callback_answer(callback: CallbackQuery, text: str = None, show_a
 @dp.callback_query(lambda c: c.data == "menu_main")
 async def menu_main(callback: CallbackQuery):
     online, max_players = await get_server_online()
-    text = f"""{random_heart()} <b>Главное меню</b>\n\n📊 Онлайн: {online}/{max_players}\n\n{random_cat()} Напиши моё имя или ответь на сообщение\n🎮 Команда /games - поиграть!"""
+    text = f"""{random_heart()} <b>Главное меню</b>\n\n📊 Онлайн: {online}/{max_players}\n\n{random_cat()} Напиши моё имя или /games чтобы поиграть!"""
     try:
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_main_keyboard())
     except Exception as e:
@@ -428,7 +412,7 @@ async def menu_premium(callback: CallbackQuery):
 
 @dp.callback_query(lambda c: c.data == "menu_enderia")
 async def menu_enderia(callback: CallbackQuery):
-    text = f"""{random_heart()} <b>Эндерия - твой живой помощник</b>\n\n{random_cat()} <b>Кто я?</b>\nЯ девушка-эндермен, хранительница Края.\n\n💬 <b>Как ко мне обратиться:</b>\nНапиши: Эндер, Эндерия, Энди\n\n🎮 <b>Игры:</b>\n/dice, /bet, /coin, /guess, /balance\n\n📜 <b>Команда /log</b> - показывает историю чата\n\n{random_rabbit()} <i>Просто позови меня по имени!</i>\n{random_heart()}"""
+    text = f"""{random_heart()} <b>Эндерия - твой живой помощник</b>\n\n{random_cat()} <b>Кто я?</b>\nЯ девушка-эндермен, хранительница Края.\n\n💬 <b>Как ко мне обратиться:</b>\nНапиши: Эндер, Эндерия, Энди\n\n🎮 <b>Игры:</b>\n/dice, /bet, /coin, /balance, /daily, /profile, /top\n\n{random_rabbit()} <i>Просто позови меня по имени или играй!</i>\n{random_heart()}"""
     try:
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_back_keyboard())
     except Exception as e:
@@ -437,6 +421,10 @@ async def menu_enderia(callback: CallbackQuery):
 
 # ========== ЗАПУСК ==========
 async def main():
+    # Инициализация базы данных
+    await init_db()
+    
+    # Запуск Flask
     flask_thread = Thread(target=run_flask, daemon=True)
     flask_thread.start()
     
@@ -445,7 +433,7 @@ async def main():
     print("🚀 БОТ LOSTEARTH ЗАПУЩЕН")
     print(f"🎨 Премиум эмодзи загружено: {len(PREMIUM_EMOJI)}")
     print(f"🤖 Бот: @{bot_info.username}")
-    print("🎮 Игры: /dice, /bet, /coin, /guess, /balance")
+    print("🎮 Игры: /dice, /bet, /coin, /daily, /profile, /top")
     print("=" * 50)
     
     try:
