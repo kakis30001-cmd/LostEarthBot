@@ -48,7 +48,7 @@ BUTTON_EMOJI = {
     "start": "5870921127685001066",
 }
 
-def button_emoji(emoji_id, fallback=""):
+def button_emoji(emoji_id, fallback="✨"):
     return f'<tg-emoji emoji-id="{emoji_id}">{fallback}</tg-emoji>'
 
 SERVER = {
@@ -142,16 +142,16 @@ def get_ip_keyboard():
 
 @dp.message(CommandStart())
 async def start_cmd(message: Message):
-    text = (button_emoji(BUTTON_EMOJI["start"], " ") + 
-            " Dobro pozhalovat na " + SERVER["name"] + "\n\n" +
-            button_emoji(BUTTON_EMOJI["house"], " ") + " " + SERVER["mode"] + "\n\n" +
-            button_emoji(BUTTON_EMOJI["cat_ok"], " ") + " Ya Enderiya - napishi moyo imya, i ya otvechu")
+    text = (button_emoji(BUTTON_EMOJI["start"], "✨") + 
+            " <b>Dobro pozhalovat na " + SERVER["name"] + "</b>\n\n" +
+            button_emoji(BUTTON_EMOJI["house"], "🏠") + " <b>" + SERVER["mode"] + "</b>\n\n" +
+            button_emoji(BUTTON_EMOJI["cat_ok"], "🐱") + " <b>Ya Enderiya - napishi moyo imya, i ya otvechu</b>")
     await message.answer(text, parse_mode="HTML", reply_markup=get_main_keyboard())
 
 @dp.message(Command("online"))
 async def cmd_online(message: Message):
     online, max_players = await get_server_online()
-    text = button_emoji(BUTTON_EMOJI["joystick"], " ") + " Online: " + str(online) + "/" + str(max_players)
+    text = button_emoji(BUTTON_EMOJI["joystick"], "📊") + " <b>Online: " + str(online) + "/" + str(max_players) + "</b>"
     await message.answer(text, parse_mode="HTML")
 
 @dp.message()
@@ -171,18 +171,18 @@ async def handle_message(message: Message):
 
 @dp.callback_query(lambda c: c.data == "menu_main")
 async def menu_main(callback: CallbackQuery):
-    await callback.message.edit_text("Glavnoe menu", parse_mode="HTML", reply_markup=get_main_keyboard())
+    await callback.message.edit_text("<b>Glavnoe menu</b>", parse_mode="HTML", reply_markup=get_main_keyboard())
     await callback.answer()
 
 @dp.callback_query(lambda c: c.data == "menu_ip")
 async def menu_ip(callback: CallbackQuery):
     online, max_players = await get_server_online()
     status = "ONLINE" if online > 0 else "OFFLINE"
-    text = (button_emoji(BUTTON_EMOJI["crown"], " ") + " LOSTEARTH | " + status + "\n\n" +
-            "JAVA: " + SERVER["java_ip"] + ":" + str(SERVER["java_port"]) + "\n" +
-            "Online: " + str(online) + "/" + str(max_players) + "\n" +
-            "BEDROCK: " + SERVER["bedrock_ip"] + ":" + str(SERVER["bedrock_port"]) + "\n\n" +
-            button_emoji(BUTTON_EMOJI["rabbit_fly"], " ") + " Priyatnoy igry")
+    text = (button_emoji(BUTTON_EMOJI["crown"], "👑") + " <b>LOSTEARTH</b> | " + status + "\n\n" +
+            "<b>JAVA:</b> " + SERVER["java_ip"] + ":" + str(SERVER["java_port"]) + "\n" +
+            "<b>Online:</b> " + str(online) + "/" + str(max_players) + "\n" +
+            "<b>BEDROCK:</b> " + SERVER["bedrock_ip"] + ":" + str(SERVER["bedrock_port"]) + "\n\n" +
+            button_emoji(BUTTON_EMOJI["rabbit_fly"], "🐰") + " <i>Priyatnoy igry</i>")
     await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_ip_keyboard())
     await callback.answer()
 
@@ -192,17 +192,17 @@ async def refresh_online(callback: CallbackQuery):
     last_update.clear()
     online, max_players = await get_server_online()
     status = "ONLINE" if online > 0 else "OFFLINE"
-    text = (button_emoji(BUTTON_EMOJI["crown"], " ") + " LOSTEARTH | " + status + "\n\n" +
-            "JAVA: " + SERVER["java_ip"] + ":" + str(SERVER["java_port"]) + "\n" +
-            "Online: " + str(online) + "/" + str(max_players) + "\n" +
-            "BEDROCK: " + SERVER["bedrock_ip"] + ":" + str(SERVER["bedrock_port"]) + "\n\n" +
-            button_emoji(BUTTON_EMOJI["rabbit_fly"], " ") + " Priyatnoy igry")
+    text = (button_emoji(BUTTON_EMOJI["crown"], "👑") + " <b>LOSTEARTH</b> | " + status + "\n\n" +
+            "<b>JAVA:</b> " + SERVER["java_ip"] + ":" + str(SERVER["java_port"]) + "\n" +
+            "<b>Online:</b> " + str(online) + "/" + str(max_players) + "\n" +
+            "<b>BEDROCK:</b> " + SERVER["bedrock_ip"] + ":" + str(SERVER["bedrock_port"]) + "\n\n" +
+            button_emoji(BUTTON_EMOJI["rabbit_fly"], "🐰") + " <i>Priyatnoy igry</i>")
     await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_ip_keyboard())
     await callback.answer()
 
 @dp.callback_query(lambda c: c.data == "menu_premium")
 async def menu_premium(callback: CallbackQuery):
-    text = (button_emoji(BUTTON_EMOJI["cat_dance"], " ") + " PREMIUM DOSTUP\n\n" +
+    text = (button_emoji(BUTTON_EMOJI["cat_dance"], "💎") + " <b>PREMIUM DOSTUP</b>\n\n" +
             "Druid - 50 rub\n" +
             "Orakul - 100 rub\n" +
             "Monarh - 200 rub\n" +
@@ -215,8 +215,8 @@ async def menu_premium(callback: CallbackQuery):
 
 @dp.callback_query(lambda c: c.data == "menu_enderia")
 async def menu_enderia(callback: CallbackQuery):
-    text = (button_emoji(BUTTON_EMOJI["cat_dance"], " ") + " Enderiya\n\n" +
-            button_emoji(BUTTON_EMOJI["cat_ok"], " ") + " Ya devushka-endermen iz LostEarth!\n\n" +
+    text = (button_emoji(BUTTON_EMOJI["cat_dance"], "💜") + " <b>Enderiya</b>\n\n" +
+            button_emoji(BUTTON_EMOJI["cat_ok"], "🐱") + " <b>Ya devushka-endermen iz LostEarth!</b>\n\n" +
             "Napishi: Ender, Enderiya, Endi - ya otvechu")
     await callback.message.edit_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="NAZAD", callback_data="menu_main", icon_custom_emoji_id=BUTTON_EMOJI["back"])]]))
     await callback.answer()
