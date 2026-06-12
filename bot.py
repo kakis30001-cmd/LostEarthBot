@@ -63,7 +63,7 @@ def run_flask():
 bot = Bot(token=TELEGRAM_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
-# ========== ПРЕМИУМ ЭМОДЗИ (КАК В ТВОЁМ ПРИМЕРЕ) ==========
+# ========== ПРЕМИУМ ЭМОДЗИ ==========
 EMOJI = {
     "cat_dance": '<tg-emoji emoji-id="5359444458930718519">🐱</tg-emoji>',
     "cat_ok": '<tg-emoji emoji-id="5269476765369144234">🤙</tg-emoji>',
@@ -87,6 +87,18 @@ EMOJI = {
 def random_cat():
     cats = [EMOJI["cat_dance"], EMOJI["cat_ok"], EMOJI["cat_up"], EMOJI["cat_laugh"], EMOJI["cat_kiss"]]
     return random.choice(cats)
+
+# ID для кнопок (без HTML тегов)
+BUTTON_EMOJI_ID = {
+    "door": "5873147866364514353",
+    "note": "5870930744116776638",
+    "rabbit_fly": "5217576088506505749",
+    "cat_dance": "5359444458930718519",
+    "cat_ok": "5269476765369144234",
+    "check": "5870633910337015697",
+    "back": "5875082500023258804",
+    "crown": "5807868868886009920",
+}
 
 # ========== КОНФИГ ==========
 SERVER = {
@@ -156,28 +168,28 @@ async def get_user_bio(user_id: int) -> str:
     except:
         return ""
 
-# ========== КЛАВИАТУРЫ ==========
+# ========== КЛАВИАТУРЫ (С ПРЕМИУМ ЭМОДЗИ НА КНОПКАХ) ==========
 def get_main_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="IP И ОНЛАЙН", callback_data="menu_ip")],
-        [InlineKeyboardButton(text="ПРАВИЛА", web_app=WebAppInfo(url=RULES_URL)),
-         InlineKeyboardButton(text="ЗАЯВКА", web_app=WebAppInfo(url=APPLY_URL))],
-        [InlineKeyboardButton(text="ПРЕМИУМ", callback_data="menu_premium"),
-         InlineKeyboardButton(text="ЭНДЕРИЯ", callback_data="menu_enderia")]
+        [InlineKeyboardButton(text="IP И ОНЛАЙН", callback_data="menu_ip", icon_custom_emoji_id=BUTTON_EMOJI_ID["door"])],
+        [InlineKeyboardButton(text="ПРАВИЛА", web_app=WebAppInfo(url=RULES_URL), icon_custom_emoji_id=BUTTON_EMOJI_ID["note"]),
+         InlineKeyboardButton(text="ЗАЯВКА", web_app=WebAppInfo(url=APPLY_URL), icon_custom_emoji_id=BUTTON_EMOJI_ID["rabbit_fly"])],
+        [InlineKeyboardButton(text="ПРЕМИУМ", callback_data="menu_premium", icon_custom_emoji_id=BUTTON_EMOJI_ID["crown"]),
+         InlineKeyboardButton(text="ЭНДЕРИЯ", callback_data="menu_enderia", icon_custom_emoji_id=BUTTON_EMOJI_ID["cat_ok"])]
     ])
 
 def get_ip_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="ОБНОВИТЬ", callback_data="refresh_online")],
-        [InlineKeyboardButton(text="НАЗАД", callback_data="menu_main")]
+        [InlineKeyboardButton(text="ОБНОВИТЬ", callback_data="refresh_online", icon_custom_emoji_id=BUTTON_EMOJI_ID["check"])],
+        [InlineKeyboardButton(text="НАЗАД", callback_data="menu_main", icon_custom_emoji_id=BUTTON_EMOJI_ID["back"])]
     ])
 
 def get_back_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="НАЗАД", callback_data="menu_main")]
+        [InlineKeyboardButton(text="НАЗАД", callback_data="menu_main", icon_custom_emoji_id=BUTTON_EMOJI_ID["back"])]
     ])
 
-# ========== ХЕНДЛЕРЫ ==========
+# ========== ХЕНДЛЕРЫ (С ПРЕМИУМ ЭМОДЗИ В ТЕКСТЕ) ==========
 @dp.message(CommandStart())
 async def start_cmd(message: Message):
     online, max_players = await get_server_online()
