@@ -1,5 +1,6 @@
 import os
 import random
+import re
 from datetime import datetime
 from collections import defaultdict, deque
 from google import genai
@@ -9,10 +10,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# ========== ПАМЯТЬ ДИАЛОГОВ (ГЛОБАЛЬНАЯ) ==========
-# Храним последние 10 сообщений для каждого пользователя
+# ========== ПАМЯТЬ ДИАЛОГОВ ==========
 user_memory = defaultdict(lambda: deque(maxlen=10))
-user_last_message = {}  # Запоминаем последнее сообщение чтобы не повторяться
+user_greeted = {}  # Запоминаем, здоровались ли уже
 
 def get_user_context(username: str) -> str:
     """Получает контекст диалога с пользователем"""
@@ -20,35 +20,56 @@ def get_user_context(username: str) -> str:
         return ""
     
     context = "\n".join(list(user_memory[username]))
-    return f"\n\n[ИСТОРИЯ ДИАЛОГА С {username}]:\n{context}\n\n[ВАЖНО]: Продолжай этот диалог. НЕ ЗДОРОВАЙСЯ если уже здоровались! Отвечай по делу."
+    return f"\n\n[ИСТОРИЯ ДИАЛОГА С {username}]:\n{context}"
 
 def add_to_memory(username: str, user_message: str, bot_response: str):
     """Добавляет сообщение в память"""
     user_memory[username].append(f"{username}: {user_message}")
     user_memory[username].append(f"Эндерия: {bot_response}")
-    print(f"[ПАМЯТЬ] {username}: сохранено {len(user_memory[username])//2} сообщений")  # Отладка
 
 def clear_user_memory(username: str):
     """Очищает память пользователя"""
     if username in user_memory:
         user_memory[username].clear()
-        print(f"[ПАМЯТЬ] {username}: память очищена")
-    if username in user_last_message:
-        del user_last_message[username]
+    if username in user_greeted:
+        user_greeted[username] = False
 
 def get_memory_size(username: str) -> int:
-    """Возвращает количество запомненных сообщений"""
-    if username in user_memory:
-        return len(user_memory[username]) // 2
-    return 0
+    return len(user_memory.get(username, [])) // 2
 
-# Ротация API ключей Gemini
+def has_already_greeted(username: str) -> bool:
+    """Проверяет, здоровались ли уже с этим игроком"""
+    return user_greeted.get(username, False)
+
+def mark_greeted(username: str):
+    """Отмечает, что с игроком уже поздоровались"""
+    user_greeted[username] = True
+
+def is_greeting(text: str) -> bool:
+    """Проверяет, является ли сообщение приветствием"""
+    text_lower = text.lower()
+    greetings = ["привет", "здравствуй", "здарова", "хай", "hello", "hi", "privet", "здорово", "доброе утро", "добрый день", "добрый вечер"]
+    return any(g in text_lower for g in greetings)
+
+def remove_greeting_from_response(response: str) -> str:
+    """Удаляет приветствия из ответа Эндерии"""
+    # Шаблоны приветствий в ответах
+    greeting_patterns = [
+        r'^(Привет|Здравствуй|Здарова|Хай|Hello|Hi)[,\s!]*',
+        r'^(Приветик|Приветствую)[,\s!]*',
+    ]
+    
+    for pattern in greeting_patterns:
+        response = re.sub(pattern, '', response, flags=re.IGNORECASE)
+    
+    return response.strip()
+
+# Ротация ключей
 GEMINI_API_KEYS = [
     os.getenv("GEMINI_API_KEY_1"),
     os.getenv("GEMINI_API_KEY_2"),
     os.getenv("GEMINI_API_KEY_3"),
 ]
-
 GEMINI_API_KEYS = [key for key in GEMINI_API_KEYS if key]
 current_key_index = 0
 
@@ -60,7 +81,7 @@ def get_next_gemini_client():
     current_key_index = (current_key_index + 1) % len(GEMINI_API_KEYS)
     return genai.Client(api_key=key)
 
-# ПРЕМИУМ ЭМОДЗИ
+# Эмодзи
 ENDERIA_EMOJI = {
     "cat_dance": "5359444458930718519",
     "cat_ok": "5269476765369144234",
@@ -71,8 +92,6 @@ ENDERIA_EMOJI = {
     "rabbit_fly": "5217576088506505749",
     "anime_dance": "6325682031741109665",
     "heart": "5199427253225667842",
-    "cat_laugh": "5276391181679366784",
-    "magic": "5474144592817318927",
 }
 
 def emoji(emoji_id: str, fallback: str = "") -> str:
@@ -88,59 +107,54 @@ ENDERIA_PROMPT = f"""
 Обожаешь котиков, аниме и зайчиков. Отвечай коротко, 2-4 предложения.
 Обращайся к игроку по имени.
 
-САМОЕ ВАЖНОЕ ПРАВИЛО:
-- Если в истории диалога ты уже поздоровалась с игроком — НЕ ЗДОРОВАЙСЯ СНОВА!
-- Если игрок написал "привет" а потом ещё раз "привет" — просто спроси "ты уже здоровался, что случилось?"
-- Продолжай диалог логично, помни что обсуждали ранее.
-- Не повторяй одну и ту же информацию дважды подряд.
+ВАЖНОЕ ПРАВИЛО:
+- НИКОГДА не начинай ответ с "Привет", "Здравствуй" и т.д. Ты уже здоровалась!
+- Если игрок пишет "привет", а вы уже здоровались — просто спроси "что хотел?" или "как дела?"
+- Продолжай диалог, а не начинай новый каждый раз.
 
-Используй 1-2 эмодзи в конце ответа.
-
-Доступные эмодзи:
-{emoji(ENDERIA_EMOJI['cat_dance'], '💃')} - танец котика
-{emoji(ENDERIA_EMOJI['cat_ok'], '🐱')} - котик одобряет
-{emoji(ENDERIA_EMOJI['rabbit_fly'], '🐰')} - зайчик летит
-{emoji(ENDERIA_EMOJI['heart'], '💜')} - сердечко
-
-Информация о сервере LostEarth:
-- IP Java: 150.241.85.40:25565
-- IP Bedrock: 150.241.85.40:19132
+Информация о сервере:
+- IP Java: 150.241.85.40:25565, IP Bedrock: 150.241.85.40:19132
 - Версия: 1.21-1.26+
 - Мирный режим: PvP только по согласию, доступ по заявкам
 - Админ: @pelmewki379
-
-Донаты: Друид 50₽, Оракул 100₽, Монарх 200₽, Херувим 300₽, Архонт 400₽, Серафим 600₽
+- Донаты: Друид 50₽, Оракул 100₽, Монарх 200₽, Херувим 300₽, Архонт 400₽, Серафим 600₽
 """
 
-FALLBACK_RESPONSES = [
-    "Ой~ {username}, меня немного зателепортировало! Повтори вопрос через минутку 💜",
-    "{username}, энергия Края восстанавливается... Скажи ещё разок! 🐱",
-    "*телепортируется* {username}, давай попробуем снова! 💜",
-]
-
 async def get_enderia_response(user_message: str, username: str) -> str:
-    """Получить ответ от Эндерии с учётом истории диалога"""
+    """Получить ответ от Эндерии с защитой от повторных приветствий"""
+    
     current_time = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
-    
-    # Получаем контекст диалога
     context = get_user_context(username)
+    already_greeted = has_already_greeted(username)
+    is_greeting_msg = is_greeting(user_message)
     
-    # Проверяем, не повторяет ли игрок то же сообщение
-    last_msg = user_last_message.get(username)
-    is_repeat = (last_msg == user_message)
+    # Если уже здоровались и это снова приветствие
+    if already_greeted and is_greeting_msg:
+        # Отвечаем без вызова Gemini
+        responses = [
+            f"{random_enderia_emoji()} {username}, ты уже здоровался! Что хотел узнать?",
+            f"{random_enderia_emoji()} {username}, мы уже общаемся! Задавай вопрос",
+            f"{random_enderia_emoji()} {username}, привет, но давай сразу к делу?",
+            f"{random_enderia_emoji()} {username}, я тебя помню! Спрашивай что хотел",
+        ]
+        response = random.choice(responses)
+        add_to_memory(username, user_message, response)
+        return response
     
-    full_prompt = f"""Текущая дата и время: {current_time}
+    # Формируем промпт с указанием, здоровались ли уже
+    greeting_instruction = ""
+    if already_greeted:
+        greeting_instruction = f"\n[ВАЖНО]: Ты УЖЕ поздоровалась с {username} ранее. НЕ ЗДОРОВАЙСЯ снова! Начни ответ сразу с дела."
+    else:
+        greeting_instruction = f"\n[ВАЖНО]: Ты ещё не здоровалась с {username}. Можешь поздороваться один раз."
+    
+    full_prompt = f"""Текущая дата: {current_time}
 {context}
+{greeting_instruction}
 
-[ТЕКУЩЕЕ СООБЩЕНИЕ ОТ {username}]: {user_message}
-[ПОВТОРНОЕ СООБЩЕНИЕ?]: {"ДА, игрок повторил то же самое" if is_repeat else "НЕТ"}
+Игрок {username} написал: {user_message}
 
-[ИНСТРУКЦИЯ]:
-1. Если вы уже общались в истории выше — НЕ ЗДОРОВАЙСЯ! Просто продолжай разговор.
-2. Если игрок повторяет приветствие — скажи что-то вроде "ты уже здоровался, спрашивай что хотел"
-3. Отвечай по делу, без лишних приветствий.
-
-Ответь как Эндерия:"""
+Ответь как Эндерия (2-4 предложения, без лишних приветствий если уже здоровались):"""
 
     for attempt in range(len(GEMINI_API_KEYS) * 2):
         try:
@@ -159,30 +173,32 @@ async def get_enderia_response(user_message: str, username: str) -> str:
             if response and response.text:
                 result = response.text.strip()
                 
+                # Если уже здоровались — принудительно удаляем приветствия
+                if already_greeted:
+                    result = remove_greeting_from_response(result)
+                
                 # Добавляем эмодзи если их нет
                 if not any(emoji_id in result for emoji_id in ENDERIA_EMOJI.values()):
                     result += f" {random_enderia_emoji()}"
                 
-                # Сохраняем в память
-                add_to_memory(username, user_message, result)
-                user_last_message[username] = user_message
+                # Если это первое сообщение — отмечаем, что поздоровались
+                if not already_greeted and not is_greeting_msg:
+                    mark_greeted(username)
+                elif not already_greeted and is_greeting_msg:
+                    mark_greeted(username)
                 
+                add_to_memory(username, user_message, result)
                 return result
                 
         except ClientError as e:
-            if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
-                print(f"[WARN] Ключ {attempt} исчерпал лимит")
+            if "429" in str(e):
                 continue
-            else:
-                print(f"[ERROR] ClientError: {e}")
-                fallback = random.choice(FALLBACK_RESPONSES).format(username=username)
-                add_to_memory(username, user_message, fallback)
-                return fallback
         except Exception as e:
-            print(f"[ERROR] Ошибка: {e}")
+            print(f"[ERROR] {e}")
             continue
     
-    fallback = random.choice(FALLBACK_RESPONSES).format(username=username)
+    # Fallback
+    fallback = f"{random_enderia_emoji()} {username}, энергия Края кончилась, повтори позже!"
     add_to_memory(username, user_message, fallback)
     return fallback
 
