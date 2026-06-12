@@ -259,6 +259,32 @@ async def handle_message(message: Message):
     username = message.from_user.first_name or "Игрок"
     user_message = message.text
     
+    print(f"📝 Получено сообщение от {username}: {user_message[:50]}...")
+    
+    add_to_chat_memory(username, user_message, is_bot=False)
+    
+    is_mentioned = should_respond(user_message)
+    is_reply_to_bot = (message.reply_to_message and message.reply_to_message.from_user.id == bot.id)
+    
+    if is_mentioned or is_reply_to_bot:
+        print(f"🎯 Эндерия должна ответить (упоминание={is_mentioned}, реплай={is_reply_to_bot})")
+        await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+        response = await get_enderia_response(user_message, username, is_reply=is_reply_to_bot)
+        if response:
+            print(f"💬 Ответ Эндерии: {response[:50]}...")
+            await message.reply(response, parse_mode="HTML")
+            add_to_chat_memory(username, response, is_bot=True)
+    else:
+        print(f"⏭️ Пропускаем (не упоминание и не реплай)")
+
+@dp.message()
+async def handle_message(message: Message):
+    if not message.text:
+        return
+    
+    username = message.from_user.first_name or "Игрок"
+    user_message = message.text
+    
     add_to_chat_memory(username, user_message, is_bot=False)
     
     is_mentioned = should_respond(user_message)
