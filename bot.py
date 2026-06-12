@@ -5,7 +5,6 @@ import struct
 import json
 from datetime import datetime
 from threading import Thread
-from collections import deque
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import CommandStart, Command
@@ -38,7 +37,7 @@ def run_flask():
 bot = Bot(token=TELEGRAM_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
-# ========== ПРЕМИУМ ЭМОДЗИ ==========
+# ========== ПРЕМИУМ ЭМОДЗИ ДЛЯ КНОПОК ==========
 EMOJI = {
     "door": "5873147866364514353",
     "note": "5870930744116776638",
@@ -47,16 +46,7 @@ EMOJI = {
     "cat_ok": "5269476765369144234",
     "check": "5870633910337015697",
     "back": "5875082500023258804",
-    "cat_glasses": "5267088110717544191",
-    "joystick": "5870717606364713020",
-    "crown": "5807868868886009920",
-    "house": "5873147866364514353",
-    "start": "5870921127685001066",
-    "cat_surprised": "5269649173946345008",
 }
-
-def emoji(sticker_id: str, fallback: str = "") -> str:
-    return f'<tg-emoji emoji-id="{sticker_id}">{fallback}</tg-emoji>'
 
 # ========== КОНФИГУРАЦИЯ ==========
 SERVER = {
@@ -70,6 +60,8 @@ SERVER = {
 }
 
 BASE_URL = os.getenv("BASE_URL", "https://lostearthbot-production.up.railway.app")
+RULES_URL = f"{BASE_URL}/"
+APPLY_URL = f"{BASE_URL}/apply"
 
 online_cache = {}
 last_update = {}
@@ -132,24 +124,69 @@ async def get_server_online():
     last_update["online"] = now
     return online, max_players
 
-# ========== КЛАВИАТУРЫ (обычные эмодзи, работают 100%) ==========
+# ========== КЛАВИАТУРЫ С ПРЕМИУМ ЭМОДЗИ ==========
 def get_main_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🌐 IP И ОНЛАЙН", callback_data="menu_ip")],
         [
-            InlineKeyboardButton(text="📜 ПРАВИЛА", web_app=WebAppInfo(url=f"{BASE_URL}/")),
-            InlineKeyboardButton(text="📝 ЗАЯВКА", web_app=WebAppInfo(url=f"{BASE_URL}/apply"))
+            InlineKeyboardButton(
+                text="IP И ОНЛАЙН", 
+                callback_data="menu_ip", 
+                icon_custom_emoji_id=EMOJI["door"]
+            )
         ],
         [
-            InlineKeyboardButton(text="💎 ПРЕМИУМ", callback_data="menu_premium"),
-            InlineKeyboardButton(text="💜 ЭНДЕРИЯ", callback_data="menu_enderia")
+            InlineKeyboardButton(
+                text="ПРАВИЛА", 
+                web_app=WebAppInfo(url=RULES_URL), 
+                icon_custom_emoji_id=EMOJI["note"]
+            ),
+            InlineKeyboardButton(
+                text="ЗАЯВКА", 
+                web_app=WebAppInfo(url=APPLY_URL), 
+                icon_custom_emoji_id=EMOJI["rabbit_fly"]
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="ПРЕМИУМ", 
+                callback_data="menu_premium", 
+                icon_custom_emoji_id=EMOJI["cat_dance"]
+            ),
+            InlineKeyboardButton(
+                text="ЭНДЕРИЯ", 
+                callback_data="menu_enderia", 
+                icon_custom_emoji_id=EMOJI["cat_ok"]
+            )
         ]
     ])
 
 def get_ip_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔄 ОБНОВИТЬ", callback_data="refresh_online")],
-        [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="menu_main")]
+        [
+            InlineKeyboardButton(
+                text="ОБНОВИТЬ", 
+                callback_data="refresh_online", 
+                icon_custom_emoji_id=EMOJI["check"]
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="НАЗАД", 
+                callback_data="menu_main", 
+                icon_custom_emoji_id=EMOJI["back"]
+            )
+        ]
+    ])
+
+def get_back_keyboard():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="НАЗАД", 
+                callback_data="menu_main", 
+                icon_custom_emoji_id=EMOJI["back"]
+            )
+        ]
     ])
 
 # ========== ХЕНДЛЕРЫ ==========
@@ -159,7 +196,9 @@ async def start_cmd(message: Message):
 
 🏠 <b>{SERVER['mode']}</b>
 
-🐱 <b>Я Эндерия - напиши моё имя, и я отвечу!</b>"""
+🐱 <b>Я Эндерия - напиши моё имя, и я отвечу!</b>
+
+💜 <b>У меня премиум эмодзи в кнопках!</b>"""
     await message.answer(text, parse_mode="HTML", reply_markup=get_main_keyboard())
 
 @dp.message(Command("online"))
@@ -229,7 +268,7 @@ async def menu_premium(callback: CallbackQuery):
 😇 Серафим - 300грн / 600₽
 
 📩 По вопросам: @pelmewki379"""
-    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="◀️ НАЗАД", callback_data="menu_main")]]))
+    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_back_keyboard())
     await callback.answer()
 
 @dp.callback_query(lambda c: c.data == "menu_enderia")
@@ -242,7 +281,7 @@ async def menu_enderia(callback: CallbackQuery):
 Напиши: Эндер, Эндерия, Энди, Ендер
 
 🐰 <i>Просто позови меня по имени, и я отвечу!</i>"""
-    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="◀️ НАЗАД", callback_data="menu_main")]]))
+    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_back_keyboard())
     await callback.answer()
 
 # ========== ЗАПУСК ==========
