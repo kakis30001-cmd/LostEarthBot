@@ -12,19 +12,13 @@ load_dotenv()
 # ========== OPENROUTER НАСТРОЙКИ ==========
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
-# ТОП-5 ЛУЧШИХ БЕСПЛАТНЫХ МОДЕЛЕЙ (отсортированы по качеству)
+# ТОП-5 МОДЕЛЕЙ С ЛУЧШИМ РУССКИМ ЯЗЫКОМ
 MODELS_CHAIN = [
-    "openai/gpt-oss-120b",                    # OpenAI, очень умная, отличный русский
-    "nousresearch/hermes-3-405b-instruct",    # 405B, огромная, умная
-    "meta-llama/llama-3.3-70b-instruct",      # 70B, стабильная, хорошая
-    "qwen/qwen3-coder-480b-a35b-instruct",    # 480B, огромный контекст
-    "nvidia/nemotron-nano-12b-v2",            # 12B, быстрая, хорошая
-]
-
-# Запасные быстрые модели (если топовые упадут)
-FALLBACK_MODELS = [
-    "meta-llama/llama-3.2-3b-instruct",       # 3B, очень быстрая
-    "liquid/lfm2.5-1.2b-instruct",            # 1.2B, супер быстрая для запаса
+    "openai/gpt-oss-120b",                    # 1. OpenAI, лучший русский (почти как ChatGPT)
+    "nousresearch/hermes-3-405b-instruct",    # 2. 405B, очень умная, отличный русский
+    "meta-llama/llama-3.3-70b-instruct",      # 3. 70B, стабильный хороший русский
+    "qwen/qwen3-next-80b-a3b-instruct",       # 4. Qwen от Alibaba, отличный русский
+    "nvidia/nemotron-3-nano-30b-a3b",         # 5. NVIDIA, хороший русский, быстрая
 ]
 
 # ========== ПАМЯТЬ ДИАЛОГОВ ==========
@@ -144,9 +138,9 @@ IP-АДРЕСА:
 Игрок: {username}
 Текущая дата: {current_time}
 
-Важно: НЕ используй HTML теги в ответе! Только текст и обычные эмодзи. Эмодзи ставь в конце ответа."""
+ОТВЕЧАЙ ТОЛЬКО НА РУССКОМ ЯЗЫКЕ! НЕ используй HTML теги в ответе! Только текст и обычные эмодзи. Эмодзи ставь в конце ответа."""
 
-# ========== ЗАПРОС К КОНКРЕТНОЙ МОДЕЛИ ==========
+# ========== ЗАПРОС К МОДЕЛИ ==========
 async def ask_model(model: str, system_prompt: str, user_prompt: str) -> tuple[str, bool]:
     """Отправляет запрос к модели. Возвращает (ответ, успех)"""
     try:
@@ -165,12 +159,12 @@ async def ask_model(model: str, system_prompt: str, user_prompt: str) -> tuple[s
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt}
                     ],
-                    "max_tokens": 200,
-                    "temperature": 0.85,
+                    "max_tokens": 250,
+                    "temperature": 0.9,
                     "top_p": 0.95,
                     "stream": False
                 },
-                timeout=aiohttp.ClientTimeout(total=25)
+                timeout=aiohttp.ClientTimeout(total=30)
             ) as response:
                 
                 if response.status == 200:
@@ -179,19 +173,19 @@ async def ask_model(model: str, system_prompt: str, user_prompt: str) -> tuple[s
                     return result, True
                 else:
                     error_text = await response.text()
-                    print(f"❌ Модель {model} ошибка {response.status}: {error_text[:100]}")
+                    print(f"❌ Модель {model} ошибка {response.status}")
                     return "", False
                     
     except asyncio.TimeoutError:
         print(f"⏰ Модель {model} таймаут")
         return "", False
     except Exception as e:
-        print(f"⚠️ Модель {model} исключение: {e}")
+        print(f"⚠️ Модель {model} ошибка: {e}")
         return "", False
 
-# ========== ОСНОВНАЯ ФУНКЦИЯ С ЦЕПОЧКОЙ МОДЕЛЕЙ ==========
+# ========== ОСНОВНАЯ ФУНКЦИЯ ==========
 async def get_enderia_response(user_message: str, username: str) -> str:
-    """Получить ответ от Эндерии с автоматическим переключением моделей"""
+    """Получить ответ от Эндерии с переключением между топ-5 моделями"""
     
     current_time = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
     context = get_user_context(username)
@@ -220,22 +214,26 @@ async def get_enderia_response(user_message: str, username: str) -> str:
 
 Игрок {username} написал: {user_message}
 
-Ответь как Эндерия (2-4 предложения). В конце ответа поставь эмодзи (🐱💜🐰). Не используй HTML теги!"""
+Ответь как Эндерия (2-4 предложения). В конце ответа поставь эмодзи (🐱💜🐰). Не используй HTML теги! ОТВЕЧАЙ ТОЛЬКО НА РУССКОМ ЯЗЫКЕ!"""
 
     system_prompt = get_system_prompt(username, current_time)
     
-    # Пробуем топовые модели
-    all_models = MODELS_CHAIN + FALLBACK_MODELS
-    
-    for model_index, model in enumerate(all_models):
-        print(f"🔄 [{model_index + 1}/{len(all_models)}] Модель: {model}")
+    # Пробуем модели по очереди
+    for model_index, model in enumerate(MODELS_CHAIN):
+        print(f"🔄 [{model_index + 1}/{len(MODELS_CHAIN)}] Пробуем {model}")
         
         result, success = await ask_model(model, system_prompt, full_prompt)
         
         if success and result and len(result) > 10:
-            print(f"✅ УСПЕХ! Модель {model} ответила!")
+            # Проверяем, что ответ на русском (хотя бы есть русские буквы)
+            has_russian = any(ord(c) > 1024 for c in result)
+            if not has_russian:
+                print(f"⚠️ Модель {model} ответила не на русском, пробуем дальше")
+                continue
+                
+            print(f"✅ УСПЕХ! Модель {model} ответила по-русски!")
             
-            # Убираем все HTML теги из ответа ИИ
+            # Убираем все HTML теги
             result = re.sub(r'<[^>]+>', '', result)
             
             # Добавляем эмодзи если их нет
@@ -249,17 +247,15 @@ async def get_enderia_response(user_message: str, username: str) -> str:
             add_to_memory(username, user_message, result)
             return result
         
-        # Небольшая задержка перед следующей моделью
         await asyncio.sleep(0.3)
     
-    # Если все модели отказали
-    print("❌ КРИТИЧНО: Все модели не ответили!")
+    # Если все модели не ответили по-русски
+    print("❌ Все модели не ответили по-русски!")
     fallbacks = [
         f"{get_enderia_emojis()} {username}, связь с Краем потеряна! Повтори позже 💜",
         f"{get_enderia_emojis()} {username}, на LostEarth есть два режима: Мирный (PvP по согласию) и SMP (можно рейдить)! 🐱",
         f"{get_enderia_emojis()} {username}, IP Java: 150.241.85.40:25565, Bedrock: 19132. Заходи играть! 🐰",
         f"{get_enderia_emojis()} {username}, донаты: Друид 50₽, Оракул 100₽, Монарх 200₽, Херувим 300₽, Архонт 400₽, Серафим 600₽ 💜",
-        f"{get_enderia_emojis()} {username}, админ: @pelmewki379, пиши по любым вопросам! 🐱",
     ]
     fallback = random.choice(fallbacks)
     add_to_memory(username, user_message, fallback)
