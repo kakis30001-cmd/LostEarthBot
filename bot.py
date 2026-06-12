@@ -14,8 +14,16 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from dotenv import load_dotenv
 from flask import Flask, send_from_directory
 
-from enderia import get_enderia_response, should_respond, clear_user_memory, get_memory_size, set_server_online, add_to_chat_memory, get_chat_context
-from prompts import ENDERIA_EMOJI, emoji, get_enderia_emojis
+from enderia import (
+    get_enderia_response, 
+    should_respond, 
+    clear_user_memory, 
+    get_memory_size, 
+    set_server_online, 
+    add_to_chat_memory, 
+    get_chat_context
+)
+from prompts import get_enderia_emojis
 
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv("BOT_TOKEN")
@@ -47,7 +55,7 @@ def run_flask():
 bot = Bot(token=TELEGRAM_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
-# ========== ПРЕМИУМ ЭМОДЗИ ДЛЯ ТЕКСТА И КНОПОК ==========
+# ========== ПРЕМИУМ ЭМОДЗИ ==========
 PREMIUM_EMOJI = {
     "door": "5873147866364514353",
     "note": "5870930744116776638",
@@ -163,61 +171,25 @@ async def get_server_online():
     set_server_online(online, max_players)
     return online, max_players
 
-# ========== КЛАВИАТУРЫ С ПРЕМИУМ ЭМОДЗИ (ПРАВИЛЬНЫЙ СИНТАКСИС) ==========
+# ========== КЛАВИАТУРЫ ==========
 def get_main_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(
-                text=f"{premium_emoji(PREMIUM_EMOJI['door'], '🚪')} IP И ОНЛАЙН", 
-                callback_data="menu_ip"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=f"{premium_emoji(PREMIUM_EMOJI['note'], '📜')} ПРАВИЛА", 
-                web_app=WebAppInfo(url=RULES_URL)
-            ),
-            InlineKeyboardButton(
-                text=f"{premium_emoji(PREMIUM_EMOJI['rabbit_fly'], '📝')} ЗАЯВКА", 
-                web_app=WebAppInfo(url=APPLY_URL)
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=f"{premium_emoji(PREMIUM_EMOJI['cat_dance'], '💎')} ПРЕМИУМ", 
-                callback_data="menu_premium"
-            ),
-            InlineKeyboardButton(
-                text=f"{premium_emoji(PREMIUM_EMOJI['heart'], '💜')} ЭНДЕРИЯ", 
-                callback_data="menu_enderia"
-            )
-        ]
+        [InlineKeyboardButton(text=f"{premium_emoji(PREMIUM_EMOJI['door'], '🚪')} IP И ОНЛАЙН", callback_data="menu_ip")],
+        [InlineKeyboardButton(text=f"{premium_emoji(PREMIUM_EMOJI['note'], '📜')} ПРАВИЛА", web_app=WebAppInfo(url=RULES_URL)),
+         InlineKeyboardButton(text=f"{premium_emoji(PREMIUM_EMOJI['rabbit_fly'], '📝')} ЗАЯВКА", web_app=WebAppInfo(url=APPLY_URL))],
+        [InlineKeyboardButton(text=f"{premium_emoji(PREMIUM_EMOJI['cat_dance'], '💎')} ПРЕМИУМ", callback_data="menu_premium"),
+         InlineKeyboardButton(text=f"{premium_emoji(PREMIUM_EMOJI['heart'], '💜')} ЭНДЕРИЯ", callback_data="menu_enderia")]
     ])
 
 def get_ip_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(
-                text=f"{premium_emoji(PREMIUM_EMOJI['check'], '🔄')} ОБНОВИТЬ", 
-                callback_data="refresh_online"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=f"{premium_emoji(PREMIUM_EMOJI['back'], '◀️')} НАЗАД", 
-                callback_data="menu_main"
-            )
-        ]
+        [InlineKeyboardButton(text=f"{premium_emoji(PREMIUM_EMOJI['check'], '🔄')} ОБНОВИТЬ", callback_data="refresh_online")],
+        [InlineKeyboardButton(text=f"{premium_emoji(PREMIUM_EMOJI['back'], '◀️')} НАЗАД", callback_data="menu_main")]
     ])
 
 def get_back_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(
-                text=f"{premium_emoji(PREMIUM_EMOJI['back'], '◀️')} НАЗАД", 
-                callback_data="menu_main"
-            )
-        ]
+        [InlineKeyboardButton(text=f"{premium_emoji(PREMIUM_EMOJI['back'], '◀️')} НАЗАД", callback_data="menu_main")]
     ])
 
 # ========== ХЕНДЛЕРЫ ==========
@@ -233,12 +205,6 @@ async def start_cmd(message: Message):
 
 {premium_emoji(PREMIUM_EMOJI['joystick'], '📊')} <b>Текущий онлайн:</b> {online}/{max_players}
 
-{premium_emoji(PREMIUM_EMOJI['magic'], '💜')} <b>Что я умею:</b>
-• Отвечать на вопросы о сервере
-• Рассказывать про режимы игры и донаты
-• Запоминать наш диалог
-• Читать последние сообщения в чате
-
 {random_cat()} <b>Просто напиши моё имя:</b> Энди, Эндерия, Эндер
 
 {get_enderia_emojis()}"""
@@ -247,14 +213,8 @@ async def start_cmd(message: Message):
 @dp.message(Command("online"))
 async def cmd_online(message: Message):
     online, max_players = await get_server_online()
-    status = "🟢 ОНЛАЙН" if online > 0 else "🔴 ОФФЛАЙН"
     await message.answer(
-        f"{premium_emoji(PREMIUM_EMOJI['joystick'], '📊')} <b>Статус сервера LostEarth</b>\n\n"
-        f"📡 {status}\n"
-        f"👥 Игроков онлайн: <b>{online}/{max_players}</b>\n\n"
-        f"💻 Java IP: <code>{SERVER['java_ip']}:{SERVER['java_port']}</code>\n"
-        f"📱 Bedrock IP: <code>{SERVER['bedrock_ip']}:{SERVER['bedrock_port']}</code>\n\n"
-        f"{random_rabbit()} <i>Приятной игры!</i>", 
+        f"{premium_emoji(PREMIUM_EMOJI['joystick'], '📊')} <b>Онлайн: {online}/{max_players}</b>", 
         parse_mode="HTML"
     )
 
@@ -263,56 +223,16 @@ async def stats_cmd(message: Message):
     username = message.from_user.first_name or "Игрок"
     size = get_memory_size(username)
     if size > 0:
-        await message.answer(
-            f"{random_cat()} <b>{username}, я помню наш диалог!</b>\n\n"
-            f"📊 Запомнено сообщений: {size}\n"
-            f"💜 Могу ответить на любые вопросы по LostEarth!\n\n"
-            f"✨ Если хочешь очистить память - напиши /clear_memory",
-            parse_mode="HTML"
-        )
+        await message.answer(f"{random_cat()} <b>{username}, я помню наш диалог!</b>\n\n📊 Запомнено сообщений: {size}\n✨ Очистить память: /clear_memory", parse_mode="HTML")
     else:
-        await message.answer(
-            f"{random_heart()} <b>{username}, мы ещё не общались!</b>\n\n"
-            f"📝 Напиши что-нибудь с моим именем (Энди, Эндерия, Эндер)\n"
-            f"🐱 И я запомню наш разговор!",
-            parse_mode="HTML"
-        )
+        await message.answer(f"{random_heart()} <b>{username}, мы ещё не общались!</b>\n\n📝 Напиши Энди или ответь на моё сообщение", parse_mode="HTML")
 
 @dp.message(Command("clear_memory"))
 async def clear_memory_cmd(message: Message):
     username = message.from_user.first_name or "Игрок"
     old_size = get_memory_size(username)
     clear_user_memory(username)
-    await message.answer(
-        f"{random_cat()} ✨ <b>Память очищена!</b>\n\n"
-        f"📊 Было запомнено: {old_size} сообщений\n"
-        f"💜 Теперь можем начать разговор заново!",
-        parse_mode="HTML"
-    )
-
-@dp.message(Command("help"))
-async def help_cmd(message: Message):
-    text = f"""{random_heart()} <b>Помощь по боту LostEarth</b>
-
-<b>🔹 Команды:</b>
-/start - Главное меню
-/online - Показать онлайн сервера
-/stats - Статистика диалога со мной
-/clear_memory - Очистить память
-/help - Эта справка
-
-<b>🔹 Как со мной общаться:</b>
-• Напиши моё имя: Энди, Эндерия, Эндер
-• Или ответь на моё сообщение
-
-<b>🔹 Что я знаю:</b>
-• IP сервера (Java и Bedrock)
-• Режимы игры (Мирный и SMP)
-• Донаты и цены
-• Правила сервера
-
-{random_cat()} <i>Задавай любые вопросы!</i>"""
-    await message.answer(text, parse_mode="HTML")
+    await message.answer(f"{random_cat()} ✨ <b>Память очищена!</b>\n\n📊 Было запомнено: {old_size} сообщений", parse_mode="HTML")
 
 @dp.message()
 async def handle_message(message: Message):
@@ -322,28 +242,15 @@ async def handle_message(message: Message):
     username = message.from_user.first_name or "Игрок"
     user_message = message.text
     
-    # Сохраняем сообщение в общий чат-память
     add_to_chat_memory(username, user_message)
     
-    # Проверяем, обращаются ли к Эндерии по имени
     is_mentioned = should_respond(user_message)
-    
-    # Проверяем, не является ли это ответом на сообщение Эндерии
     is_reply_to_bot = (message.reply_to_message and message.reply_to_message.from_user.id == bot.id)
     
-    # Если обратились по имени ИЛИ ответили на сообщение бота
     if is_mentioned or is_reply_to_bot:
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
-        
-        # Получаем контекст чата
         chat_context = get_chat_context()
-        
-        response = await get_enderia_response(
-            user_message, 
-            username, 
-            is_reply=is_reply_to_bot,
-            chat_context=chat_context
-        )
+        response = await get_enderia_response(user_message, username, is_reply=is_reply_to_bot, chat_context=chat_context)
         if response:
             await message.reply(response, parse_mode="HTML")
 
@@ -355,73 +262,34 @@ async def safe_callback_answer(callback: CallbackQuery, text: str = None, show_a
         else:
             await callback.answer()
     except Exception as e:
-        if "query is too old" in str(e):
-            print(f"[WARN] Устаревший callback")
+        if "query is too old" not in str(e):
+            print(f"[ERROR] {e}")
 
 @dp.callback_query(lambda c: c.data == "menu_main")
 async def menu_main(callback: CallbackQuery):
     online, max_players = await get_server_online()
-    text = f"""{premium_emoji(PREMIUM_EMOJI['magic'], '✨')} <b>Главное меню LostEarth</b>
-
-{premium_emoji(PREMIUM_EMOJI['joystick'], '📊')} Онлайн: {online}/{max_players}
-
-{random_cat()} <b>Эндерия всегда рядом!</b>
-Напиши моё имя или ответь на моё сообщение
-
-{premium_emoji(PREMIUM_EMOJI['cat_ok'], '💜')} <b>Доступные команды:</b>
-/online - онлайн сервера
-/stats - статистика диалога
-/clear_memory - очистить память
-/help - помощь"""
+    text = f"""{premium_emoji(PREMIUM_EMOJI['magic'], '✨')} <b>Главное меню</b>\n\n📊 Онлайн: {online}/{max_players}\n\n{random_cat()} Напиши моё имя или ответь на сообщение"""
     try:
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_main_keyboard())
     except Exception as e:
-        print(f"[ERROR] menu_main edit: {e}")
+        print(f"[ERROR] {e}")
     await safe_callback_answer(callback)
 
 @dp.callback_query(lambda c: c.data == "menu_ip")
 async def menu_ip(callback: CallbackQuery):
     online, max_players = await get_server_online()
-    status = "🟢 ONLINE" if online > 0 else "🔴 OFFLINE"
-    text = f"""{premium_emoji(PREMIUM_EMOJI['crown'], '👑')} <b>LOSTEARTH</b> | {status}
-
-{premium_emoji(PREMIUM_EMOJI['joystick'], '📊')} <b>Онлайн:</b> {online}/{max_players}
-
-💻 <b>JAVA EDITION:</b>
-<code>{SERVER['java_ip']}:{SERVER['java_port']}</code>
-
-📱 <b>BEDROCK EDITION:</b>
-<code>{SERVER['bedrock_ip']}:{SERVER['bedrock_port']}</code>
-
-📦 <b>Версия:</b> {SERVER['java_versions']}
-
-{random_rabbit()} <i>Приятной игры!</i>
-
-{premium_emoji(PREMIUM_EMOJI['heart'], '💜')} По всем вопросам: @pelmewki379"""
+    text = f"""👑 <b>LOSTEARTH</b>\n\n💻 Java: <code>{SERVER['java_ip']}:{SERVER['java_port']}</code>\n📱 Bedrock: <code>{SERVER['bedrock_ip']}:{SERVER['bedrock_port']}</code>\n📊 Онлайн: {online}/{max_players}\n\n{random_rabbit()} Приятной игры!"""
     last_online_data[callback.message.chat.id] = {"online": online, "max": max_players}
     try:
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_ip_keyboard())
     except Exception as e:
-        print(f"[ERROR] menu_ip edit: {e}")
+        print(f"[ERROR] {e}")
     await safe_callback_answer(callback)
 
 @dp.callback_query(lambda c: c.data == "refresh_online")
 async def refresh_online(callback: CallbackQuery):
     online, max_players = await get_server_online()
-    status = "🟢 ONLINE" if online > 0 else "🔴 OFFLINE"
-    text = f"""{premium_emoji(PREMIUM_EMOJI['crown'], '👑')} <b>LOSTEARTH</b> | {status}
-
-{premium_emoji(PREMIUM_EMOJI['joystick'], '📊')} <b>Онлайн:</b> {online}/{max_players}
-
-💻 <b>JAVA EDITION:</b>
-<code>{SERVER['java_ip']}:{SERVER['java_port']}</code>
-
-📱 <b>BEDROCK EDITION:</b>
-<code>{SERVER['bedrock_ip']}:{SERVER['bedrock_port']}</code>
-
-📦 <b>Версия:</b> {SERVER['java_versions']}
-
-{random_rabbit()} <i>Приятной игры!</i>"""
+    text = f"""👑 <b>LOSTEARTH</b>\n\n💻 Java: <code>{SERVER['java_ip']}:{SERVER['java_port']}</code>\n📱 Bedrock: <code>{SERVER['bedrock_ip']}:{SERVER['bedrock_port']}</code>\n📊 Онлайн: {online}/{max_players}\n\n{random_rabbit()} Приятной игры!"""
     chat_id = callback.message.chat.id
     last_data = last_online_data.get(chat_id, {})
     if last_data.get("online") == online and last_data.get("max") == max_players:
@@ -437,52 +305,20 @@ async def refresh_online(callback: CallbackQuery):
 
 @dp.callback_query(lambda c: c.data == "menu_premium")
 async def menu_premium(callback: CallbackQuery):
-    text = f"""{premium_emoji(PREMIUM_EMOJI['cat_money'], '💎')} <b>ПРЕМИУМ ДОСТУП LOSTEARTH</b>
-
-{premium_emoji(PREMIUM_EMOJI['magic'], '🌿')} <b>Друид</b> - 25грн / 50₽
-{premium_emoji(PREMIUM_EMOJI['cat_glasses'], '🔮')} <b>Оракул</b> - 50грн / 100₽
-{premium_emoji(PREMIUM_EMOJI['crown'], '👑')} <b>Монарх</b> - 100грн / 200₽
-{premium_emoji(PREMIUM_EMOJI['rabbit_fly'], '🪽')} <b>Херувим</b> - 150грн / 300₽
-{premium_emoji(PREMIUM_EMOJI['house'], '🏛️')} <b>Архонт</b> - 200грн / 400₽
-{premium_emoji(PREMIUM_EMOJI['cat_dance'], '😇')} <b>Серафим</b> - 300грн / 600₽
-
-<i>Все донаты включают префикс в чате и набор команд</i>
-
-{premium_emoji(PREMIUM_EMOJI['microphone'], '📩')} <b>По вопросам доната:</b> @pelmewki379
-
-{random_cat()} <i>Хочешь полёт? Бери Херувима или выше!</i>"""
+    text = f"""💎 <b>ПРЕМИУМ ДОСТУП</b>\n\n🌿 Друид - 50₽\n🔮 Оракул - 100₽\n👑 Монарх - 200₽\n🪽 Херувим - 300₽\n🏛️ Архонт - 400₽\n😇 Серафим - 600₽\n\n📩 @pelmewki379"""
     try:
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_back_keyboard())
     except Exception as e:
-        print(f"[ERROR] menu_premium edit: {e}")
+        print(f"[ERROR] {e}")
     await safe_callback_answer(callback)
 
 @dp.callback_query(lambda c: c.data == "menu_enderia")
 async def menu_enderia(callback: CallbackQuery):
-    text = f"""{random_heart()} <b>Эндерия - твой живой помощник</b>
-
-{random_cat()} <b>Кто я?</b>
-Я девушка-эндермен, хранительница Края. Обожаю телепортироваться, котиков и аниме!
-
-{premium_emoji(PREMIUM_EMOJI['microphone'], '💬')} <b>Как ко мне обратиться:</b>
-• Напиши: Эндер, Эндерия, Энди, Ендер
-• Или ответь на моё сообщение
-
-{premium_emoji(PREMIUM_EMOJI['magic'], '📋')} <b>Что я знаю:</b>
-• Всё о сервере LostEarth
-• IP и онлайн
-• Режимы игры (Мирный и SMP)
-• Донаты и цены
-
-{premium_emoji(PREMIUM_EMOJI['cat_ok'], '🔹')} <b>Команды:</b>
-/stats - статистика диалога
-/clear_memory - очистить память
-
-{random_rabbit()} <i>Просто позови меня по имени, и я отвечу!</i>"""
+    text = f"""{random_heart()} <b>Эндерия</b>\n\n{random_cat()} Я девушка-эндермен из LostEarth!\n\n💬 Напиши: Эндер, Эндерия, Энди\n\n{random_rabbit()} Позови меня!"""
     try:
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_back_keyboard())
     except Exception as e:
-        print(f"[ERROR] menu_enderia edit: {e}")
+        print(f"[ERROR] {e}")
     await safe_callback_answer(callback)
 
 # ========== ЗАПУСК ==========
@@ -491,13 +327,17 @@ async def main():
     flask_thread = Thread(target=run_flask, daemon=True)
     flask_thread.start()
     
+    # Получаем информацию о боте
+    bot_info = await bot.get_me()
+    
     print("=" * 50)
     print("🚀 БОТ LOSTEARTH ЗАПУЩЕН")
     print(f"🎨 Премиум эмодзи загружено: {len(PREMIUM_EMOJI)}")
-    print(f"🤖 Бот @{bot.username} запущен")
+    print(f"🤖 Бот: @{bot_info.username}")
+    print(f"📊 ID бота: {bot_info.id}")
     print("=" * 50)
     
-    # Запускаем бота с обработкой конфликта
+    # Запускаем бота
     try:
         await dp.start_polling(bot)
     except Exception as e:
