@@ -19,9 +19,11 @@ from enderia import (
     should_respond, 
     clear_user_memory, 
     get_memory_size, 
-    set_server_online
+    set_server_online,
+    add_to_chat_memory,
+    get_chat_context
 )
-from prompts import get_enderia_emojis
+from prompts import get_enderia_emojis, ENDERIA_EMOJI, emoji
 
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv("BOT_TOKEN")
@@ -90,6 +92,9 @@ def random_rabbit():
 def random_heart():
     return premium_emoji(PREMIUM_EMOJI["heart"], "💜")
 
+def random_anime():
+    return premium_emoji(PREMIUM_EMOJI["anime_dance"], "💃")
+
 # ========== КОНФИГУРАЦИЯ ==========
 SERVER = {
     "name": "LostEarth",
@@ -109,140 +114,71 @@ online_cache = {}
 last_update = {}
 last_online_data = {}
 
-# ========== MINECRAFT API (ИСПРАВЛЕННЫЙ) ==========
+# ========== MINECRAFT API (упрощённый) ==========
 async def get_java_status(ip: str, port: int = 25565):
-    """Получает статус Java сервера через Server List Ping (SLP) протокол"""
+    """Получает статус Java сервера"""
     try:
-        # Создаём сокет с таймаутом
+        print(f"🔍 Проверяю сервер {ip}:{port}...")
+        
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(5)  # Увеличен таймаут до 5 секунд
+        sock.settimeout(5)
         
-        # Подключаемся
         sock.connect((ip, port))
+        print(f"✅ Подключился к {ip}:{port}")
         
-        # Формируем handshake пакет (протокол 754 = 1.21+)
-        # packet ID 0x00 (Handshake)
-        handshake = bytearray()
-        handshake.append(0x00)  # Packet ID
+        # Отправляем запрос статуса
+        request = bytearray()
+        request.append(0x00)
+        request.extend(struct.pack('>i', 0))
+        request.append(len(ip))
+        request.extend(ip.encode())
+        request.extend(struct.pack('>H', port))
+        request.append(0x01)
         
-        # Protocol version (754 = 1.21, 767 = 1.21.1, 770 = 1.21.3)
-        # Используем 754 как базовый
-        protocol = 754
-        handshake.extend(struct.pack('>i', protocol))  # VarInt как int
+        sock.send(struct.pack('>i', len(request)))
+        sock.send(request)
+        sock.send(b'\x00\x00')
         
-        # Server address
-        host_bytes = ip.encode('utf-8')
-        handshake.append(len(host_bytes))
-        handshake.extend(host_bytes)
-        
-        # Server port
-        handshake.extend(struct.pack('>H', port))
-        
-        # Next state: 1 for status
-        handshake.append(0x01)
-        
-        # Отправляем handshake с правильным префиксом длины
-        packet_length = len(handshake)
-        sock.send(struct.pack('>i', packet_length))  # Длина пакета как int
-        sock.send(handshake)
-        
-        # Отправляем запрос статуса (packet ID 0x00)
-        sock.send(b'\x00\x00')  # Длина 0, packet ID 0
-        
-        # Читаем длину ответа
         data = sock.recv(1024)
-        if not data:
-            sock.close()
-            return 0, 0
-        
-        # Распарсить VarInt длину
-        data = data[1:]  # Пропускаем первый байт (длина пакета)
-        
-        # Ищем начало JSON
-        json_start = data.find(b'{')
-        if json_start == -1:
-            sock.close()
-            return 0, 0
-        
-        json_data = data[json_start:].decode('utf-8', errors='ignore')
-        players = json.loads(json_data).get("players", {})
-        
         sock.close()
         
-        online = players.get("online", 0)
-        max_players = players.get("max", 0)
+        data_str = data.decode('utf-8', errors='ignore')
+        json_start = data_str.find('{')
+        if json_start != -1:
+            json_end = data_str.rfind('}') + 1
+            json_data = json.loads(data_str[json_start:json_end])
+            players = json_data.get("players", {})
+            online = players.get("online", 0)
+            max_players = players.get("max", 0)
+            print(f"📊 Онлайн: {online}/{max_players}")
+            return online, max_players
         
-        print(f"📊 Статус сервера {ip}:{port} - Онлайн: {online}/{max_players}")
-        return online, max_players
+        print("❌ Не удалось найти JSON в ответе")
+        return 0, 0
         
     except socket.timeout:
-        print(f"⏰ Таймаут подключения к {ip}:{port}")
+        print(f"⏰ Таймаут {ip}:{port}")
         return 0, 0
     except ConnectionRefusedError:
-        print(f"🔌 Отказ соединения {ip}:{port} - сервер не запущен")
+        print(f"🔌 Отказ соединения {ip}:{port}")
         return 0, 0
     except Exception as e:
-        print(f"❌ Ошибка получения статуса {ip}:{port}: {e}")
-        return 0, 0
-
-async def get_bedrock_status(ip: str, port: int = 19132):
-    """Получает статус Bedrock сервера (простой ping)"""
-    try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.settimeout(3)
-        
-        # Bedrock ping запрос (Unconnected Ping)
-        # 0x01 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 + random 8 bytes
-        ping_data = bytearray([0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
-        # Добавляем случайные байты
-        for _ in range(8):
-            ping_data.append(random.randint(0, 255))
-        
-        sock.sendto(ping_data, (ip, port))
-        
-        try:
-            data, addr = sock.recvfrom(2048)
-            sock.close()
-            # Если получили ответ - сервер работает
-            # Для Bedrock сложно получить точный онлайн без полного парсинга
-            return 1, 100  # Возвращаем 1 как индикатор что сервер жив
-        except:
-            sock.close()
-            return 0, 0
-    except Exception as e:
-        print(f"❌ Bedrock ошибка: {e}")
+        print(f"❌ Ошибка: {e}")
         return 0, 0
 
 async def get_server_online():
-    """Возвращает онлайн сервера (с кэшированием)"""
+    """Возвращает онлайн сервера"""
     now = datetime.now().timestamp()
     
-    # Кэш на 30 секунд
     if "online" in last_update and now - last_update["online"] < 30:
-        cached_online = online_cache.get("online", 0)
-        cached_max = online_cache.get("max", 0)
-        print(f"📦 Кэш: онлайн {cached_online}/{cached_max}")
-        return cached_online, cached_max
+        return online_cache.get("online", 0), online_cache.get("max", 0)
     
-    print("🔄 Обновление статуса сервера...")
-    
-    # Пробуем получить статус
     online, max_players = await get_java_status(SERVER["java_ip"], SERVER["java_port"])
     
-    # Если не удалось получить онлайн - проверяем Bedrock как запасной вариант
-    if online == 0:
-        bedrock_online, _ = await get_bedrock_status(SERVER["bedrock_ip"], SERVER["bedrock_port"])
-        if bedrock_online > 0:
-            # Сервер жив, но Java статус не получен
-            online = 1  # Хотя бы показываем что сервер онлайн
-            max_players = 100  # Примерное значение
-    
-    # Сохраняем в кэш
     online_cache["online"] = online
     online_cache["max"] = max_players
     last_update["online"] = now
     
-    # Обновляем для Эндерии
     set_server_online(online, max_players)
     
     print(f"📊 Итоговый онлайн: {online}/{max_players}")
@@ -280,50 +216,70 @@ async def start_cmd(message: Message):
 
 {random_cat()} <b>Я Эндерия - твой живой помощник!</b>
 
-📊 <b>Текущий онлайн:</b> {online}/{max_players}
+{premium_emoji(PREMIUM_EMOJI['joystick'], '📊')} <b>Текущий онлайн:</b> {online}/{max_players}
 
-🐱 <b>Просто напиши моё имя или ответь на моё сообщение!</b>
+{random_cat()} <b>Просто напиши моё имя:</b> Энди, Эндерия, Эндер
 
-{get_enderia_emojis()}"""
+{random_heart()} {random_rabbit()} {random_anime()} {get_enderia_emojis()}"""
     await message.answer(text, parse_mode="HTML", reply_markup=get_main_keyboard())
 
 @dp.message(Command("online"))
 async def cmd_online(message: Message):
     online, max_players = await get_server_online()
-    await message.answer(f"📊 <b>Онлайн: {online}/{max_players}</b>", parse_mode="HTML")
+    await message.answer(
+        f"{premium_emoji(PREMIUM_EMOJI['joystick'], '📊')} <b>Онлайн: {online}/{max_players}</b> {random_cat()}", 
+        parse_mode="HTML"
+    )
 
 @dp.message(Command("stats"))
 async def stats_cmd(message: Message):
     username = message.from_user.first_name or "Игрок"
     size = get_memory_size(username)
     if size > 0:
-        await message.answer(f"{random_cat()} <b>{username}, я помню наш диалог!</b>\n\n📊 Запомнено сообщений: {size}\n✨ Очистить память: /clear_memory", parse_mode="HTML")
+        await message.answer(
+            f"{random_cat()} <b>{username}, я помню наш диалог!</b>\n\n"
+            f"📊 Запомнено сообщений: {size}\n"
+            f"{random_heart()} Очистить память: /clear_memory\n"
+            f"{random_rabbit()} Продолжай общаться!",
+            parse_mode="HTML"
+        )
     else:
-        await message.answer(f"{random_heart()} <b>{username}, мы ещё не общались!</b>\n\n📝 Напиши Энди или ответь на моё сообщение", parse_mode="HTML")
+        await message.answer(
+            f"{random_heart()} <b>{username}, мы ещё не общались!</b>\n\n"
+            f"{random_cat()} Напиши Энди или ответь на моё сообщение\n"
+            f"{random_rabbit()} Буду рада познакомиться!",
+            parse_mode="HTML"
+        )
 
 @dp.message(Command("clear_memory"))
 async def clear_memory_cmd(message: Message):
     username = message.from_user.first_name or "Игрок"
     old_size = get_memory_size(username)
     clear_user_memory(username)
-    await message.answer(f"{random_cat()} ✨ <b>Память очищена!</b>\n\n📊 Было запомнено: {old_size} сообщений", parse_mode="HTML")
+    await message.answer(
+        f"{random_cat()} ✨ <b>Память очищена!</b>\n\n"
+        f"📊 Было запомнено: {old_size} сообщений\n"
+        f"{random_heart()} Теперь можем начать заново!",
+        parse_mode="HTML"
+    )
 
 @dp.message(Command("help"))
 async def help_cmd(message: Message):
     text = f"""{random_heart()} <b>Помощь по боту LostEarth</b>
 
-<b>🔹 Команды:</b>
+{premium_emoji(PREMIUM_EMOJI['magic'], '🔹')} <b>Команды:</b>
 /start - Главное меню
 /online - Показать онлайн
 /stats - Статистика диалога
 /clear_memory - Очистить память
 /help - Справка
 
-<b>🔹 Как общаться:</b>
+{random_cat()} <b>Как общаться:</b>
 Напиши: Энди, Эндерия, Эндер
 Или просто ответь на моё сообщение
 
-{random_cat()} <i>Задавай вопросы!</i>"""
+{random_rabbit()} <i>Задавай вопросы!</i>
+{random_anime()}"""
     await message.answer(text, parse_mode="HTML")
 
 @dp.message()
@@ -334,6 +290,8 @@ async def handle_message(message: Message):
     username = message.from_user.first_name or "Игрок"
     user_message = message.text
     
+    add_to_chat_memory(username, user_message, is_bot=False)
+    
     is_mentioned = should_respond(user_message)
     is_reply_to_bot = (message.reply_to_message and message.reply_to_message.from_user.id == bot.id)
     
@@ -342,6 +300,7 @@ async def handle_message(message: Message):
         response = await get_enderia_response(user_message, username, is_reply=is_reply_to_bot)
         if response:
             await message.reply(response, parse_mode="HTML")
+            add_to_chat_memory(username, response, is_bot=True)
 
 # ========== КОЛБЭКИ ==========
 async def safe_callback_answer(callback: CallbackQuery, text: str = None, show_alert: bool = False):
@@ -357,7 +316,13 @@ async def safe_callback_answer(callback: CallbackQuery, text: str = None, show_a
 @dp.callback_query(lambda c: c.data == "menu_main")
 async def menu_main(callback: CallbackQuery):
     online, max_players = await get_server_online()
-    text = f"""✨ <b>Главное меню</b>\n\n📊 Онлайн: {online}/{max_players}\n\n🐱 Напиши моё имя или ответь на сообщение"""
+    text = f"""{premium_emoji(PREMIUM_EMOJI['magic'], '✨')} <b>Главное меню</b>
+
+{premium_emoji(PREMIUM_EMOJI['joystick'], '📊')} Онлайн: {online}/{max_players}
+
+{random_cat()} Напиши моё имя или ответь на сообщение
+
+{random_heart()} {random_rabbit()}"""
     try:
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_main_keyboard())
     except Exception as e:
@@ -367,7 +332,14 @@ async def menu_main(callback: CallbackQuery):
 @dp.callback_query(lambda c: c.data == "menu_ip")
 async def menu_ip(callback: CallbackQuery):
     online, max_players = await get_server_online()
-    text = f"""👑 <b>LOSTEARTH</b>\n\n💻 Java: <code>{SERVER['java_ip']}:{SERVER['java_port']}</code>\n📱 Bedrock: <code>{SERVER['bedrock_ip']}:{SERVER['bedrock_port']}</code>\n📊 Онлайн: {online}/{max_players}\n\n🐰 Приятной игры!"""
+    text = f"""{premium_emoji(PREMIUM_EMOJI['crown'], '👑')} <b>LOSTEARTH</b>
+
+{premium_emoji(PREMIUM_EMOJI['joystick'], '💻')} <b>JAVA:</b> <code>{SERVER['java_ip']}:{SERVER['java_port']}</code>
+{premium_emoji(PREMIUM_EMOJI['rabbit_fly'], '📱')} <b>BEDROCK:</b> <code>{SERVER['bedrock_ip']}:{SERVER['bedrock_port']}</code>
+{premium_emoji(PREMIUM_EMOJI['check'], '📊')} <b>Онлайн:</b> {online}/{max_players}
+
+{random_rabbit()} <i>Приятной игры!</i>
+{random_heart()}"""
     last_online_data[callback.message.chat.id] = {"online": online, "max": max_players}
     try:
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_ip_keyboard())
@@ -377,28 +349,42 @@ async def menu_ip(callback: CallbackQuery):
 
 @dp.callback_query(lambda c: c.data == "refresh_online")
 async def refresh_online(callback: CallbackQuery):
-    # Принудительно очищаем кэш
-    last_update.clear()
     online_cache.clear()
+    last_update.clear()
     
     online, max_players = await get_server_online()
-    text = f"""👑 <b>LOSTEARTH</b>\n\n💻 Java: <code>{SERVER['java_ip']}:{SERVER['java_port']}</code>\n📱 Bedrock: <code>{SERVER['bedrock_ip']}:{SERVER['bedrock_port']}</code>\n📊 Онлайн: {online}/{max_players}\n\n🐰 Приятной игры!"""
+    text = f"""{premium_emoji(PREMIUM_EMOJI['crown'], '👑')} <b>LOSTEARTH</b>
+
+{premium_emoji(PREMIUM_EMOJI['joystick'], '💻')} <b>JAVA:</b> <code>{SERVER['java_ip']}:{SERVER['java_port']}</code>
+{premium_emoji(PREMIUM_EMOJI['rabbit_fly'], '📱')} <b>BEDROCK:</b> <code>{SERVER['bedrock_ip']}:{SERVER['bedrock_port']}</code>
+{premium_emoji(PREMIUM_EMOJI['check'], '📊')} <b>Онлайн:</b> {online}/{max_players}
+
+{random_rabbit()} <i>Приятной игры!</i>
+{random_heart()}"""
     chat_id = callback.message.chat.id
-    last_data = last_online_data.get(chat_id, {})
-    if last_data.get("online") == online and last_data.get("max") == max_players:
-        await safe_callback_answer(callback, "✨ Онлайн не изменился!", False)
-        return
     last_online_data[chat_id] = {"online": online, "max": max_players}
     try:
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_ip_keyboard())
         await safe_callback_answer(callback, "🔄 Онлайн обновлён!", False)
     except Exception as e:
-        if "message is not modified" in str(e):
-            await safe_callback_answer(callback, "✨ Онлайн не изменился!", False)
+        if "message is not modified" not in str(e):
+            print(f"[ERROR] {e}")
 
 @dp.callback_query(lambda c: c.data == "menu_premium")
 async def menu_premium(callback: CallbackQuery):
-    text = f"""💎 <b>ПРЕМИУМ ДОСТУП</b>\n\n🌿 Друид - 50₽\n🔮 Оракул - 100₽\n👑 Монарх - 200₽\n🪽 Херувим - 300₽\n🏛️ Архонт - 400₽\n😇 Серафим - 600₽\n\n📩 @pelmewki379"""
+    text = f"""{premium_emoji(PREMIUM_EMOJI['cat_money'], '💎')} <b>ПРЕМИУМ ДОСТУП</b>
+
+{premium_emoji(PREMIUM_EMOJI['magic'], '🌿')} <b>Друид</b> - 50₽
+{premium_emoji(PREMIUM_EMOJI['cat_glasses'], '🔮')} <b>Оракул</b> - 100₽
+{premium_emoji(PREMIUM_EMOJI['crown'], '👑')} <b>Монарх</b> - 200₽
+{premium_emoji(PREMIUM_EMOJI['rabbit_fly'], '🪽')} <b>Херувим</b> - 300₽ (полёт!)
+{premium_emoji(PREMIUM_EMOJI['house'], '🏛️')} <b>Архонт</b> - 400₽
+{premium_emoji(PREMIUM_EMOJI['cat_dance'], '😇')} <b>Серафим</b> - 600₽
+
+{premium_emoji(PREMIUM_EMOJI['microphone'], '📩')} <b>По вопросам:</b> @pelmewki379
+
+{random_cat()} <i>Хочешь полёт? Бери Херувима!</i>
+{random_heart()}"""
     try:
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_back_keyboard())
     except Exception as e:
@@ -407,7 +393,21 @@ async def menu_premium(callback: CallbackQuery):
 
 @dp.callback_query(lambda c: c.data == "menu_enderia")
 async def menu_enderia(callback: CallbackQuery):
-    text = f"""{random_heart()} <b>Эндерия</b>\n\n{random_cat()} Я девушка-эндермен из LostEarth!\n\n💬 Напиши: Эндер, Эндерия, Энди\n\n{random_rabbit()} Позови меня!"""
+    text = f"""{random_heart()} <b>Эндерия - твой живой помощник</b>
+
+{random_cat()} <b>Кто я?</b>
+Я девушка-эндермен, хранительница Края. Обожаю телепортироваться, котиков и аниме!
+
+{premium_emoji(PREMIUM_EMOJI['microphone'], '💬')} <b>Как ко мне обратиться:</b>
+Напиши: Эндер, Эндерия, Энди, Ендер
+
+{premium_emoji(PREMIUM_EMOJI['magic'], '📋')} <b>Что я знаю:</b>
+• IP и онлайн сервера
+• Режимы игры (Мирный и SMP)
+• Донаты и цены
+
+{random_rabbit()} <i>Просто позови меня по имени!</i>
+{random_anime()} {random_heart()}"""
     try:
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_back_keyboard())
     except Exception as e:
