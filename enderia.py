@@ -46,9 +46,9 @@ async def get_enderia_response(user_id: int, chat_id: int, user_message: str, us
         history_context = get_history_context(user_id, chat_id)
         
         if history_context:
-            full_instruction = f"{ENDERIA_SYSTEM_PROMPT}\n\n{history_context}\n\nТекущая дата: {current_time}\nОнлайн: {online} игроков\n{username}: {user_message}\n\nОтветь как Эндерия (коротко, 2-4 предложения, с премиум эмодзи):"
+            full_instruction = f"{ENDERIA_SYSTEM_PROMPT}\n\n{history_context}\n\nВремя: {current_time}\nОнлайн: {online} игроков\n{username}: {user_message}\n\nОтветь как Эндерия (коротко, 2-4 предложения, с премиум эмодзи):"
         else:
-            full_instruction = f"{ENDERIA_SYSTEM_PROMPT}\n\nТекущая дата: {current_time}\nОнлайн: {online} игроков\n{username}: {user_message}\n\nОтветь как Эндерия (коротко, 2-4 предложения, с премиум эмодзи):"
+            full_instruction = f"{ENDERIA_SYSTEM_PROMPT}\n\nВремя: {current_time}\nОнлайн: {online} игроков\n{username}: {user_message}\n\nОтветь как Эндерия (коротко, 2-4 предложения, с премиум эмодзи):"
         
         response = ai_client.models.generate_content(
             model="gemini-2.5-flash-lite",
@@ -72,5 +72,5 @@ def should_respond(message_text: str) -> bool:
     if not message_text:
         return False
     text_lower = message_text.lower()
-    keywords = ["эндер", "эндерия", "энди", "ендер", "энд", "ендеря"]
+    keywords = ["эндер", "эндерия", "энди", "ендер"]
     return any(k in text_lower for k in keywords)
