@@ -7,29 +7,31 @@ from datetime import datetime
 from collections import defaultdict, deque
 from dotenv import load_dotenv
 
-# Импортируем всё из prompts.py
-from prompts import (
-    get_system_prompt, 
-    get_enderia_emojis, 
-    FALLBACK_RESPONSES,
-    ENDERIA_EMOJI
-)
+from prompts import get_system_prompt, get_enderia_emojis, FALLBACK_RESPONSES, ENDERIA_EMOJI
 
 load_dotenv()
 
-# ========== OPENROUTER НАСТРОЙКИ ==========
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 # ТОП-5 МОДЕЛЕЙ С ЛУЧШИМ РУССКИМ ЯЗЫКОМ
 MODELS_CHAIN = [
-    "openai/gpt-oss-120b",                    # 1. OpenAI, лучший русский
-    "nousresearch/hermes-3-405b-instruct",    # 2. 405B, очень умная
-    "meta-llama/llama-3.3-70b-instruct",      # 3. 70B, стабильный
-    "qwen/qwen3-next-80b-a3b-instruct",       # 4. Qwen от Alibaba
-    "nvidia/nemotron-3-nano-30b-a3b",         # 5. NVIDIA, быстрая
+    "openai/gpt-oss-120b",
+    "nousresearch/hermes-3-405b-instruct",
+    "meta-llama/llama-3.3-70b-instruct",
+    "qwen/qwen3-next-80b-a3b-instruct",
+    "nvidia/nemotron-3-nano-30b-a3b",
 ]
 
-# ========== ПАМЯТЬ ДИАЛОГОВ ==========
+# Функция для получения онлайна (будет передаваться из bot.py)
+current_online = 0
+current_max = 0
+
+def set_server_online(online: int, max_players: int):
+    global current_online, current_max
+    current_online = online
+    current_max = max_players
+
+# ПАМЯТЬ ДИАЛОГОВ
 user_memory = defaultdict(lambda: deque(maxlen=10))
 user_last_question = {}
 user_greeted = {}
@@ -71,12 +73,10 @@ def mark_greeted(username: str):
 
 def is_greeting(text: str) -> bool:
     text_lower = text.lower()
-    greetings = ["привет", "здравствуй", "здарова", "хай", "hello", "hi", "privet"]
+    greetings = ["привет", "здравствуй", "здарова", "хай", "hello", "hi", "privet", "доброе утро", "добрый день"]
     return any(g in text_lower for g in greetings)
 
-# ========== ЗАПРОС К МОДЕЛИ ==========
 async def ask_model(model: str, system_prompt: str, user_prompt: str) -> tuple[str, bool]:
-    """Отправляет запрос к модели. Возвращает (ответ, успех)"""
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(
@@ -93,14 +93,13 @@ async def ask_model(model: str, system_prompt: str, user_prompt: str) -> tuple[s
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt}
                     ],
-                    "max_tokens": 250,
+                    "max_tokens": 300,
                     "temperature": 0.9,
                     "top_p": 0.95,
                     "stream": False
                 },
-                timeout=aiohttp.ClientTimeout(total=30)
+                timeout=aiohttp.ClientTimeout(total=35)
             ) as response:
-                
                 if response.status == 200:
                     data = await response.json()
                     result = data["choices"][0]["message"]["content"].strip()
@@ -108,7 +107,6 @@ async def ask_model(model: str, system_prompt: str, user_prompt: str) -> tuple[s
                 else:
                     print(f"❌ Модель {model} ошибка {response.status}")
                     return "", False
-                    
     except asyncio.TimeoutError:
         print(f"⏰ Модель {model} таймаут")
         return "", False
@@ -116,16 +114,15 @@ async def ask_model(model: str, system_prompt: str, user_prompt: str) -> tuple[s
         print(f"⚠️ Модель {model} ошибка: {e}")
         return "", False
 
-# ========== ОСНОВНАЯ ФУНКЦИЯ ==========
 async def get_enderia_response(user_message: str, username: str) -> str:
-    """Получить ответ от Эндерии с переключением между топ-5 моделями"""
+    global current_online, current_max
     
     current_time = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
     context = get_user_context(username)
     already_greeted = has_already_greeted(username)
     is_greeting_msg = is_greeting(user_message)
     
-    # Ограничение по времени (не чаще чем раз в 2 секунды)
+    # Ограничение по времени
     now = datetime.now().timestamp()
     last_time = user_last_time.get(username, 0)
     if now - last_time < 2:
@@ -135,7 +132,7 @@ async def get_enderia_response(user_message: str, username: str) -> str:
     # Если уже здоровались и это снова приветствие
     if already_greeted and is_greeting_msg:
         emojis = get_enderia_emojis()
-        response = f"{emojis} {username}, ты уже здоровался! Что хотел узнать про LostEarth?"
+        response = f"{emojis} {username}, мы уже общаемся! Что хотел узнать про LostEarth? 💜"
         add_to_memory(username, user_message, response)
         return response
     
@@ -148,33 +145,28 @@ async def get_enderia_response(user_message: str, username: str) -> str:
 
 Игрок {username} написал: {user_message}
 
-Ответь как Эндерия (2-4 предложения). В конце ответа поставь эмодзи (🐱💜🐰). Не используй HTML теги! ОТВЕЧАЙ ТОЛЬКО НА РУССКОМ ЯЗЫКЕ!"""
+Ответь как Эндерия (2-4 предложения). Если игрок отвечает на твоё сообщение — ПРОДОЛЖАЙ ДИАЛОГ!
+В конце ответа поставь 1-2 эмодзи. Не используй HTML теги! ОТВЕЧАЙ ТОЛЬКО НА РУССКОМ ЯЗЫКЕ!"""
 
-    system_prompt = get_system_prompt(username, current_time)
+    system_prompt = get_system_prompt(username, current_time, current_online, current_max)
     
-    # Пробуем модели по очереди
     for model_index, model in enumerate(MODELS_CHAIN):
         print(f"🔄 [{model_index + 1}/{len(MODELS_CHAIN)}] Пробуем {model}")
         
         result, success = await ask_model(model, system_prompt, full_prompt)
         
         if success and result and len(result) > 10:
-            # Проверяем, что ответ на русском
             has_russian = any(ord(c) > 1024 for c in result)
             if not has_russian:
                 print(f"⚠️ Модель {model} ответила не на русском, пробуем дальше")
                 continue
                 
             print(f"✅ УСПЕХ! Модель {model} ответила по-русски!")
-            
-            # Убираем все HTML теги
             result = re.sub(r'<[^>]+>', '', result)
             
-            # Добавляем эмодзи если их нет
             if not any(emoji_id in result for emoji_id in ENDERIA_EMOJI.values()):
                 result += f" {get_enderia_emojis()}"
             
-            # Отмечаем что поздоровались
             if not already_greeted:
                 mark_greeted(username)
             
@@ -183,7 +175,6 @@ async def get_enderia_response(user_message: str, username: str) -> str:
         
         await asyncio.sleep(0.3)
     
-    # Если все модели не ответили
     print("❌ Все модели не ответили!")
     emojis = get_enderia_emojis()
     fallback = random.choice(FALLBACK_RESPONSES).format(emojis=emojis, username=username)
