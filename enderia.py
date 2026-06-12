@@ -4,7 +4,7 @@ import re
 import aiohttp
 import asyncio
 import json
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from collections import defaultdict, deque
 from dotenv import load_dotenv
 
@@ -22,7 +22,7 @@ MODELS_CHAIN = [
     "nvidia/nemotron-3-nano-30b-a3b",
 ]
 
-# ========== ПРОСТОЕ ФАЙЛОВОЕ ХРАНИЛИЩЕ (БЕЗ БД) ==========
+# ========== ФАЙЛОВОЕ ХРАНИЛИЩЕ ==========
 PLAYERS_FILE = "players.json"
 
 def load_players():
@@ -55,24 +55,6 @@ def update_balance(username: str, delta: int):
     data[username]["balance"] = data[username].get("balance", 100) + delta
     save_players(data)
 
-def can_claim_daily_bonus(username: str) -> bool:
-    data = load_players()
-    if username not in data:
-        return True
-    last_bonus = data[username].get("last_bonus")
-    if not last_bonus:
-        return True
-    return last_bonus != str(date.today())
-
-def claim_daily_bonus(username: str) -> int:
-    data = load_players()
-    if username not in data:
-        data[username] = {"balance": 100, "last_bonus": None, "wins": 0, "losses": 0}
-    data[username]["balance"] = data[username].get("balance", 100) + 100
-    data[username]["last_bonus"] = str(date.today())
-    save_players(data)
-    return 100
-
 def update_stats(username: str, is_win: bool):
     data = load_players()
     if username not in data:
@@ -89,17 +71,36 @@ def get_stats(username: str) -> dict:
         return {"wins": 0, "losses": 0}
     return {"wins": data[username].get("wins", 0), "losses": data[username].get("losses", 0)}
 
-def get_top_players(limit: int = 10) -> list:
+def can_claim_daily_bonus(username: str) -> bool:
     data = load_players()
-    players = []
-    for name, info in data.items():
-        players.append({
-            "username": name,
-            "balance": info.get("balance", 100),
-            "wins": info.get("wins", 0)
-        })
-    players.sort(key=lambda x: x["balance"], reverse=True)
-    return players[:limit]
+    if username not in data:
+        return True
+    last_bonus = data[username].get("last_bonus")
+    if not last_bonus:
+        return True
+    return last_bonus != str(date.today())
+
+def set_daily_bonus_claimed(username: str):
+    data = load_players()
+    if username not in data:
+        data[username] = {"balance": 100, "last_bonus": None, "wins": 0, "losses": 0}
+    data[username]["last_bonus"] = str(date.today())
+    save_players(data)
+
+def check_and_add_bonus(username: str, has_description: bool) -> tuple[bool, int]:
+    """Проверяет и начисляет бонус. Возвращает (получил_ли_бонус, сумма_бонуса)"""
+    if not has_description:
+        return False, 0
+    
+    if can_claim_daily_bonus(username):
+        data = load_players()
+        if username not in data:
+            data[username] = {"balance": 100, "last_bonus": None, "wins": 0, "losses": 0}
+        data[username]["balance"] = data[username].get("balance", 100) + 100
+        data[username]["last_bonus"] = str(date.today())
+        save_players(data)
+        return True, 100
+    return False, 0
 
 # ========== ОСТАЛЬНОЙ КОД ==========
 current_online = 0
@@ -123,7 +124,7 @@ def save_to_log(username: str, message: str, is_bot: bool = False):
         pass
 
 def get_random_emoji():
-    emojis = ["💜", "🐱", "🐰", "✨", "🎲", "💎", "🎯", "⭐", "🌸", "🪙", "🎉", "😊", "🥳"]
+    emojis = ["💜", "🐱", "🐰", "✨", "🎲", "💎", "🎯", "⭐", "🌸", "🪙", "🎉", "😊"]
     return random.choice(emojis)
 
 # ========== ПАМЯТЬ ДИАЛОГОВ ==========
@@ -169,6 +170,9 @@ async def game_dice_bet(username: str, bet_amount: int, bot, chat_id: int) -> st
     if balance < bet_amount:
         return f"{get_random_emoji()} {username}, у тебя всего {balance} алмазов! Не хватает на ставку {bet_amount} 💎"
     
+    if bet_amount < 10:
+        return f"{get_random_emoji()} {username}, минимальная ставка 10 алмазов! 💎"
+    
     await bot.send_message(chat_id, f"{get_random_emoji()} {username} бросает кубик... 🎲")
     player_value = await roll_dice_animated(bot, chat_id)
     
@@ -189,89 +193,67 @@ async def game_dice_bet(username: str, bet_amount: int, bot, chat_id: int) -> st
     else:
         return f"{get_random_emoji()} 🤝 НИЧЬЯ! 🤝 {get_random_emoji()}\n\nОба выбросили {player_value}\n\n💰 Ставка возвращена!\n💎 Баланс: {balance} {get_random_emoji()}"
 
-async def game_dice_battle(username: str, bot, chat_id: int) -> str:
-    await bot.send_message(chat_id, f"{get_random_emoji()} {username} бросает кубик... 🎲")
-    player_value = await roll_dice_animated(bot, chat_id)
-    
-    await asyncio.sleep(1.5)
-    await bot.send_message(chat_id, f"{get_random_emoji()} Эндерия бросает кубик... 🎲")
-    bot_value = await roll_dice_animated(bot, chat_id)
-    
-    if player_value > bot_value:
-        return f"{get_random_emoji()} 🏆 ТЫ ПОБЕДИЛ! 🏆 {get_random_emoji()}\n\nТвой кубик: {player_value}\nМой кубик: {bot_value}\n\n✨ Отличная игра! ✨"
-    elif player_value < bot_value:
-        return f"{get_random_emoji()} 👑 Я ПОБЕДИЛА! 👑 {get_random_emoji()}\n\nТвой кубик: {player_value}\nМой кубик: {bot_value}\n\n💫 В следующий раз повезёт! 💫"
-    else:
-        return f"{get_random_emoji()} 🤝 НИЧЬЯ! 🤝 {get_random_emoji()}\n\nОба выбросили {player_value}\n\n🎲 Сыграем ещё? Напиши /dice {get_random_emoji()}"
-
-async def game_coinflip(username: str, bet_amount: int, choice: str) -> str:
-    balance = get_balance(username)
-    if balance < bet_amount:
-        return f"{get_random_emoji()} {username}, у тебя всего {balance} алмазов! Не хватает на ставку {bet_amount} 💎"
-    
-    coin = random.choice(["орёл", "решка"])
-    coin_emoji = "🦅" if coin == "орёл" else "🪙"
-    
-    if choice.lower() == coin:
-        update_balance(username, bet_amount)
-        update_stats(username, is_win=True)
-        new_balance = get_balance(username)
-        return f"{get_random_emoji()} 🎉 ПОБЕДА! 🎉 {get_random_emoji()}\n\nТвой выбор: {choice}\nВыпало: {coin} {coin_emoji}\n\n✨ Ты выиграл {bet_amount} алмазов!\n💎 Баланс: {new_balance} {get_random_emoji()}"
-    else:
-        update_balance(username, -bet_amount)
-        update_stats(username, is_win=False)
-        new_balance = get_balance(username)
-        return f"{get_random_emoji()} 😔 ПРОИГРЫШ... 😔 {get_random_emoji()}\n\nТвой выбор: {choice}\nВыпало: {coin} {coin_emoji}\n\n💔 Ты проиграл {bet_amount} алмазов!\n💎 Баланс: {new_balance} {get_random_emoji()}"
-
 # ========== ОСНОВНАЯ ФУНКЦИЯ ==========
-async def get_enderia_response(user_message: str, username: str, is_reply: bool = False, chat_id: int = None, bot=None) -> str:
+async def get_enderia_response(user_message: str, username: str, is_reply: bool = False, chat_id: int = None, bot=None, user_bio: str = "") -> str:
     global current_online, current_max
     
     save_to_log(username, user_message, is_bot=False)
     msg_lower = user_message.lower()
     
-    # ========== ИГРОВЫЕ КОМАНДЫ ==========
+    # Проверка на наличие @lostearth_bot в описании
+    has_bot_in_bio = "@lostearth_bot" in user_bio.lower() if user_bio else False
+    
+    # ========== КОМАНДЫ ==========
     if user_message.startswith("/balance") or user_message.startswith("/bal"):
         balance = get_balance(username)
         response = f"{get_random_emoji()} {username}, твой баланс: {balance} 💎 алмазов! {get_random_emoji()}"
         add_to_memory(username, user_message, response)
         return response
     
-    if user_message.startswith("/daily"):
-        if can_claim_daily_bonus(username):
-            bonus = claim_daily_bonus(username)
-            balance = get_balance(username)
-            response = f"{get_random_emoji()} 🎁 ЕЖЕДНЕВНЫЙ БОНУС! 🎁 {get_random_emoji()}\n\n✨ +{bonus} 💎 алмазов!\n💎 Баланс: {balance} алмазов\n\n🌸 Заходи завтра снова! 🌸"
-        else:
-            response = f"{get_random_emoji()} {username}, ты уже получал бонус сегодня! Возвращайся завтра! 🌸"
-        add_to_memory(username, user_message, response)
-        return response
-    
     if user_message.startswith("/profile"):
         balance = get_balance(username)
         stats = get_stats(username)
-        response = f"{get_random_emoji()} 👤 ПРОФИЛЬ ИГРОКА 👤 {get_random_emoji()}\n\n👤 Имя: {username}\n💎 Баланс: {balance} алмазов\n🏆 Побед: {stats['wins']}\n💔 Поражений: {stats['losses']}\n📊 Всего игр: {stats['wins'] + stats['losses']}\n\n{get_random_emoji()} Напиши /games чтобы играть! {get_random_emoji()}"
+        response = f"""{get_random_emoji()} 👤 <b>ПРОФИЛЬ ИГРОКА</b> 👤 {get_random_emoji()}
+
+👤 Имя: {username}
+💎 Баланс: {balance} алмазов
+🏆 Побед: {stats['wins']}
+💔 Поражений: {stats['losses']}
+📊 Всего игр: {stats['wins'] + stats['losses']}
+
+{get_random_emoji()} <b>Ежедневный бонус:</b>
+➕ 100 алмазов каждый день!
+📝 Условие: в описании профиля должен быть @lostearth_bot
+
+<i>Как получить бонус? Добавь в описание своего профиля: @lostearth_bot</i>
+
+{get_random_emoji()} Напиши /daily чтобы получить бонус! {get_random_emoji()}"""
         add_to_memory(username, user_message, response)
         return response
     
-    if user_message.startswith("/top"):
-        top = get_top_players(10)
-        if not top:
-            response = f"{get_random_emoji()} 📊 Топ игроков пока пуст! Будь первым! 🎲 {get_random_emoji()}"
+    if user_message.startswith("/daily"):
+        if has_bot_in_bio:
+            bonus_given, amount = check_and_add_bonus(username, True)
+            if bonus_given:
+                balance = get_balance(username)
+                response = f"{get_random_emoji()} 🎁 ЕЖЕДНЕВНЫЙ БОНУС! 🎁 {get_random_emoji()}\n\n✨ +{amount} 💎 алмазов!\n💎 Баланс: {balance} алмазов\n\n🌸 Заходи завтра снова! 🌸"
+            else:
+                response = f"{get_random_emoji()} {username}, ты уже получал бонус сегодня! Возвращайся завтра! 🌸"
         else:
-            text = f"{get_random_emoji()} 🏆 ТОП ИГРОКОВ ПО АЛМАЗАМ 🏆 {get_random_emoji()}\n\n"
-            for i, p in enumerate(top, 1):
-                medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else "•"
-                text += f"{medal} {p['username']} — {p['balance']} 💎 (🏆{p['wins']})\n"
-            response = text
-        add_to_memory(username, user_message, response)
-        return response
-    
-    if user_message.startswith("/dice"):
-        if bot and chat_id:
-            response = await game_dice_battle(username, bot, chat_id)
-        else:
-            response = f"{get_random_emoji()} {username}, напиши /dice в чате со мной! 🎲"
+            response = f"""{get_random_emoji()} ❌ <b>НЕТ БОНУСА!</b> ❌ {get_random_emoji()}
+
+Чтобы получать ежедневный бонус 100 алмазов, добавь в описание своего профиля:
+
+<b>@lostearth_bot</b>
+
+📝 Как это сделать:
+1. Зайди в настройки Telegram
+2. Нажми на свою фотографию
+3. Выбери "Редактировать профиль"
+4. В разделе "Описание" добавь: @lostearth_bot
+5. Сохрани и возвращайся за бонусом!
+
+{get_random_emoji()} После добавления напиши /daily снова! {get_random_emoji()}"""
         add_to_memory(username, user_message, response)
         return response
     
@@ -279,54 +261,39 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         match = re.match(r"^/bet\s+(\d+)$", user_message)
         if match and bot and chat_id:
             bet_amount = int(match.group(1))
-            if bet_amount < 10:
-                response = f"{get_random_emoji()} {username}, минимальная ставка 10 алмазов! 💎"
-            else:
-                response = await game_dice_bet(username, bet_amount, bot, chat_id)
+            response = await game_dice_bet(username, bet_amount, bot, chat_id)
         else:
-            response = f"{get_random_emoji()} {username}, используй: /bet [сумма] (например /bet 50) 🎲"
-        add_to_memory(username, user_message, response)
-        return response
-    
-    if user_message.startswith("/coin"):
-        match = re.match(r"^/coin\s+(орёл|решка)\s+(\d+)$", user_message.lower())
-        if match:
-            choice = match.group(1)
-            bet_amount = int(match.group(2))
-            if bet_amount < 10:
-                response = f"{get_random_emoji()} {username}, минимальная ставка 10 алмазов! 💎"
-            else:
-                response = await game_coinflip(username, bet_amount, choice)
-        else:
-            response = f"{get_random_emoji()} {username}, используй: /coin орёл 50 или /coin решка 100 🪙"
+            response = f"{get_random_emoji()} {username}, используй: /bet [сумма] (например /bet 50) 🎲\n💰 Минимальная ставка: 10 алмазов"
         add_to_memory(username, user_message, response)
         return response
     
     if user_message.startswith("/games"):
         response = f"""{get_random_emoji()} 🎮 <b>ДОСТУПНЫЕ ИГРЫ</b> 🎮 {get_random_emoji()}
 
-🎲 /dice - Битва кубиков (бесплатно)
-💰 /bet [сумма] - Ставка на кубик (выигрыш х2)
-🪙 /coin [орёл/решка] [сумма] - Орёл/Решка на алмазы
-💎 /balance - Показать баланс
-🎁 /daily - Бонус 100💎 каждый день
-👤 /profile - Твой профиль
-🏆 /top - Топ игроков
+💰 <b>/bet [сумма]</b> - Ставка на кубик (выигрыш х2)
+💎 <b>/balance</b> - Показать баланс
+👤 <b>/profile</b> - Твой профиль
+🎁 <b>/daily</b> - Ежедневный бонус 100💎
 
-✨ Стартовый баланс: 100 алмазов 💎
-🌸 Минимальная ставка: 10 алмазов
+✨ <b>Правила игры:</b>
+• Минимальная ставка: 10 алмазов
+• Твой кубик против кубика Эндерии
+• Если твой кубик больше - выигрываешь x2
+• Если меньше - проигрываешь ставку
 
-{get_random_emoji()} Удачи в играх! {get_random_emoji()}"""
+💎 <b>Стартовый баланс: 100 алмазов</b>
+
+{get_random_emoji()} Напиши /bet 50 чтобы сыграть! {get_random_emoji()}"""
         add_to_memory(username, user_message, response)
         return response
     
-    # ========== ОБЫЧНЫЙ РАЗГОВОР С ПАМЯТЬЮ ==========
+    # ========== ОБЫЧНЫЙ РАЗГОВОР ==========
     history = get_user_context(username)
     already_greeted = has_already_greeted(username)
     is_greeting_msg = is_greeting(user_message)
     
     if already_greeted and is_greeting_msg and not is_reply:
-        response = f"{get_random_emoji()} {username}, мы уже общаемся! Что хотел узнать про LostEarth? Хочешь поиграть? Напиши /games {get_random_emoji()}"
+        response = f"{get_random_emoji()} {username}, мы уже общаемся! Хочешь сыграть в кости? Напиши /bet 50 {get_random_emoji()}"
         add_to_memory(username, user_message, response)
         return response
     
@@ -343,8 +310,8 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
 
 Ответь как Эндерия, учитывая историю разговора.
 ВАЖНО: Если вы уже общались - НЕ ЗДОРОВАЙСЯ заново!
-Будь милой, дружелюбной, используй эмодзи. Отвечай 3-5 предложениями.
-Обязательно закончи мысль и поставь эмодзи в конце."""
+Будь милой, дружелюбной, используй эмодзи. Отвечай 2-4 предложения.
+Если спросят про игры - расскажи про /bet."""
             
             for model in MODELS_CHAIN:
                 try:
@@ -358,10 +325,10 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
                                     {"role": "system", "content": system_prompt},
                                     {"role": "user", "content": full_prompt}
                                 ],
-                                "max_tokens": 600,
+                                "max_tokens": 500,
                                 "temperature": 0.9,
                             },
-                            timeout=aiohttp.ClientTimeout(total=40)
+                            timeout=aiohttp.ClientTimeout(total=35)
                         ) as response:
                             if response.status == 200:
                                 data = await response.json()
@@ -378,19 +345,10 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         except:
             pass
     
-    # Fallback ответы
-    fallbacks = [
-        f"{get_random_emoji()} {username}, я Эндерия — хранительница Края! ✨\n\nIP Java: 150.241.85.40:25565\nХочешь поиграть? Напиши /games 🎲 {get_random_emoji()}",
-        f"{get_random_emoji()} {username}, привет! У нас есть игры: /dice, /bet, /coin. Проверим удачу? 🎲 {get_random_emoji()}",
-        f"{get_random_emoji()} {username}, на LostEarth есть два режима: Мирный и SMP. IP: 150.241.85.40:25565\n\nНапиши /games чтобы поиграть! 🎮 {get_random_emoji()}",
-    ]
-    response = random.choice(fallbacks)
-    
-    if not already_greeted:
-        mark_greeted(username)
-    
-    add_to_memory(username, user_message, response)
-    return response
+    # Fallback
+    fallback = f"{get_random_emoji()} {username}, я Эндерия! Хочешь сыграть в кости? Напиши /bet 50 🎲\n\nЕжедневный бонус 100💎 за @lostearth_bot в описании! {get_random_emoji()}"
+    add_to_memory(username, user_message, fallback)
+    return fallback
 
 def should_respond(message_text: str) -> bool:
     if not message_text:
