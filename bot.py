@@ -20,7 +20,16 @@ from enderia import (
     clear_user_memory, 
     get_memory_size, 
     set_server_online,
-    save_to_log
+    save_to_log,
+    get_balance,
+    get_stats,
+    update_balance,
+    update_stats,
+    can_claim_daily_bonus,
+    set_daily_bonus_claimed,
+    load_players,
+    save_players,
+    roll_dice_animated
 )
 from prompts import get_enderia_emojis
 
@@ -281,14 +290,12 @@ async def help_cmd(message: Message):
 # ========== ИГРОВЫЕ КОМАНДЫ ==========
 @dp.message(Command("balance"))
 async def balance_cmd(message: Message):
-    from enderia import get_balance
     username = message.from_user.username or message.from_user.first_name
     balance = get_balance(username)
     await message.answer(f"{get_random_emoji()} {username}, твой баланс: {balance} 💎 алмазов! {get_random_emoji()}", parse_mode="HTML")
 
 @dp.message(Command("profile"))
 async def profile_cmd(message: Message):
-    from enderia import get_balance, get_stats
     username = message.from_user.username or message.from_user.first_name
     balance = get_balance(username)
     stats = get_stats(username)
@@ -309,7 +316,7 @@ async def profile_cmd(message: Message):
 
 @dp.message(Command("daily"))
 async def daily_cmd(message: Message):
-    from enderia import can_claim_daily_bonus, set_daily_bonus_claimed, get_balance
+    from datetime import date
     username = message.from_user.username or message.from_user.first_name
     
     # Получаем описание профиля
@@ -352,8 +359,8 @@ async def daily_cmd(message: Message):
 
 @dp.message(Command("bet"))
 async def bet_cmd(message: Message):
-    from enderia import get_balance, update_balance, update_stats, roll_dice_animated
     import re
+    import asyncio
     
     username = message.from_user.username or message.from_user.first_name
     user_message = message.text
@@ -452,12 +459,9 @@ async def handle_message(message: Message):
     # Получаем описание профиля для проверки бонуса
     user_bio = await get_user_bio(message.from_user.id)
     
-    # Игровые команды
+    # Игровые команды уже обработаны выше, пропускаем их
     if user_message.startswith("/"):
-        cmd = user_message.lower().split()[0]
-        if cmd in ["/bet", "/balance", "/bal", "/daily", "/profile", "/games"]:
-            # Они уже обработаны выше
-            return
+        return
     
     # Обычные сообщения с упоминанием Эндерии
     if should_respond(user_message):
@@ -533,23 +537,8 @@ async def menu_enderia(callback: CallbackQuery):
         print(f"[ERROR] {e}")
     await safe_callback_answer(callback)
 
-# ========== ДОПОЛНИТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ БОНУСА ==========
-from datetime import date
-
-def load_players():
-    from enderia import load_players as lp
-    return lp()
-
-def save_players(data):
-    from enderia import save_players as sp
-    sp(data)
-
 # ========== ЗАПУСК ==========
 async def main():
-    # Инициализация
-    from enderia import init_db
-    await init_db()
-    
     # Запуск Flask
     flask_thread = Thread(target=run_flask, daemon=True)
     flask_thread.start()
