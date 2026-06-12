@@ -12,10 +12,11 @@ from prompts import get_system_prompt
 
 load_dotenv()
 
-# ========== ПОДКЛЮЧЕНИЕ К POSTGRESQL (из твоего Railway) ==========
-DATABASE_URL = "postgresql://postgres:hgSCmLMXOynevPATDDMerzJwTMBxFamM@thomas.proxy.rlwy.net:41663/railway"
+# ========== ПОДКЛЮЧЕНИЕ К POSTGRESQL (правильный URL для Railway) ==========
+# Используем внутренний хост Railway, а не внешний
+DATABASE_URL = "postgresql://postgres:hgSCmLMXOynevPATDDMerzJwTMBxFamM@postgres.railway.internal:5432/railway"
 
-# ========== ФУНКЦИИ БАЗЫ ДАННЫХ ==========
+# ========== ФУНКЦИИ БАЗЫ ДАННЫХ С ПОВТОРОМ ПРИ ОШИБКЕ ==========
 async def init_db():
     try:
         conn = await asyncpg.connect(DATABASE_URL)
@@ -30,11 +31,17 @@ async def init_db():
             )
         """)
         await conn.close()
-        print("✅ PostgreSQL подключена, таблицы готовы")
+        print("✅ PostgreSQL подключена")
         return True
     except Exception as e:
-        print(f"❌ Ошибка БД: {e}")
+        print(f"⚠️ Ошибка БД: {e}, использую локальное хранилище")
         return False
+
+# Локальное хранилище на случай ошибки БД
+local_players = {}
+local_wins = {}
+local_losses = {}
+local_bonus = {}
 
 async def get_balance(username: str) -> int:
     try:
@@ -44,20 +51,20 @@ async def get_balance(username: str) -> int:
         if row:
             return row[0]
         else:
-            async with asyncpg.connect(DATABASE_URL) as conn2:
-                await conn2.execute("INSERT INTO players (username, balance) VALUES ($1, 100)", username)
+            await conn.execute("INSERT INTO players (username, balance) VALUES ($1, 100)", username)
             return 100
-    except Exception as e:
-        print(f"❌ Ошибка get_balance: {e}")
-        return 100
+    except:
+        # Fallback на локальное хранилище
+        return local_players.get(username, 100)
 
 async def update_balance(username: str, delta: int):
     try:
         conn = await asyncpg.connect(DATABASE_URL)
         await conn.execute("UPDATE players SET balance = balance + $1 WHERE username = $2", delta, username)
         await conn.close()
-    except Exception as e:
-        print(f"❌ Ошибка update_balance: {e}")
+    except:
+        # Fallback на локальное хранилище
+        local_players[username] = local_players.get(username, 100) + delta
 
 async def can_claim_daily_bonus(username: str) -> bool:
     try:
@@ -68,7 +75,8 @@ async def can_claim_daily_bonus(username: str) -> bool:
             return True
         return row[0] < date.today()
     except:
-        return True
+        last = local_bonus.get(username)
+        return last is None or last < date.today()
 
 async def claim_daily_bonus(username: str) -> int:
     try:
@@ -77,7 +85,9 @@ async def claim_daily_bonus(username: str) -> int:
         await conn.close()
         return 100
     except:
-        return 0
+        local_players[username] = local_players.get(username, 100) + 100
+        local_bonus[username] = date.today()
+        return 100
 
 async def update_stats(username: str, is_win: bool):
     try:
@@ -88,7 +98,10 @@ async def update_stats(username: str, is_win: bool):
             await conn.execute("UPDATE players SET losses = losses + 1 WHERE username = $1", username)
         await conn.close()
     except:
-        pass
+        if is_win:
+            local_wins[username] = local_wins.get(username, 0) + 1
+        else:
+            local_losses[username] = local_losses.get(username, 0) + 1
 
 async def get_stats(username: str) -> dict:
     try:
@@ -99,7 +112,7 @@ async def get_stats(username: str) -> dict:
             return {"wins": row[0], "losses": row[1]}
         return {"wins": 0, "losses": 0}
     except:
-        return {"wins": 0, "losses": 0}
+        return {"wins": local_wins.get(username, 0), "losses": local_losses.get(username, 0)}
 
 async def get_top_players(limit: int = 10) -> list:
     try:
@@ -110,7 +123,7 @@ async def get_top_players(limit: int = 10) -> list:
     except:
         return []
 
-# ========== НАСТРОЙКИ ==========
+# ========== ОСТАЛЬНОЙ КОД ==========
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 MODELS_CHAIN = [
@@ -142,11 +155,11 @@ def save_to_log(username: str, message: str, is_bot: bool = False):
         pass
 
 def get_random_emoji():
-    emojis = ["💜", "🐱", "🐰", "✨", "🎲", "💎", "🎯", "⭐", "🌸", "🪙", "🎉", "😊"]
+    emojis = ["💜", "🐱", "🐰", "✨", "🎲", "💎", "🎯", "⭐", "🌸", "🪙", "🎉", "😊", "🥳"]
     return random.choice(emojis)
 
 # ========== ПАМЯТЬ ДИАЛОГОВ ==========
-user_memory = defaultdict(lambda: deque(maxlen=15))
+user_memory = defaultdict(lambda: deque(maxlen=20))
 user_greeted = {}
 
 def get_user_context(username: str) -> str:
@@ -281,7 +294,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
             text = f"{get_random_emoji()} 🏆 ТОП ИГРОКОВ ПО АЛМАЗАМ 🏆 {get_random_emoji()}\n\n"
             for i, p in enumerate(top, 1):
                 medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else "•"
-                text += f"{medal} {p['username']} — {p['balance']} 💎 (побед: {p['wins']})\n"
+                text += f"{medal} {p['username']} — {p['balance']} 💎 (🏆{p['wins']})\n"
             response = text
         add_to_memory(username, user_message, response)
         return response
@@ -362,7 +375,8 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
 
 Ответь как Эндерия, учитывая историю разговора.
 ВАЖНО: Если вы уже общались - НЕ ЗДОРОВАЙСЯ заново!
-Будь милой, дружелюбной, используй эмодзи. Отвечай 3-5 предложениями."""
+Будь милой, дружелюбной, используй эмодзи. Отвечай 3-5 предложениями.
+Обязательно закончи мысль и поставь эмодзи в конце."""
             
             for model in MODELS_CHAIN:
                 try:
@@ -376,18 +390,15 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
                                     {"role": "system", "content": system_prompt},
                                     {"role": "user", "content": full_prompt}
                                 ],
-                                "max_tokens": 500,
+                                "max_tokens": 600,
                                 "temperature": 0.9,
                             },
-                            timeout=aiohttp.ClientTimeout(total=35)
+                            timeout=aiohttp.ClientTimeout(total=40)
                         ) as response:
                             if response.status == 200:
                                 data = await response.json()
                                 result = data["choices"][0]["message"]["content"].strip()
                                 result = re.sub(r'<[^>]+>', '', result)
-                                
-                                if len(result) < 30:
-                                    result += f" {get_random_emoji()} {get_random_emoji()}"
                                 
                                 if not already_greeted:
                                     mark_greeted(username)
@@ -399,10 +410,23 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         except:
             pass
     
-    # Fallback
-    fallback = f"{get_random_emoji()} {username}, я Эндерия — хранительница Края! ✨\n\nIP: 150.241.85.40:25565\nХочешь поиграть? Напиши /games 🎲 {get_random_emoji()}"
-    add_to_memory(username, user_message, fallback)
-    return fallback
+    # Fallback ответы (полные, не обрезанные)
+    fallbacks = [
+        f"{get_random_emoji()} {username}, я Эндерия — хранительница Края! ✨\n\nНа LostEarth есть два режима: Мирный (PvP по согласию) и SMP (можно рейдить).\nIP Java: 150.241.85.40:25565, Bedrock порт 19132.\n\nХочешь поиграть? Напиши /games 🎲 {get_random_emoji()}",
+        
+        f"{get_random_emoji()} {username}, привет! 🌸\n\nУ нас есть донаты: Друид 50₽, Оракул 100₽, Монарх 200₽, Херувим 300₽ (с полётом!), Архонт 400₽, Серафим 600₽.\nПо вопросам к @pelmewki379 💎\n\nХочешь сыграть в кости? Напиши /dice 🎲 {get_random_emoji()}",
+        
+        f"{get_random_emoji()} {username}, сейчас на сервере онлайн {current_online}/{current_max} игроков!\n\nЗаходи играть! IP: 150.241.85.40:25565\n\nА если хочешь поиграть со мной — напиши /games 🎮 {get_random_emoji()}",
+        
+        f"{get_random_emoji()} {username}, я Эндерия! 🐱\n\nМогу рассказать о сервере, режимах игры, донатах или сыграть с тобой в кости!\n\nНапиши /games чтобы увидеть все игры! 🎲 {get_random_emoji()}",
+    ]
+    response = random.choice(fallbacks)
+    
+    if not already_greeted:
+        mark_greeted(username)
+    
+    add_to_memory(username, user_message, response)
+    return response
 
 def should_respond(message_text: str) -> bool:
     if not message_text:
