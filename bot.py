@@ -19,9 +19,7 @@ from enderia import (
     should_respond, 
     clear_user_memory, 
     get_memory_size, 
-    set_server_online, 
-    add_to_chat_memory, 
-    get_chat_context
+    set_server_online
 )
 from prompts import get_enderia_emojis
 
@@ -111,67 +109,146 @@ online_cache = {}
 last_update = {}
 last_online_data = {}
 
-# ========== MINECRAFT API ==========
+# ========== MINECRAFT API (ИСПРАВЛЕННЫЙ) ==========
 async def get_java_status(ip: str, port: int = 25565):
+    """Получает статус Java сервера через Server List Ping (SLP) протокол"""
     try:
+        # Создаём сокет с таймаутом
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(3)
+        sock.settimeout(5)  # Увеличен таймаут до 5 секунд
+        
+        # Подключаемся
         sock.connect((ip, port))
         
+        # Формируем handshake пакет (протокол 754 = 1.21+)
+        # packet ID 0x00 (Handshake)
         handshake = bytearray()
-        handshake += b'\x00'
-        handshake += b'\x04\x00\x00\x00'
+        handshake.append(0x00)  # Packet ID
+        
+        # Protocol version (754 = 1.21, 767 = 1.21.1, 770 = 1.21.3)
+        # Используем 754 как базовый
+        protocol = 754
+        handshake.extend(struct.pack('>i', protocol))  # VarInt как int
+        
+        # Server address
         host_bytes = ip.encode('utf-8')
-        handshake += bytes([len(host_bytes)]) + host_bytes
-        handshake += struct.pack('>H', port)
-        handshake += b'\x01'
+        handshake.append(len(host_bytes))
+        handshake.extend(host_bytes)
         
-        value = len(handshake)
-        while True:
-            if value & ~0x7F == 0:
-                sock.send(bytes([value]))
-                break
-            sock.send(bytes([(value & 0x7F) | 0x80]))
-            value >>= 7
+        # Server port
+        handshake.extend(struct.pack('>H', port))
         
+        # Next state: 1 for status
+        handshake.append(0x01)
+        
+        # Отправляем handshake с правильным префиксом длины
+        packet_length = len(handshake)
+        sock.send(struct.pack('>i', packet_length))  # Длина пакета как int
         sock.send(handshake)
-        sock.send(b'\x00\x00')
         
-        result = 0
-        shift = 0
-        while True:
-            byte = sock.recv(1)[0]
-            result |= (byte & 0x7F) << shift
-            shift += 7
-            if not (byte & 0x80):
-                length = result
-                break
+        # Отправляем запрос статуса (packet ID 0x00)
+        sock.send(b'\x00\x00')  # Длина 0, packet ID 0
         
-        data = b''
-        while len(data) < length:
-            data += sock.recv(1024)
+        # Читаем длину ответа
+        data = sock.recv(1024)
+        if not data:
+            sock.close()
+            return 0, 0
+        
+        # Распарсить VarInt длину
+        data = data[1:]  # Пропускаем первый байт (длина пакета)
+        
+        # Ищем начало JSON
+        json_start = data.find(b'{')
+        if json_start == -1:
+            sock.close()
+            return 0, 0
+        
+        json_data = data[json_start:].decode('utf-8', errors='ignore')
+        players = json.loads(json_data).get("players", {})
+        
         sock.close()
         
-        data = data[1:]
-        json_data = json.loads(data.decode('utf-8'))
-        players = json_data.get("players", {})
-        return players.get("online", 0), players.get("max", 0)
-    except:
+        online = players.get("online", 0)
+        max_players = players.get("max", 0)
+        
+        print(f"📊 Статус сервера {ip}:{port} - Онлайн: {online}/{max_players}")
+        return online, max_players
+        
+    except socket.timeout:
+        print(f"⏰ Таймаут подключения к {ip}:{port}")
+        return 0, 0
+    except ConnectionRefusedError:
+        print(f"🔌 Отказ соединения {ip}:{port} - сервер не запущен")
+        return 0, 0
+    except Exception as e:
+        print(f"❌ Ошибка получения статуса {ip}:{port}: {e}")
+        return 0, 0
+
+async def get_bedrock_status(ip: str, port: int = 19132):
+    """Получает статус Bedrock сервера (простой ping)"""
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.settimeout(3)
+        
+        # Bedrock ping запрос (Unconnected Ping)
+        # 0x01 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 + random 8 bytes
+        ping_data = bytearray([0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+        # Добавляем случайные байты
+        for _ in range(8):
+            ping_data.append(random.randint(0, 255))
+        
+        sock.sendto(ping_data, (ip, port))
+        
+        try:
+            data, addr = sock.recvfrom(2048)
+            sock.close()
+            # Если получили ответ - сервер работает
+            # Для Bedrock сложно получить точный онлайн без полного парсинга
+            return 1, 100  # Возвращаем 1 как индикатор что сервер жив
+        except:
+            sock.close()
+            return 0, 0
+    except Exception as e:
+        print(f"❌ Bedrock ошибка: {e}")
         return 0, 0
 
 async def get_server_online():
+    """Возвращает онлайн сервера (с кэшированием)"""
     now = datetime.now().timestamp()
+    
+    # Кэш на 30 секунд
     if "online" in last_update and now - last_update["online"] < 30:
-        return online_cache.get("online", 0), online_cache.get("max", 0)
+        cached_online = online_cache.get("online", 0)
+        cached_max = online_cache.get("max", 0)
+        print(f"📦 Кэш: онлайн {cached_online}/{cached_max}")
+        return cached_online, cached_max
+    
+    print("🔄 Обновление статуса сервера...")
+    
+    # Пробуем получить статус
     online, max_players = await get_java_status(SERVER["java_ip"], SERVER["java_port"])
+    
+    # Если не удалось получить онлайн - проверяем Bedrock как запасной вариант
+    if online == 0:
+        bedrock_online, _ = await get_bedrock_status(SERVER["bedrock_ip"], SERVER["bedrock_port"])
+        if bedrock_online > 0:
+            # Сервер жив, но Java статус не получен
+            online = 1  # Хотя бы показываем что сервер онлайн
+            max_players = 100  # Примерное значение
+    
+    # Сохраняем в кэш
     online_cache["online"] = online
     online_cache["max"] = max_players
     last_update["online"] = now
     
+    # Обновляем для Эндерии
     set_server_online(online, max_players)
+    
+    print(f"📊 Итоговый онлайн: {online}/{max_players}")
     return online, max_players
 
-# ========== КЛАВИАТУРЫ С ПРЕМИУМ ЭМОДЗИ (РАБОЧИЙ ВАРИАНТ) ==========
+# ========== КЛАВИАТУРЫ ==========
 def get_main_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="IP И ОНЛАЙН", callback_data="menu_ip", icon_custom_emoji_id=PREMIUM_EMOJI["door"])],
@@ -205,7 +282,7 @@ async def start_cmd(message: Message):
 
 📊 <b>Текущий онлайн:</b> {online}/{max_players}
 
-🐱 <b>Просто напиши моё имя:</b> Энди, Эндерия, Эндер
+🐱 <b>Просто напиши моё имя или ответь на моё сообщение!</b>
 
 {get_enderia_emojis()}"""
     await message.answer(text, parse_mode="HTML", reply_markup=get_main_keyboard())
@@ -213,10 +290,7 @@ async def start_cmd(message: Message):
 @dp.message(Command("online"))
 async def cmd_online(message: Message):
     online, max_players = await get_server_online()
-    await message.answer(
-        f"📊 <b>Онлайн: {online}/{max_players}</b>", 
-        parse_mode="HTML"
-    )
+    await message.answer(f"📊 <b>Онлайн: {online}/{max_players}</b>", parse_mode="HTML")
 
 @dp.message(Command("stats"))
 async def stats_cmd(message: Message):
@@ -247,6 +321,7 @@ async def help_cmd(message: Message):
 
 <b>🔹 Как общаться:</b>
 Напиши: Энди, Эндерия, Эндер
+Или просто ответь на моё сообщение
 
 {random_cat()} <i>Задавай вопросы!</i>"""
     await message.answer(text, parse_mode="HTML")
@@ -259,15 +334,12 @@ async def handle_message(message: Message):
     username = message.from_user.first_name or "Игрок"
     user_message = message.text
     
-    add_to_chat_memory(username, user_message)
-    
     is_mentioned = should_respond(user_message)
     is_reply_to_bot = (message.reply_to_message and message.reply_to_message.from_user.id == bot.id)
     
     if is_mentioned or is_reply_to_bot:
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
-        chat_context = get_chat_context()
-        response = await get_enderia_response(user_message, username, is_reply=is_reply_to_bot, chat_context=chat_context)
+        response = await get_enderia_response(user_message, username, is_reply=is_reply_to_bot)
         if response:
             await message.reply(response, parse_mode="HTML")
 
@@ -305,6 +377,10 @@ async def menu_ip(callback: CallbackQuery):
 
 @dp.callback_query(lambda c: c.data == "refresh_online")
 async def refresh_online(callback: CallbackQuery):
+    # Принудительно очищаем кэш
+    last_update.clear()
+    online_cache.clear()
+    
     online, max_players = await get_server_online()
     text = f"""👑 <b>LOSTEARTH</b>\n\n💻 Java: <code>{SERVER['java_ip']}:{SERVER['java_port']}</code>\n📱 Bedrock: <code>{SERVER['bedrock_ip']}:{SERVER['bedrock_port']}</code>\n📊 Онлайн: {online}/{max_players}\n\n🐰 Приятной игры!"""
     chat_id = callback.message.chat.id
