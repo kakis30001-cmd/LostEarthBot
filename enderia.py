@@ -14,12 +14,13 @@ load_dotenv()
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
+# Цепочка моделей для резервирования
 MODELS_CHAIN = [
-    "openai/gpt-oss-120b",
-    "nousresearch/hermes-3-405b-instruct",
-    "meta-llama/llama-3.3-70b-instruct",
-    "qwen/qwen3-next-80b-a3b-instruct",
-    "nvidia/nemotron-3-nano-30b-a3b",
+    "openai/gpt-4o-mini",
+    "openai/gpt-3.5-turbo",
+    "meta-llama/llama-3.2-3b-instruct",
+    "qwen/qwen2.5-7b-instruct",
+    "google/gemini-flash-1.5",
 ]
 
 # ========== ФАЙЛОВОЕ ХРАНИЛИЩЕ ==========
@@ -90,14 +91,9 @@ def set_daily_bonus_claimed(username: str):
 def check_and_add_bonus(username: str, has_description: bool) -> tuple[bool, int]:
     if not has_description:
         return False, 0
-    
     if can_claim_daily_bonus(username):
-        data = load_players()
-        if username not in data:
-            data[username] = {"balance": 100, "last_bonus": None, "wins": 0, "losses": 0}
-        data[username]["balance"] = data[username].get("balance", 100) + 100
-        data[username]["last_bonus"] = str(date.today())
-        save_players(data)
+        update_balance(username, 100)
+        set_daily_bonus_claimed(username)
         return True, 100
     return False, 0
 
@@ -151,15 +147,14 @@ def mark_greeted(username: str):
 
 def is_greeting(text: str) -> bool:
     text_lower = text.lower()
-    greetings = ["привет", "здравствуй", "хай", "hello", "приветик", "здарова"]
+    greetings = ["привет", "здравствуй", "хай", "hello", "приветик", "здарова", "доброе утро", "добрый день", "добрый вечер"]
     return any(g in text_lower for g in greetings)
 
 def is_just_name(text: str) -> bool:
     """Проверяет, зовут ли просто по имени"""
     text_lower = text.lower().strip()
-    names = ["энди", "эндер", "эндерия", "ендер", "енди"]
-    # Если сообщение состоит только из имени или имени с восклицательным знаком
-    clean_text = re.sub(r'[!?.]', '', text_lower).strip()
+    names = ["энди", "эндер", "эндерия", "ендер", "енди", "энд"]
+    clean_text = re.sub(r'[!?.,]', '', text_lower).strip()
     return clean_text in names
 
 # ========== ИГРЫ ==========
@@ -170,10 +165,10 @@ async def roll_dice_animated(bot, chat_id: int):
 async def game_dice_bet(username: str, bet_amount: int, bot, chat_id: int) -> str:
     balance = get_balance(username)
     if balance < bet_amount:
-        return f"{get_enderia_emojis()} {username}, у тебя всего {balance} алмазов! Не хватает на ставку {bet_amount} 💎"
+        return f"{get_enderia_emojis()} {username}, у тебя всего {balance} алмазов! Не хватает на ставку {bet_amount}"
     
     if bet_amount < 10:
-        return f"{get_enderia_emojis()} {username}, минимальная ставка 10 алмазов! 💎"
+        return f"{get_enderia_emojis()} {username}, минимальная ставка 10 алмазов!"
     
     await bot.send_message(chat_id, f"{get_enderia_emojis()} {username} бросает кубик... 🎲")
     player_value = await roll_dice_animated(bot, chat_id)
@@ -186,16 +181,16 @@ async def game_dice_bet(username: str, bet_amount: int, bot, chat_id: int) -> st
         update_balance(username, bet_amount)
         update_stats(username, is_win=True)
         new_balance = get_balance(username)
-        return f"{emoji(ENDERIA_EMOJI['cat_dance'], '🎉')} ПОБЕДА! {emoji(ENDERIA_EMOJI['cat_dance'], '🎉')}\n\nТвой кубик: {player_value}\nМой кубик: {bot_value}\n\n✨ Ты выиграл {bet_amount} алмазов!\n💎 Баланс: {new_balance} {get_enderia_emojis(1)}"
+        return f"{emoji(ENDERIA_EMOJI['cat_dance'], '🎉')} ПОБЕДА! {emoji(ENDERIA_EMOJI['cat_dance'], '🎉')}\n\nТвой кубик: {player_value}\nМой кубик: {bot_value}\n\n✨ Ты выиграл {bet_amount} алмазов!\n💎 Баланс: {new_balance}"
     elif player_value < bot_value:
         update_balance(username, -bet_amount)
         update_stats(username, is_win=False)
         new_balance = get_balance(username)
-        return f"{emoji(ENDERIA_EMOJI['cat_surprised'], '😔')} ПРОИГРЫШ... {emoji(ENDERIA_EMOJI['cat_surprised'], '😔')}\n\nТвой кубик: {player_value}\nМой кубик: {bot_value}\n\n💔 Ты проиграл {bet_amount} алмазов!\n💎 Баланс: {new_balance} {get_enderia_emojis(1)}"
+        return f"{emoji(ENDERIA_EMOJI['cat_surprised'], '😔')} ПРОИГРЫШ... {emoji(ENDERIA_EMOJI['cat_surprised'], '😔')}\n\nТвой кубик: {player_value}\nМой кубик: {bot_value}\n\n💔 Ты проиграл {bet_amount} алмазов!\n💎 Баланс: {new_balance}"
     else:
-        return f"{emoji(ENDERIA_EMOJI['heart'], '🤝')} НИЧЬЯ! {emoji(ENDERIA_EMOJI['heart'], '🤝')}\n\nОба выбросили {player_value}\n\n💰 Ставка возвращена!\n💎 Баланс: {balance} {get_enderia_emojis(1)}"
+        return f"{emoji(ENDERIA_EMOJI['heart'], '🤝')} НИЧЬЯ! {emoji(ENDERIA_EMOJI['heart'], '🤝')}\n\nОба выбросили {player_value}\n\n💰 Ставка возвращена!\n💎 Баланс: {balance}"
 
-# ========== ОСНОВНАЯ ФУНКЦИЯ ==========
+# ========== ОСНОВНАЯ ФУНКЦИЯ С ИИ ==========
 async def get_enderia_response(user_message: str, username: str, is_reply: bool = False, chat_id: int = None, bot=None, user_bio: str = "") -> str:
     global current_online, current_max
     
@@ -205,28 +200,28 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     # Проверка на наличие @lostearth_bot в описании
     has_bot_in_bio = "@lostearth_bot" in user_bio.lower() if user_bio else False
     
-    # ========== КОМАНДЫ ==========
+    # ========== КОМАНДЫ (быстрые ответы без ИИ) ==========
     if user_message.startswith("/balance") or user_message.startswith("/bal"):
         balance = get_balance(username)
-        response = f"{get_enderia_emojis()} {username}, твой баланс: {balance} 💎 алмазов! {get_enderia_emojis(1)}"
+        response = f"{get_enderia_emojis()} {username}, твой баланс: {balance} алмазов! {get_enderia_emojis(1)}"
         add_to_memory(username, user_message, response)
         return response
     
     if user_message.startswith("/profile"):
         balance = get_balance(username)
         stats = get_stats(username)
-        response = f"""{emoji(ENDERIA_EMOJI['crown'], '👤')} <b>ПРОФИЛЬ ИГРОКА</b> {emoji(ENDERIA_EMOJI['crown'], '👤')}
+        response = f"""👤 ПРОФИЛЬ ИГРОКА 👤
 
-👤 Имя: {username}
-💎 Баланс: {balance} алмазов
-🏆 Побед: {stats['wins']}
-💔 Поражений: {stats['losses']}
-📊 Всего игр: {stats['wins'] + stats['losses']}
+Имя: {username}
+Баланс: {balance} алмазов
+Побед: {stats['wins']}
+Поражений: {stats['losses']}
+Всего игр: {stats['wins'] + stats['losses']}
 
-{emoji(ENDERIA_EMOJI['star'], '🎁')} <b>Ежедневный бонус: +100 алмазов</b>
-📝 Добавь в описание: @lostearth_bot
+Ежедневный бонус: +100 алмазов
+Добавь в описание: @lostearth_bot
 
-{get_enderia_emojis(1)} Напиши /daily чтобы получить бонус! {get_enderia_emojis(1)}"""
+Напиши /daily чтобы получить бонус! {get_enderia_emojis(1)}"""
         add_to_memory(username, user_message, response)
         return response
     
@@ -235,24 +230,24 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
             bonus_given, amount = check_and_add_bonus(username, True)
             if bonus_given:
                 balance = get_balance(username)
-                response = f"{emoji(ENDERIA_EMOJI['star'], '🎁')} ЕЖЕДНЕВНЫЙ БОНУС! {emoji(ENDERIA_EMOJI['star'], '🎁')}\n\n✨ +{amount} 💎 алмазов!\n💎 Баланс: {balance} алмазов\n\n{emoji(ENDERIA_EMOJI['anime_dance'], '🌸')} Заходи завтра снова! {emoji(ENDERIA_EMOJI['anime_dance'], '🌸')}"
+                response = f"ЕЖЕДНЕВНЫЙ БОНУС!\n\n+{amount} алмазов!\nБаланс: {balance} алмазов\n\nЗаходи завтра снова! {get_enderia_emojis(1)}"
             else:
-                response = f"{get_enderia_emojis()} {username}, ты уже получал бонус сегодня! Возвращайся завтра! {emoji(ENDERIA_EMOJI['cat_sleep'], '🌸')}"
+                response = f"{get_enderia_emojis()} {username}, ты уже получал бонус сегодня! Возвращайся завтра!"
         else:
-            response = f"""{emoji(ENDERIA_EMOJI['cat_surprised'], '❌')} <b>НЕТ БОНУСА!</b> {emoji(ENDERIA_EMOJI['cat_surprised'], '❌')}
+            response = f"""НЕТ БОНУСА!
 
 Чтобы получать ежедневный бонус 100 алмазов, добавь в описание своего профиля:
 
-<b>@lostearth_bot</b>
+@lostearth_bot
 
-📝 <b>Как это сделать:</b>
+Как это сделать:
 1. Зайди в настройки Telegram
 2. Нажми на свою фотографию
 3. Выбери "Редактировать профиль"
 4. В разделе "Описание" добавь: @lostearth_bot
 5. Сохрани и возвращайся!
 
-{get_enderia_emojis(1)} После добавления напиши /daily снова! {get_enderia_emojis(1)}"""
+После добавления напиши /daily снова! {get_enderia_emojis(1)}"""
         add_to_memory(username, user_message, response)
         return response
     
@@ -262,38 +257,38 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
             bet_amount = int(match.group(1))
             response = await game_dice_bet(username, bet_amount, bot, chat_id)
         else:
-            response = f"{get_enderia_emojis()} {username}, используй: /bet [сумма] (например /bet 50) 🎲\n💰 Минимальная ставка: 10 алмазов"
+            response = f"{get_enderia_emojis()} {username}, используй: /bet [сумма] (например /bet 50)\nМинимальная ставка: 10 алмазов"
         add_to_memory(username, user_message, response)
         return response
     
     if user_message.startswith("/games"):
-        response = f"""{emoji(ENDERIA_EMOJI['joystick'], '🎮')} <b>ДОСТУПНЫЕ ИГРЫ</b> {emoji(ENDERIA_EMOJI['joystick'], '🎮')}
+        response = f"""ДОСТУПНЫЕ ИГРЫ
 
-💰 <b>/bet [сумма]</b> - Ставка на кубик (выигрыш x2)
-💎 <b>/balance</b> - Показать баланс
-👤 <b>/profile</b> - Твой профиль
-🎁 <b>/daily</b> - Ежедневный бонус 100💎
+/bet [сумма] - Ставка на кубик (выигрыш x2)
+/balance - Показать баланс
+/profile - Твой профиль
+/daily - Ежедневный бонус 100
 
-✨ <b>Правила игры:</b>
+Правила игры:
 • Минимальная ставка: 10 алмазов
 • Твой кубик против моего
 • Если твой кубик больше - выигрываешь x2
 
-💎 <b>Стартовый баланс: 100 алмазов</b>
+Стартовый баланс: 100 алмазов
 
-{get_enderia_emojis(1)} Напиши /bet 50 чтобы сыграть! {get_enderia_emojis(1)}"""
+Напиши /bet 50 чтобы сыграть! {get_enderia_emojis(1)}"""
         add_to_memory(username, user_message, response)
         return response
     
-    # ========== ОБЫЧНЫЙ РАЗГОВОР ==========
+    # ========== ИИ ДЛЯ ОБЫЧНЫХ СООБЩЕНИЙ ==========
     history = get_user_context(username)
     already_greeted = has_already_greeted(username)
     is_greeting_msg = is_greeting(user_message)
     is_name_call = is_just_name(user_message)
     
-    # Если просто позвали по имени - отвечаем без лишних вопросов
+    # Если просто позвали по имени - короткий ответ
     if is_name_call and not is_reply:
-        response = f"{get_enderia_emojis()} Слушаю, {username}! Что хотел узнать? Может сыграем в кости? 🎲"
+        response = f"{get_enderia_emojis()} Слушаю, {username}! Что хотел узнать?"
         if not already_greeted:
             mark_greeted(username)
         add_to_memory(username, user_message, response)
@@ -301,70 +296,100 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     
     # Если уже здоровались и снова привет - не здороваемся заново
     if already_greeted and is_greeting_msg and not is_reply:
-        response = f"{get_enderia_emojis()} {username}, мы уже общаемся! Хочешь сыграть в кости? Напиши /bet 50 🎲"
+        response = f"{get_enderia_emojis()} {username}, мы уже общаемся! Хочешь сыграть в кости? Напиши /bet 50"
         add_to_memory(username, user_message, response)
         return response
     
-    # Пытаемся получить ответ от ИИ
+    # Пытаемся получить ответ от ИИ через OpenRouter
     if OPENROUTER_API_KEY:
         try:
             current_time = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
             system_prompt = get_system_prompt(username, current_time, current_online, current_max)
             
-            full_prompt = f"""Вот история нашего диалога с {username}:
-{history if history else "Пока пусто"}
+            # Формируем промпт с историей
+            full_prompt = f"""История диалога:
+{history if history else "Диалог только начинается"}
 
-Сейчас {username} написал: {user_message}
+{username} написал: {user_message}
 
-Ответь как Эндерия, учитывая историю разговора.
-ВАЖНО: 
-- Если вы уже общались - НЕ ЗДОРОВАЙСЯ заново!
-- Если это ответ на твоё сообщение - ПРОДОЛЖАЙ ДИАЛОГ
-- Будь милой, дружелюбной, используй эмодзи
-- Отвечай 2-4 предложения
-- Если спросят про игры - расскажи про /bet и /daily"""
+Ответь как Эндерия (девушка-эндермен). Правила:
+1. Если уже общались - НЕ ЗДОРОВАЙСЯ заново
+2. Если это ответ на твоё сообщение - ПРОДОЛЖАЙ диалог
+3. Будь милой, дружелюбной, используй премиум эмодзи
+4. Отвечай 1-3 предложения, по делу
+5. Если спрашивают про игры - предложи /bet
+6. Если спрашивают про бонус - расскажи про /daily и @lostearth_bot в описании
+7. Если спрашивают про сервер - дай IP: 150.241.85.40:25565
+8. НЕ используй HTML теги
+9. НЕ пиши длинные сообщения
+
+Твой ответ:"""
             
             for model in MODELS_CHAIN:
                 try:
                     async with aiohttp.ClientSession() as session:
                         async with session.post(
                             "https://openrouter.ai/api/v1/chat/completions",
-                            headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"},
+                            headers={
+                                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                                "Content-Type": "application/json"
+                            },
                             json={
                                 "model": model,
                                 "messages": [
                                     {"role": "system", "content": system_prompt},
                                     {"role": "user", "content": full_prompt}
                                 ],
-                                "max_tokens": 500,
-                                "temperature": 0.9,
+                                "max_tokens": 300,
+                                "temperature": 0.8,
                             },
-                            timeout=aiohttp.ClientTimeout(total=35)
+                            timeout=aiohttp.ClientTimeout(total=30)
                         ) as response:
                             if response.status == 200:
                                 data = await response.json()
                                 result = data["choices"][0]["message"]["content"].strip()
+                                # Убираем возможные HTML теги
                                 result = re.sub(r'<[^>]+>', '', result)
                                 
                                 if not already_greeted:
                                     mark_greeted(username)
                                 
+                                # Добавляем премиум эмодзи если их нет
+                                if not any(key in result for key in ['<tg-emoji', '🐱', '💜', '✨']):
+                                    result = f"{get_enderia_emojis(1)} {result} {get_enderia_emojis(1)}"
+                                
                                 add_to_memory(username, user_message, result)
+                                save_to_log(username, result, is_bot=True)
                                 return result
-                except:
+                except Exception as e:
+                    print(f"Модель {model} ошибка: {e}")
                     continue
-        except:
-            pass
+        except Exception as e:
+            print(f"Ошибка ИИ: {e}")
     
-    # Fallback
-    fallback = f"{get_enderia_emojis()} {username}, я здесь! Хочешь сыграть в кости? Напиши /bet 50 🎲\n\nЕжедневный бонус 100💎 за @lostearth_bot в описании! {get_enderia_emojis(1)}"
-    add_to_memory(username, user_message, fallback)
-    return fallback
+    # Если ИИ не ответил, используем умные fallback ответы
+    fallbacks = [
+        f"{get_enderia_emojis()} {username}, я здесь! Хочешь узнать про сервер или поиграть в кости? Напиши /bet 50",
+        f"{get_enderia_emojis()} {username}, у нас есть мирный режим и SMP! IP: 150.241.85.40:25565",
+        f"{get_enderia_emojis()} {username}, не забудь про ежедневный бонус 100 алмазов! Добавь @lostearth_bot в описание и напиши /daily",
+        f"{get_enderia_emojis()} {username}, могу рассказать про донаты, правила или сыграть с тобой в кости! Что выберешь?",
+        f"{get_enderia_emojis()} {username}, телепортнулась к тебе! Чем могу помочь?",
+    ]
+    
+    response = random.choice(fallbacks)
+    
+    if not already_greeted:
+        mark_greeted(username)
+    
+    add_to_memory(username, user_message, response)
+    save_to_log(username, response, is_bot=True)
+    return response
 
 def should_respond(message_text: str) -> bool:
+    """Проверяет, нужно ли отвечать на сообщение"""
     if not message_text:
         return False
     text_lower = message_text.lower()
-    # Отвечаем только когда обращаются к Эндерии
+    # Отвечаем когда обращаются к Эндерии
     keywords = ["эндер", "эндерия", "энди", "ендер", "енди", "@lostearth_bot"]
     return any(keyword in text_lower for keyword in keywords)
