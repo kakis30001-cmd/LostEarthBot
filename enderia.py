@@ -1,9 +1,5 @@
-import asyncio
 import os
 from datetime import datetime
-from aiogram import Bot, Dispatcher, types
-from aiogram.filters import Command
-from aiogram.types import Message
 from google import genai
 from google.genai import types as ai_types
 from dotenv import load_dotenv
@@ -27,23 +23,22 @@ ENDERIA_PROMPT = (
 
 async def get_enderia_response(user_message: str, username: str) -> str:
     """Получить ответ от Эндерии"""
-    try:
-        current_time = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
-        full_instruction = f"{ENDERIA_PROMPT} Текущая дата и время: {current_time}. Игрок {username} спросил: {user_message}"
-        
-        response = ai_client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=user_message,
-            config=ai_types.GenerateContentConfig(
-                system_instruction=full_instruction,
-                temperature=0.9,
-            ),
-        )
-        
-        return response.text if response.text else None
-    except Exception as e:
-        print(f"Ошибка Gemini: {e}")
-        return None
+    current_time = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
+    
+    # Формируем полную инструкцию
+    full_instruction = f"{ENDERIA_PROMPT} Текущая дата и время: {current_time}. Игрок {username} написал: {user_message}"
+    
+    # Отправляем запрос в Gemini
+    response = ai_client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=user_message,
+        config=ai_types.GenerateContentConfig(
+            system_instruction=full_instruction,
+            temperature=0.9,
+        ),
+    )
+    
+    return response.text if response.text else None
 
 def should_respond(message_text: str) -> bool:
     """Проверяет, обращаются ли к Эндерии"""
@@ -51,4 +46,4 @@ def should_respond(message_text: str) -> bool:
         return False
     text_lower = message_text.lower()
     keywords = ["эндер", "эндерия", "энди", "ендер", "энд"]
-    return any(k in text_lower for k in keywords)
+    return any(keyword in text_lower for keyword in keywords)
