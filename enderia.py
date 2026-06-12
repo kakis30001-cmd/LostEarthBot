@@ -3,7 +3,7 @@ import random
 import re
 import aiohttp
 import asyncio
-import asyncpg
+import json
 from datetime import datetime, date
 from collections import defaultdict, deque
 from dotenv import load_dotenv
@@ -12,118 +12,6 @@ from prompts import get_system_prompt
 
 load_dotenv()
 
-# ========== ПОДКЛЮЧЕНИЕ К POSTGRESQL (правильный URL для Railway) ==========
-# Используем внутренний хост Railway, а не внешний
-DATABASE_URL = "postgresql://postgres:hgSCmLMXOynevPATDDMerzJwTMBxFamM@postgres.railway.internal:5432/railway"
-
-# ========== ФУНКЦИИ БАЗЫ ДАННЫХ С ПОВТОРОМ ПРИ ОШИБКЕ ==========
-async def init_db():
-    try:
-        conn = await asyncpg.connect(DATABASE_URL)
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS players (
-                username TEXT PRIMARY KEY,
-                balance INTEGER DEFAULT 100,
-                last_bonus DATE,
-                wins INTEGER DEFAULT 0,
-                losses INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT NOW()
-            )
-        """)
-        await conn.close()
-        print("✅ PostgreSQL подключена")
-        return True
-    except Exception as e:
-        print(f"⚠️ Ошибка БД: {e}, использую локальное хранилище")
-        return False
-
-# Локальное хранилище на случай ошибки БД
-local_players = {}
-local_wins = {}
-local_losses = {}
-local_bonus = {}
-
-async def get_balance(username: str) -> int:
-    try:
-        conn = await asyncpg.connect(DATABASE_URL)
-        row = await conn.fetchrow("SELECT balance FROM players WHERE username = $1", username)
-        await conn.close()
-        if row:
-            return row[0]
-        else:
-            await conn.execute("INSERT INTO players (username, balance) VALUES ($1, 100)", username)
-            return 100
-    except:
-        # Fallback на локальное хранилище
-        return local_players.get(username, 100)
-
-async def update_balance(username: str, delta: int):
-    try:
-        conn = await asyncpg.connect(DATABASE_URL)
-        await conn.execute("UPDATE players SET balance = balance + $1 WHERE username = $2", delta, username)
-        await conn.close()
-    except:
-        # Fallback на локальное хранилище
-        local_players[username] = local_players.get(username, 100) + delta
-
-async def can_claim_daily_bonus(username: str) -> bool:
-    try:
-        conn = await asyncpg.connect(DATABASE_URL)
-        row = await conn.fetchrow("SELECT last_bonus FROM players WHERE username = $1", username)
-        await conn.close()
-        if not row or row[0] is None:
-            return True
-        return row[0] < date.today()
-    except:
-        last = local_bonus.get(username)
-        return last is None or last < date.today()
-
-async def claim_daily_bonus(username: str) -> int:
-    try:
-        conn = await asyncpg.connect(DATABASE_URL)
-        await conn.execute("UPDATE players SET balance = balance + 100, last_bonus = $1 WHERE username = $2", date.today(), username)
-        await conn.close()
-        return 100
-    except:
-        local_players[username] = local_players.get(username, 100) + 100
-        local_bonus[username] = date.today()
-        return 100
-
-async def update_stats(username: str, is_win: bool):
-    try:
-        conn = await asyncpg.connect(DATABASE_URL)
-        if is_win:
-            await conn.execute("UPDATE players SET wins = wins + 1 WHERE username = $1", username)
-        else:
-            await conn.execute("UPDATE players SET losses = losses + 1 WHERE username = $1", username)
-        await conn.close()
-    except:
-        if is_win:
-            local_wins[username] = local_wins.get(username, 0) + 1
-        else:
-            local_losses[username] = local_losses.get(username, 0) + 1
-
-async def get_stats(username: str) -> dict:
-    try:
-        conn = await asyncpg.connect(DATABASE_URL)
-        row = await conn.fetchrow("SELECT wins, losses FROM players WHERE username = $1", username)
-        await conn.close()
-        if row:
-            return {"wins": row[0], "losses": row[1]}
-        return {"wins": 0, "losses": 0}
-    except:
-        return {"wins": local_wins.get(username, 0), "losses": local_losses.get(username, 0)}
-
-async def get_top_players(limit: int = 10) -> list:
-    try:
-        conn = await asyncpg.connect(DATABASE_URL)
-        rows = await conn.fetch("SELECT username, balance, wins, losses FROM players ORDER BY balance DESC LIMIT $1", limit)
-        await conn.close()
-        return [dict(row) for row in rows]
-    except:
-        return []
-
-# ========== ОСТАЛЬНОЙ КОД ==========
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 MODELS_CHAIN = [
@@ -134,6 +22,86 @@ MODELS_CHAIN = [
     "nvidia/nemotron-3-nano-30b-a3b",
 ]
 
+# ========== ПРОСТОЕ ФАЙЛОВОЕ ХРАНИЛИЩЕ (БЕЗ БД) ==========
+PLAYERS_FILE = "players.json"
+
+def load_players():
+    if not os.path.exists(PLAYERS_FILE):
+        return {}
+    try:
+        with open(PLAYERS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except:
+        return {}
+
+def save_players(data):
+    try:
+        with open(PLAYERS_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except:
+        pass
+
+def get_balance(username: str) -> int:
+    data = load_players()
+    if username not in data:
+        data[username] = {"balance": 100, "last_bonus": None, "wins": 0, "losses": 0}
+        save_players(data)
+    return data[username].get("balance", 100)
+
+def update_balance(username: str, delta: int):
+    data = load_players()
+    if username not in data:
+        data[username] = {"balance": 100, "last_bonus": None, "wins": 0, "losses": 0}
+    data[username]["balance"] = data[username].get("balance", 100) + delta
+    save_players(data)
+
+def can_claim_daily_bonus(username: str) -> bool:
+    data = load_players()
+    if username not in data:
+        return True
+    last_bonus = data[username].get("last_bonus")
+    if not last_bonus:
+        return True
+    return last_bonus != str(date.today())
+
+def claim_daily_bonus(username: str) -> int:
+    data = load_players()
+    if username not in data:
+        data[username] = {"balance": 100, "last_bonus": None, "wins": 0, "losses": 0}
+    data[username]["balance"] = data[username].get("balance", 100) + 100
+    data[username]["last_bonus"] = str(date.today())
+    save_players(data)
+    return 100
+
+def update_stats(username: str, is_win: bool):
+    data = load_players()
+    if username not in data:
+        data[username] = {"balance": 100, "last_bonus": None, "wins": 0, "losses": 0}
+    if is_win:
+        data[username]["wins"] = data[username].get("wins", 0) + 1
+    else:
+        data[username]["losses"] = data[username].get("losses", 0) + 1
+    save_players(data)
+
+def get_stats(username: str) -> dict:
+    data = load_players()
+    if username not in data:
+        return {"wins": 0, "losses": 0}
+    return {"wins": data[username].get("wins", 0), "losses": data[username].get("losses", 0)}
+
+def get_top_players(limit: int = 10) -> list:
+    data = load_players()
+    players = []
+    for name, info in data.items():
+        players.append({
+            "username": name,
+            "balance": info.get("balance", 100),
+            "wins": info.get("wins", 0)
+        })
+    players.sort(key=lambda x: x["balance"], reverse=True)
+    return players[:limit]
+
+# ========== ОСТАЛЬНОЙ КОД ==========
 current_online = 0
 current_max = 0
 active_games = {}
@@ -188,7 +156,7 @@ def mark_greeted(username: str):
 
 def is_greeting(text: str) -> bool:
     text_lower = text.lower()
-    greetings = ["привет", "здравствуй", "хай", "hello", "приветик", "здарова", "доброе утро", "добрый день", "добрый вечер"]
+    greetings = ["привет", "здравствуй", "хай", "hello", "приветик", "здарова", "доброе утро", "добрый день"]
     return any(g in text_lower for g in greetings)
 
 # ========== ИГРЫ ==========
@@ -197,7 +165,7 @@ async def roll_dice_animated(bot, chat_id: int):
     return msg.dice.value
 
 async def game_dice_bet(username: str, bet_amount: int, bot, chat_id: int) -> str:
-    balance = await get_balance(username)
+    balance = get_balance(username)
     if balance < bet_amount:
         return f"{get_random_emoji()} {username}, у тебя всего {balance} алмазов! Не хватает на ставку {bet_amount} 💎"
     
@@ -209,14 +177,14 @@ async def game_dice_bet(username: str, bet_amount: int, bot, chat_id: int) -> st
     bot_value = await roll_dice_animated(bot, chat_id)
     
     if player_value > bot_value:
-        await update_balance(username, bet_amount)
-        await update_stats(username, is_win=True)
-        new_balance = await get_balance(username)
+        update_balance(username, bet_amount)
+        update_stats(username, is_win=True)
+        new_balance = get_balance(username)
         return f"{get_random_emoji()} 🎉 ПОБЕДА! 🎉 {get_random_emoji()}\n\nТвой кубик: {player_value}\nМой кубик: {bot_value}\n\n✨ Ты выиграл {bet_amount} алмазов!\n💎 Баланс: {new_balance} {get_random_emoji()}"
     elif player_value < bot_value:
-        await update_balance(username, -bet_amount)
-        await update_stats(username, is_win=False)
-        new_balance = await get_balance(username)
+        update_balance(username, -bet_amount)
+        update_stats(username, is_win=False)
+        new_balance = get_balance(username)
         return f"{get_random_emoji()} 😔 ПРОИГРЫШ... 😔 {get_random_emoji()}\n\nТвой кубик: {player_value}\nМой кубик: {bot_value}\n\n💔 Ты проиграл {bet_amount} алмазов!\n💎 Баланс: {new_balance} {get_random_emoji()}"
     else:
         return f"{get_random_emoji()} 🤝 НИЧЬЯ! 🤝 {get_random_emoji()}\n\nОба выбросили {player_value}\n\n💰 Ставка возвращена!\n💎 Баланс: {balance} {get_random_emoji()}"
@@ -237,7 +205,7 @@ async def game_dice_battle(username: str, bot, chat_id: int) -> str:
         return f"{get_random_emoji()} 🤝 НИЧЬЯ! 🤝 {get_random_emoji()}\n\nОба выбросили {player_value}\n\n🎲 Сыграем ещё? Напиши /dice {get_random_emoji()}"
 
 async def game_coinflip(username: str, bet_amount: int, choice: str) -> str:
-    balance = await get_balance(username)
+    balance = get_balance(username)
     if balance < bet_amount:
         return f"{get_random_emoji()} {username}, у тебя всего {balance} алмазов! Не хватает на ставку {bet_amount} 💎"
     
@@ -245,14 +213,14 @@ async def game_coinflip(username: str, bet_amount: int, choice: str) -> str:
     coin_emoji = "🦅" if coin == "орёл" else "🪙"
     
     if choice.lower() == coin:
-        await update_balance(username, bet_amount)
-        await update_stats(username, is_win=True)
-        new_balance = await get_balance(username)
+        update_balance(username, bet_amount)
+        update_stats(username, is_win=True)
+        new_balance = get_balance(username)
         return f"{get_random_emoji()} 🎉 ПОБЕДА! 🎉 {get_random_emoji()}\n\nТвой выбор: {choice}\nВыпало: {coin} {coin_emoji}\n\n✨ Ты выиграл {bet_amount} алмазов!\n💎 Баланс: {new_balance} {get_random_emoji()}"
     else:
-        await update_balance(username, -bet_amount)
-        await update_stats(username, is_win=False)
-        new_balance = await get_balance(username)
+        update_balance(username, -bet_amount)
+        update_stats(username, is_win=False)
+        new_balance = get_balance(username)
         return f"{get_random_emoji()} 😔 ПРОИГРЫШ... 😔 {get_random_emoji()}\n\nТвой выбор: {choice}\nВыпало: {coin} {coin_emoji}\n\n💔 Ты проиграл {bet_amount} алмазов!\n💎 Баланс: {new_balance} {get_random_emoji()}"
 
 # ========== ОСНОВНАЯ ФУНКЦИЯ ==========
@@ -264,15 +232,15 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     
     # ========== ИГРОВЫЕ КОМАНДЫ ==========
     if user_message.startswith("/balance") or user_message.startswith("/bal"):
-        balance = await get_balance(username)
+        balance = get_balance(username)
         response = f"{get_random_emoji()} {username}, твой баланс: {balance} 💎 алмазов! {get_random_emoji()}"
         add_to_memory(username, user_message, response)
         return response
     
     if user_message.startswith("/daily"):
-        if await can_claim_daily_bonus(username):
-            bonus = await claim_daily_bonus(username)
-            balance = await get_balance(username)
+        if can_claim_daily_bonus(username):
+            bonus = claim_daily_bonus(username)
+            balance = get_balance(username)
             response = f"{get_random_emoji()} 🎁 ЕЖЕДНЕВНЫЙ БОНУС! 🎁 {get_random_emoji()}\n\n✨ +{bonus} 💎 алмазов!\n💎 Баланс: {balance} алмазов\n\n🌸 Заходи завтра снова! 🌸"
         else:
             response = f"{get_random_emoji()} {username}, ты уже получал бонус сегодня! Возвращайся завтра! 🌸"
@@ -280,14 +248,14 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         return response
     
     if user_message.startswith("/profile"):
-        balance = await get_balance(username)
-        stats = await get_stats(username)
+        balance = get_balance(username)
+        stats = get_stats(username)
         response = f"{get_random_emoji()} 👤 ПРОФИЛЬ ИГРОКА 👤 {get_random_emoji()}\n\n👤 Имя: {username}\n💎 Баланс: {balance} алмазов\n🏆 Побед: {stats['wins']}\n💔 Поражений: {stats['losses']}\n📊 Всего игр: {stats['wins'] + stats['losses']}\n\n{get_random_emoji()} Напиши /games чтобы играть! {get_random_emoji()}"
         add_to_memory(username, user_message, response)
         return response
     
     if user_message.startswith("/top"):
-        top = await get_top_players(10)
+        top = get_top_players(10)
         if not top:
             response = f"{get_random_emoji()} 📊 Топ игроков пока пуст! Будь первым! 🎲 {get_random_emoji()}"
         else:
@@ -410,15 +378,11 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         except:
             pass
     
-    # Fallback ответы (полные, не обрезанные)
+    # Fallback ответы
     fallbacks = [
-        f"{get_random_emoji()} {username}, я Эндерия — хранительница Края! ✨\n\nНа LostEarth есть два режима: Мирный (PvP по согласию) и SMP (можно рейдить).\nIP Java: 150.241.85.40:25565, Bedrock порт 19132.\n\nХочешь поиграть? Напиши /games 🎲 {get_random_emoji()}",
-        
-        f"{get_random_emoji()} {username}, привет! 🌸\n\nУ нас есть донаты: Друид 50₽, Оракул 100₽, Монарх 200₽, Херувим 300₽ (с полётом!), Архонт 400₽, Серафим 600₽.\nПо вопросам к @pelmewki379 💎\n\nХочешь сыграть в кости? Напиши /dice 🎲 {get_random_emoji()}",
-        
-        f"{get_random_emoji()} {username}, сейчас на сервере онлайн {current_online}/{current_max} игроков!\n\nЗаходи играть! IP: 150.241.85.40:25565\n\nА если хочешь поиграть со мной — напиши /games 🎮 {get_random_emoji()}",
-        
-        f"{get_random_emoji()} {username}, я Эндерия! 🐱\n\nМогу рассказать о сервере, режимах игры, донатах или сыграть с тобой в кости!\n\nНапиши /games чтобы увидеть все игры! 🎲 {get_random_emoji()}",
+        f"{get_random_emoji()} {username}, я Эндерия — хранительница Края! ✨\n\nIP Java: 150.241.85.40:25565\nХочешь поиграть? Напиши /games 🎲 {get_random_emoji()}",
+        f"{get_random_emoji()} {username}, привет! У нас есть игры: /dice, /bet, /coin. Проверим удачу? 🎲 {get_random_emoji()}",
+        f"{get_random_emoji()} {username}, на LostEarth есть два режима: Мирный и SMP. IP: 150.241.85.40:25565\n\nНапиши /games чтобы поиграть! 🎮 {get_random_emoji()}",
     ]
     response = random.choice(fallbacks)
     
