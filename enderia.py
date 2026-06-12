@@ -1,19 +1,23 @@
 import os
 import random
 import re
+import aiohttp
+import asyncio
 from datetime import datetime
 from collections import defaultdict, deque
-from google import genai
-from google.genai import types as ai_types
-from google.genai.errors import ClientError
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# ========== OPENROUTER НАСТРОЙКИ ==========
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+OPENROUTER_MODEL = "nex-agi/nex-n2-pro:free"  # Бесплатная модель!
 
 # ========== ПАМЯТЬ ДИАЛОГОВ ==========
 user_memory = defaultdict(lambda: deque(maxlen=10))
 user_last_question = {}
 user_greeted = {}
+user_last_time = {}
 
 def get_user_context(username: str) -> str:
     if username not in user_memory or len(user_memory[username]) == 0:
@@ -54,23 +58,6 @@ def is_greeting(text: str) -> bool:
     greetings = ["привет", "здравствуй", "здарова", "хай", "hello", "hi", "privet"]
     return any(g in text_lower for g in greetings)
 
-# ========== РОТАЦИЯ КЛЮЧЕЙ GEMINI ==========
-GEMINI_API_KEYS = [
-    os.getenv("GEMINI_API_KEY_1"),
-    os.getenv("GEMINI_API_KEY_2"),
-    os.getenv("GEMINI_API_KEY_3"),
-]
-GEMINI_API_KEYS = [key for key in GEMINI_API_KEYS if key]
-current_key_index = 0
-
-def get_next_gemini_client():
-    global current_key_index
-    if not GEMINI_API_KEYS:
-        raise Exception("Нет доступных API ключей Gemini!")
-    key = GEMINI_API_KEYS[current_key_index]
-    current_key_index = (current_key_index + 1) % len(GEMINI_API_KEYS)
-    return genai.Client(api_key=key)
-
 # ========== ПРЕМИУМ ЭМОДЗИ ==========
 ENDERIA_EMOJI = {
     "cat_dance": "5359444458930718519",
@@ -100,15 +87,15 @@ def get_enderia_emojis():
         emojis.append(random_enderia_emoji())
     return " ".join(emojis)
 
-# ========== ПРОМПТ ЭНДЕРИИ ==========
-ENDERIA_SYSTEM_PROMPT = f"""
-Ты — Эндерия (Энди), девушка-эндермен в чате Minecraft сервера LostEarth.
+# ========== СИСТЕМНЫЙ ПРОМПТ ==========
+def get_system_prompt(username: str, current_time: str) -> str:
+    return f"""Ты — Эндерия (Энди), девушка-эндермен в чате Minecraft сервера LostEarth.
 
 Твой образ: высокая эндермен-девушка с фиолетовыми волосами и светящимися глазами. Ты паришь и телепортируешься.
 
 Твой характер: добрая, загадочная. Обожаешь котиков, аниме и зайчиков.
 
-Стиль общения: говори ласково, используй обращения "игрок~", "дружок~".
+Стиль общения: говори ласково, используй обращения "игрок~", "дружок~". Отвечай коротко, 2-4 предложения.
 
 ИНФОРМАЦИЯ О СЕРВЕРЕ LostEarth:
 
@@ -140,16 +127,26 @@ IP-АДРЕСА:
 - Запрещена реклама → БАН
 - Оскорбление админа → МУТ
 
-Отвечай коротко, 2-4 предложения. Используй эмодзи только в конце ответа.
-"""
+Игрок: {username}
+Текущая дата: {current_time}
 
+Важно: НЕ используй HTML теги в ответе! Только текст и обычные эмодзи. Эмодзи ставь в конце ответа."""
+
+# ========== ОСНОВНАЯ ФУНКЦИЯ ==========
 async def get_enderia_response(user_message: str, username: str) -> str:
-    """Получить ответ от Эндерии"""
+    """Получить ответ от Эндерии через OpenRouter"""
     
     current_time = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
     context = get_user_context(username)
     already_greeted = has_already_greeted(username)
     is_greeting_msg = is_greeting(user_message)
+    
+    # Ограничение по времени (не чаще чем раз в 2 секунды)
+    now = datetime.now().timestamp()
+    last_time = user_last_time.get(username, 0)
+    if now - last_time < 2:
+        await asyncio.sleep(1)
+    user_last_time[username] = now
     
     # Если уже здоровались и это снова приветствие
     if already_greeted and is_greeting_msg:
@@ -161,54 +158,77 @@ async def get_enderia_response(user_message: str, username: str) -> str:
     if already_greeted:
         greeting_instruction = "Ты УЖЕ поздоровалась. НЕ ЗДОРОВАЙСЯ! Начни сразу с ответа."
     
-    full_prompt = f"""Время: {current_time}
+    full_prompt = f"""{greeting_instruction}
 {context}
-{greeting_instruction}
 
 Игрок {username} написал: {user_message}
 
-Ответь как Эндерия (2-4 предложения). В конце ответа поставь эмодзи. НЕ используй HTML теги!"""
+Ответь как Эндерия (2-4 предложения). В конце ответа поставь эмодзи (🐱💜🐰). Не используй HTML теги!"""
 
-    for attempt in range(len(GEMINI_API_KEYS) * 2):
-        try:
-            ai_client = get_next_gemini_client()
-            
-            response = ai_client.models.generate_content(
-                model="gemini-2.5-flash-lite",
-                contents=full_prompt,
-                config=ai_types.GenerateContentConfig(
-                    system_instruction=ENDERIA_SYSTEM_PROMPT,
-                    temperature=0.85,
-                    max_output_tokens=200,
-                ),
-            )
-            
-            if response and response.text:
-                result = response.text.strip()
-                
-                # Убираем все HTML теги из ответа ИИ
-                result = re.sub(r'<[^>]+>', '', result)
-                
-                # Добавляем эмодзи если их нет
-                if not any(emoji_id in result for emoji_id in ENDERIA_EMOJI.values()):
-                    result += f" {get_enderia_emojis()}"
-                
-                # Отмечаем что поздоровались
-                if not already_greeted:
-                    mark_greeted(username)
-                
-                add_to_memory(username, user_message, result)
-                return result
-                
-        except ClientError as e:
-            if "429" in str(e):
-                print(f"[WARN] Лимит ключа {attempt}")
-                continue
-        except Exception as e:
-            print(f"[ERROR] {e}")
-            continue
+    system_prompt = get_system_prompt(username, current_time)
     
-    fallback = f"{get_enderia_emojis()} {username}, энергия Края кончилась, повтори позже!"
+    # Пробуем отправить запрос с повторами
+    for attempt in range(3):
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                        "Content-Type": "application/json",
+                        "HTTP-Referer": "https://t.me/LostEarthBot",
+                        "X-Title": "LostEarth Bot"
+                    },
+                    json={
+                        "model": OPENROUTER_MODEL,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": full_prompt}
+                        ],
+                        "max_tokens": 200,
+                        "temperature": 0.85,
+                        "top_p": 0.95,
+                        "stream": False
+                    },
+                    timeout=aiohttp.ClientTimeout(total=30)
+                ) as response:
+                    
+                    if response.status == 200:
+                        data = await response.json()
+                        result = data["choices"][0]["message"]["content"].strip()
+                        
+                        # Убираем все HTML теги из ответа ИИ
+                        result = re.sub(r'<[^>]+>', '', result)
+                        
+                        # Добавляем эмодзи если их нет
+                        if not any(emoji_id in result for emoji_id in ENDERIA_EMOJI.values()):
+                            result += f" {get_enderia_emojis()}"
+                        
+                        # Отмечаем что поздоровались
+                        if not already_greeted:
+                            mark_greeted(username)
+                        
+                        add_to_memory(username, user_message, result)
+                        return result
+                    else:
+                        error_text = await response.text()
+                        print(f"OpenRouter ошибка {response.status}: {error_text}")
+                        
+        except asyncio.TimeoutError:
+            print(f"Таймаут OpenRouter, попытка {attempt + 1}/3")
+            await asyncio.sleep(1)
+        except Exception as e:
+            print(f"OpenRouter ошибка: {e}")
+            await asyncio.sleep(1)
+    
+    # Fallback ответы при ошибке
+    fallbacks = [
+        f"{get_enderia_emojis()} {username}, связь с Краем потеряна! Повтори позже 💜",
+        f"{get_enderia_emojis()} {username}, на LostEarth есть два режима: Мирный (PvP по согласию) и SMP (можно рейдить)! 🐱",
+        f"{get_enderia_emojis()} {username}, IP Java: 150.241.85.40:25565, Bedrock: 19132. Заходи играть! 🐰",
+        f"{get_enderia_emojis()} {username}, донаты: Друид 50₽, Оракул 100₽, Монарх 200₽, Херувим 300₽, Архонт 400₽, Серафим 600₽ 💜",
+    ]
+    fallback = random.choice(fallbacks)
     add_to_memory(username, user_message, fallback)
     return fallback
 
