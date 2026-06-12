@@ -194,8 +194,6 @@ async def start_cmd(message: Message):
 
 {random_heart()} <b>Я Эндерия - твой живой помощник!</b>
 
-📊 <b>Текущий онлайн:</b> {online}/{max_players}
-
 {random_cat()} <b>Просто напиши моё имя:</b> Энди, Эндерия, Эндер
 
 {random_rabbit()} {random_anime()} {get_enderia_emojis()}"""
