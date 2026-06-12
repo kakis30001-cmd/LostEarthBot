@@ -155,12 +155,11 @@ def get_random_emoji():
     emojis = ["💜", "🐱", "🐰", "✨", "🎲", "💎", "🎯", "⭐"]
     return random.choice(emojis)
 
-# ========== ПАМЯТЬ ДИАЛОГОВ (ВАЖНО!) ==========
+# ========== ПАМЯТЬ ДИАЛОГОВ ==========
 user_memory = defaultdict(lambda: deque(maxlen=10))
 user_greeted = {}
 
 def get_user_context(username: str) -> str:
-    """Возвращает историю диалога с пользователем"""
     if username not in user_memory or len(user_memory[username]) == 0:
         return ""
     return "\n".join(list(user_memory[username]))
@@ -186,7 +185,7 @@ def mark_greeted(username: str):
 
 def is_greeting(text: str) -> bool:
     text_lower = text.lower()
-    greetings = ["привет", "здравствуй", "хай", "hello", "приветик"]
+    greetings = ["привет", "здравствуй", "хай", "hello", "приветик", "здарова"]
     return any(g in text_lower for g in greetings)
 
 # ========== ИГРЫ ==========
@@ -341,20 +340,17 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         add_to_memory(username, user_message, response)
         return response
     
-    # ========== ОБЫЧНЫЙ РАЗГОВОР С ПАМЯТЬЮ ==========
-    
-    # Получаем историю диалога
+    # ========== ОБЫЧНЫЙ РАЗГОВОР ==========
     history = get_user_context(username)
     already_greeted = has_already_greeted(username)
     is_greeting_msg = is_greeting(user_message)
     
-    # Если уже здоровались и снова привет
     if already_greeted and is_greeting_msg and not is_reply:
         response = f"{get_random_emoji()} {username}, мы уже общаемся! Что хотел узнать? Напиши /games чтобы поиграть!"
         add_to_memory(username, user_message, response)
         return response
     
-    # Пытаемся получить ответ от ИИ с учётом истории
+    # Пытаемся получить ответ от ИИ
     try:
         current_time = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
         system_prompt = get_system_prompt(username, current_time, current_online, current_max)
@@ -366,7 +362,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
 
 Ответь как Эндерия, учитывая историю разговора. Если вы уже общались - НЕ ЗДОРОВАЙСЯ заново.
 Будь милой и дружелюбной. Если спросят про игры - расскажи о /games.
-Ответь 2-3 предложения, в конце эмодзи."""
+Ответь 3-5 предложениями, закончи мысль. В конце эмодзи."""
         
         for model in MODELS_CHAIN:
             try:
@@ -380,15 +376,20 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
                                 {"role": "system", "content": system_prompt},
                                 {"role": "user", "content": full_prompt}
                             ],
-                            "max_tokens": 200,
+                            "max_tokens": 400,
                             "temperature": 0.85,
                         },
-                        timeout=aiohttp.ClientTimeout(total=20)
+                        timeout=aiohttp.ClientTimeout(total=25)
                     ) as response:
                         if response.status == 200:
                             data = await response.json()
                             result = data["choices"][0]["message"]["content"].strip()
                             result = re.sub(r'<[^>]+>', '', result)
+                            
+                            # Проверяем, не обрезано ли сообщение
+                            if len(result) < 50 and "..." in result:
+                                # Если обрезано - добавляем ещё
+                                result += " 🌸💜"
                             
                             if not already_greeted:
                                 mark_greeted(username)
