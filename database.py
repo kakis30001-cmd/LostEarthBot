@@ -1,168 +1,130 @@
 import os
-import asyncpg
+import json
 from datetime import date
 from typing import Optional, Dict, Any
 
-DATABASE_URL = os.getenv("DATABASE_URL")
+PLAYERS_FILE = "players.json"
 
-# Кэш для быстрого доступа
-balance_cache = {}
-stats_cache = {}
-
-async def init_db():
-    """Создаёт таблицы если их нет"""
+def load_players():
+    """Загружает всех игроков из файла"""
+    if not os.path.exists(PLAYERS_FILE):
+        return {}
     try:
-        conn = await asyncpg.connect(DATABASE_URL)
-        
-        # Таблица игроков
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS players (
-                username TEXT PRIMARY KEY,
-                balance INTEGER DEFAULT 100,
-                last_bonus DATE,
-                wins INTEGER DEFAULT 0,
-                losses INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT NOW(),
-                updated_at TIMESTAMP DEFAULT NOW()
-            )
-        """)
-        
-        await conn.close()
-        print("✅ PostgreSQL база данных инициализирована")
-        return True
-    except Exception as e:
-        print(f"❌ Ошибка инициализации БД: {e}")
-        return False
+        with open(PLAYERS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except:
+        return {}
+
+def save_players(data):
+    """Сохраняет игроков в файл"""
+    try:
+        with open(PLAYERS_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except:
+        pass
 
 async def get_balance(username: str) -> int:
     """Получает баланс игрока"""
-    try:
-        conn = await asyncpg.connect(DATABASE_URL)
-        row = await conn.fetchrow("SELECT balance FROM players WHERE username = $1", username)
-        await conn.close()
-        
-        if row:
-            balance_cache[username] = row[0]
-            return row[0]
-        else:
-            await create_player(username)
-            return 100
-    except Exception as e:
-        print(f"❌ Ошибка получения баланса: {e}")
-        return balance_cache.get(username, 100)
+    data = load_players()
+    if username not in data:
+        data[username] = {"balance": 100, "last_bonus": None, "wins": 0, "losses": 0}
+        save_players(data)
+    return data[username].get("balance", 100)
 
 async def create_player(username: str):
     """Создаёт нового игрока"""
-    try:
-        conn = await asyncpg.connect(DATABASE_URL)
-        await conn.execute("""
-            INSERT INTO players (username, balance)
-            VALUES ($1, 100)
-        """, username)
-        await conn.close()
-        balance_cache[username] = 100
-        print(f"✅ Создан игрок {username}")
-    except Exception as e:
-        print(f"❌ Ошибка создания игрока: {e}")
+    data = load_players()
+    if username not in data:
+        data[username] = {"balance": 100, "last_bonus": None, "wins": 0, "losses": 0}
+        save_players(data)
 
 async def update_balance(username: str, delta: int):
     """Обновляет баланс игрока"""
-    try:
-        conn = await asyncpg.connect(DATABASE_URL)
-        await conn.execute("""
-            UPDATE players 
-            SET balance = balance + $1, updated_at = NOW()
-            WHERE username = $2
-        """, delta, username)
-        await conn.close()
-        
-        if username in balance_cache:
-            balance_cache[username] += delta
-        else:
-            balance_cache[username] = 100 + delta
-    except Exception as e:
-        print(f"❌ Ошибка обновления баланса: {e}")
+    data = load_players()
+    if username not in data:
+        data[username] = {"balance": 100, "last_bonus": None, "wins": 0, "losses": 0}
+    data[username]["balance"] = data[username].get("balance", 100) + delta
+    save_players(data)
 
 async def can_claim_daily_bonus(username: str) -> bool:
     """Проверяет, можно ли получить ежедневный бонус"""
-    try:
-        conn = await asyncpg.connect(DATABASE_URL)
-        row = await conn.fetchrow("SELECT last_bonus FROM players WHERE username = $1", username)
-        await conn.close()
-        
-        if not row or row[0] is None:
-            return True
-        return row[0] < date.today()
-    except Exception as e:
-        print(f"❌ Ошибка проверки бонуса: {e}")
+    data = load_players()
+    if username not in data:
         return True
+    last_bonus = data[username].get("last_bonus")
+    if not last_bonus:
+        return True
+    return last_bonus != str(date.today())
 
 async def claim_daily_bonus(username: str) -> int:
     """Начисляет ежедневный бонус 100 алмазов"""
-    try:
-        conn = await asyncpg.connect(DATABASE_URL)
-        await conn.execute("""
-            UPDATE players 
-            SET balance = balance + 100, last_bonus = $1, updated_at = NOW()
-            WHERE username = $2
-        """, date.today(), username)
-        await conn.close()
-        
-        if username in balance_cache:
-            balance_cache[username] += 100
-        else:
-            balance_cache[username] = 200
-        return 100
-    except Exception as e:
-        print(f"❌ Ошибка начисления бонуса: {e}")
-        return 0
+    data = load_players()
+    if username not in data:
+        data[username] = {"balance": 100, "last_bonus": None, "wins": 0, "losses": 0}
+    data[username]["balance"] = data[username].get("balance", 100) + 100
+    data[username]["last_bonus"] = str(date.today())
+    save_players(data)
+    return 100
 
 async def update_stats(username: str, is_win: bool):
     """Обновляет статистику побед/поражений"""
-    try:
-        conn = await asyncpg.connect(DATABASE_URL)
-        if is_win:
-            await conn.execute("""
-                UPDATE players 
-                SET wins = wins + 1, updated_at = NOW()
-                WHERE username = $1
-            """, username)
-        else:
-            await conn.execute("""
-                UPDATE players 
-                SET losses = losses + 1, updated_at = NOW()
-                WHERE username = $1
-            """, username)
-        await conn.close()
-    except Exception as e:
-        print(f"❌ Ошибка обновления статистики: {e}")
+    data = load_players()
+    if username not in data:
+        data[username] = {"balance": 100, "last_bonus": None, "wins": 0, "losses": 0}
+    if is_win:
+        data[username]["wins"] = data[username].get("wins", 0) + 1
+    else:
+        data[username]["losses"] = data[username].get("losses", 0) + 1
+    save_players(data)
 
 async def get_stats(username: str) -> dict:
     """Получает статистику игрока"""
-    try:
-        conn = await asyncpg.connect(DATABASE_URL)
-        row = await conn.fetchrow("SELECT wins, losses FROM players WHERE username = $1", username)
-        await conn.close()
-        
-        if row:
-            return {"wins": row[0], "losses": row[1]}
+    data = load_players()
+    if username not in data:
         return {"wins": 0, "losses": 0}
-    except Exception as e:
-        print(f"❌ Ошибка получения статистики: {e}")
-        return {"wins": 0, "losses": 0}
+    return {"wins": data[username].get("wins", 0), "losses": data[username].get("losses", 0)}
 
 async def get_top_players(limit: int = 10) -> list:
     """Получает топ игроков по балансу"""
-    try:
-        conn = await asyncpg.connect(DATABASE_URL)
-        rows = await conn.fetch("""
-            SELECT username, balance, wins, losses 
-            FROM players 
-            ORDER BY balance DESC 
-            LIMIT $1
-        """, limit)
-        await conn.close()
-        return [dict(row) for row in rows]
-    except Exception as e:
-        print(f"❌ Ошибка получения топа: {e}")
-        return []
+    data = load_players()
+    players = []
+    for username, info in data.items():
+        players.append({
+            "username": username,
+            "balance": info.get("balance", 0),
+            "wins": info.get("wins", 0),
+            "losses": info.get("losses", 0)
+        })
+    players.sort(key=lambda x: x["balance"], reverse=True)
+    return players[:limit]
+
+# Синхронные версии для совместимости с существующим кодом
+def get_balance_sync(username: str) -> int:
+    data = load_players()
+    if username not in data:
+        data[username] = {"balance": 100, "last_bonus": None, "wins": 0, "losses": 0}
+        save_players(data)
+    return data[username].get("balance", 100)
+
+def update_balance_sync(username: str, delta: int):
+    data = load_players()
+    if username not in data:
+        data[username] = {"balance": 100, "last_bonus": None, "wins": 0, "losses": 0}
+    data[username]["balance"] = data[username].get("balance", 100) + delta
+    save_players(data)
+
+def update_stats_sync(username: str, is_win: bool):
+    data = load_players()
+    if username not in data:
+        data[username] = {"balance": 100, "last_bonus": None, "wins": 0, "losses": 0}
+    if is_win:
+        data[username]["wins"] = data[username].get("wins", 0) + 1
+    else:
+        data[username]["losses"] = data[username].get("losses", 0) + 1
+    save_players(data)
+
+def get_stats_sync(username: str) -> dict:
+    data = load_players()
+    if username not in data:
+        return {"wins": 0, "losses": 0}
+    return {"wins": data[username].get("wins", 0), "losses": data[username].get("losses", 0)}
