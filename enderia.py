@@ -54,37 +54,18 @@ else:
     print(f"✅ Файл {HISTORY_FILE} уже существует")
 
 # ========== ФУНКЦИИ ДЛЯ РАБОТЫ С ФАЙЛОВОЙ ПАМЯТЬЮ ==========
-def add_to_chat_memory(username: str, message: str, is_bot: bool = False):
+def add_to_chat_memory(username: str, message: str, is_bot: bool = False, extra_info: str = ""):
     """Добавляет сообщение в файл истории чата"""
     try:
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         prefix = "🤖 Эндерия" if is_bot else f"👤 {username}"
         line = f"[{timestamp}] {prefix}: {message}\n"
         
-        # Отладочный вывод
-        print(f"💾 Сохраняю в чат-лог: {line[:100]}...")
+        # Добавляем строку в конец файла
+        with open(HISTORY_FILE, "a", encoding="utf-8") as f:
+            f.write(line)
         
-        # Читаем существующие строки
-        if os.path.exists(HISTORY_FILE):
-            with open(HISTORY_FILE, "r", encoding="utf-8") as f:
-                lines = f.readlines()
-        else:
-            lines = []
-        
-        # Добавляем новую строку
-        lines.append(line)
-        
-        # Оставляем только последние MAX_HISTORY_LINES строк
-        if len(lines) > MAX_HISTORY_LINES:
-            header = lines[:2] if lines and lines[0].startswith("#") else []
-            body = lines[2:] if header else lines
-            lines = header + body[-MAX_HISTORY_LINES:]
-        
-        # Записываем обратно
-        with open(HISTORY_FILE, "w", encoding="utf-8") as f:
-            f.writelines(lines)
-        
-        print(f"✅ Сохранено, всего строк: {len(lines)}")
+        print(f"💾 Записано в лог: [{timestamp}] {prefix}: {message[:50]}...")
             
     except Exception as e:
         print(f"❌ Ошибка сохранения истории: {e}")
