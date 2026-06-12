@@ -31,78 +31,57 @@ def set_server_online(online: int, max_players: int):
     current_max = max_players
 
 # ========== НАСТРОЙКИ ФАЙЛОВОЙ ПАМЯТИ ЧАТА ==========
-# Используем абсолютный путь для Railway
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-HISTORY_DIR = os.path.join(BASE_DIR, "chat_history")
+HISTORY_DIR = "chat_history"
 HISTORY_FILE = os.path.join(HISTORY_DIR, "chat.log")
 MAX_HISTORY_LINES = 1000
 
-# Создаём папку
-try:
-    os.makedirs(HISTORY_DIR, exist_ok=True)
-    print(f"✅ Папка создана: {HISTORY_DIR}")
-except Exception as e:
-    print(f"❌ Ошибка создания папки: {e}")
+# Создаём папку если её нет
+os.makedirs(HISTORY_DIR, exist_ok=True)
 
-# Функция принудительной записи
-def write_to_log(content: str):
-    """Принудительная запись в файл с синхронизацией"""
-    try:
-        with open(HISTORY_FILE, "a", encoding="utf-8") as f:
-            f.write(content)
-            f.flush()  # Принудительный сброс буфера
-            os.fsync(f.fileno())  # Принудительная запись на диск
-        return True
-    except Exception as e:
-        print(f"❌ Ошибка записи: {e}")
-        return False
+# Если файла нет - создаём
+if not os.path.exists(HISTORY_FILE):
+    with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+        f.write(f"# История чата LostEarth\n# Создан: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
 
-# Создаём заголовок если файл пустой
-if not os.path.exists(HISTORY_FILE) or os.path.getsize(HISTORY_FILE) == 0:
-    header = f"# История чата LostEarth\n# Создан: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
-    write_to_log(header)
-    print(f"✅ Файл создан: {HISTORY_FILE}")
-
+# ========== ФУНКЦИИ ДЛЯ РАБОТЫ С ФАЙЛОВОЙ ПАМЯТЬЮ ==========
 def add_to_chat_memory(username: str, message: str, is_bot: bool = False):
-    """Добавляет сообщение в файл истории чата с принудительной записью"""
+    """Добавляет сообщение в файл истории чата"""
     try:
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         prefix = "🤖 Эндерия" if is_bot else f"👤 {username}"
         line = f"[{timestamp}] {prefix}: {message}\n"
         
-        # Записываем
-        if write_to_log(line):
-            print(f"💾 УСПЕШНО! Записано в {HISTORY_FILE}: [{timestamp}] {prefix}: {message[:30]}...")
-        else:
-            print(f"❌ НЕ УДАЛОСЬ записать в файл")
+        # Добавляем строку в конец файла
+        with open(HISTORY_FILE, "a", encoding="utf-8") as f:
+            f.write(line)
+        
+        print(f"💾 Записано в лог: [{timestamp}] {prefix}: {message[:50]}...")
             
     except Exception as e:
-        print(f"❌ Ошибка сохранения: {e}")
+        print(f"❌ Ошибка сохранения истории: {e}")
 
 def get_chat_history(limit: int = 50) -> str:
     """Возвращает последние N сообщений из истории чата"""
     try:
         if not os.path.exists(HISTORY_FILE):
-            print(f"⚠️ Файл {HISTORY_FILE} не существует")
             return ""
         
         with open(HISTORY_FILE, "r", encoding="utf-8") as f:
             lines = f.readlines()
         
-        print(f"📖 Читаю историю чата, всего строк в файле: {len(lines)}")
-        
-        # Пропускаем заголовки
+        # Пропускаем заголовки (строки начинающиеся с #)
         messages = [l.strip() for l in lines if not l.startswith("#") and l.strip()]
-        
-        if not messages:
-            return ""
         
         # Берём последние limit сообщений
         last_messages = messages[-limit:] if len(messages) > limit else messages
+        
+        if not last_messages:
+            return ""
+        
         return "\n".join(last_messages)
         
     except Exception as e:
-        print(f"❌ Ошибка чтения: {e}")
+        print(f"❌ Ошибка чтения истории: {e}")
         return ""
 
 def get_chat_context(limit: int = 30) -> str:
@@ -119,11 +98,12 @@ def get_chat_context(limit: int = 30) -> str:
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-ВАЖНО: Прочитай всю историю чата выше. Отвечай естественно, как участник чата.
+ВАЖНО: Прочитай всю историю чата выше. Ты видишь, что пишут игроки. 
+Отвечай естественно, как участник чата. Учитывай контекст разговора.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
-# ========== ПАМЯТЬ ДИАЛОГОВ ==========
+# ========== ПАМЯТЬ ДИАЛОГОВ С КАЖДЫМ ПОЛЬЗОВАТЕЛЕМ ==========
 user_memory = defaultdict(lambda: deque(maxlen=10))
 user_last_question = {}
 user_greeted = {}
@@ -132,7 +112,13 @@ user_last_time = {}
 def get_user_context(username: str) -> str:
     if username not in user_memory or len(user_memory[username]) == 0:
         return ""
-    return "\n".join(list(user_memory[username]))
+    context = "\n".join(list(user_memory[username]))
+    return f"""
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📜 ИСТОРИЯ ДИАЛОГА С {username}:
+{context}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"""
 
 def add_to_memory(username: str, user_message: str, bot_response: str):
     user_memory[username].append(f"{username}: {user_message}")
@@ -157,7 +143,8 @@ def mark_greeted(username: str):
 
 def is_greeting(text: str) -> bool:
     text_lower = text.lower()
-    greetings = ["привет", "здравствуй", "хай", "hello", "приветик"]
+    greetings = ["привет", "здравствуй", "здарова", "хай", "hello", "hi", "privet", 
+                 "доброе утро", "добрый день", "добрый вечер", "приветик"]
     return any(g in text_lower for g in greetings)
 
 # ========== ЗАПРОС К МОДЕЛИ ==========
@@ -169,6 +156,8 @@ async def ask_model(model: str, system_prompt: str, user_prompt: str) -> tuple[s
                 headers={
                     "Authorization": f"Bearer {OPENROUTER_API_KEY}",
                     "Content-Type": "application/json",
+                    "HTTP-Referer": "https://t.me/LostEarthBot",
+                    "X-Title": "LostEarth Bot"
                 },
                 json={
                     "model": model,
@@ -176,23 +165,32 @@ async def ask_model(model: str, system_prompt: str, user_prompt: str) -> tuple[s
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt}
                     ],
-                    "max_tokens": 250,
-                    "temperature": 0.85,
+                    "max_tokens": 300,
+                    "temperature": 0.9,
+                    "top_p": 0.95,
+                    "stream": False
                 },
-                timeout=aiohttp.ClientTimeout(total=30)
+                timeout=aiohttp.ClientTimeout(total=35)
             ) as response:
                 if response.status == 200:
                     data = await response.json()
-                    return data["choices"][0]["message"]["content"].strip(), True
-                return "", False
-    except:
+                    result = data["choices"][0]["message"]["content"].strip()
+                    return result, True
+                else:
+                    print(f"❌ Модель {model} ошибка {response.status}")
+                    return "", False
+    except asyncio.TimeoutError:
+        print(f"⏰ Модель {model} таймаут")
+        return "", False
+    except Exception as e:
+        print(f"⚠️ Модель {model} ошибка: {e}")
         return "", False
 
 # ========== ОСНОВНАЯ ФУНКЦИЯ ==========
 async def get_enderia_response(user_message: str, username: str, is_reply: bool = False) -> str:
     global current_online, current_max
     
-    # Сохраняем вопрос пользователя в лог
+    # Сохраняем сообщение пользователя в лог
     add_to_chat_memory(username, user_message, is_bot=False)
     
     current_time = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
@@ -208,42 +206,70 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         await asyncio.sleep(1)
     user_last_time[username] = now
     
-    # Если уже здоровались и снова привет
+    # Если уже здоровались и это снова приветствие
     if already_greeted and is_greeting_msg and not is_reply:
-        response = f"💜 {username}, мы уже общаемся! Что хотел узнать?"
+        emojis = get_enderia_emojis()
+        response = f"{emojis} {username}, мы уже общаемся! Что хотел узнать про LostEarth? 💜"
         add_to_memory(username, user_message, response)
         add_to_chat_memory(username, response, is_bot=True)
         return response
     
-    greeting_instruction = ""
-    if already_greeted:
-        greeting_instruction = "НЕ ЗДОРОВАЙСЯ! Начни сразу с ответа."
+    # Определяем инструкцию по приветствию
+    if is_reply:
+        greeting_instruction = "Ты отвечаешь на сообщение игрока. НЕ ЗДОРОВАЙСЯ! Продолжай диалог."
+    elif already_greeted:
+        greeting_instruction = "Ты УЖЕ поздоровалась. НЕ ЗДОРОВАЙСЯ! Начни сразу с ответа."
+    else:
+        greeting_instruction = "Ты ещё не здоровалась. Можешь поздороваться коротко."
     
+    # Формируем полный промпт
     full_prompt = f"""{greeting_instruction}
 
 {user_ctx}
 
 {chat_ctx}
 
-{username} написал: {user_message}
+Игрок {username} написал: {user_message}
 Это ответ на сообщение бота: {"ДА" if is_reply else "НЕТ"}
 
-Ответь как Эндерия (2-4 предложения). Будь милой и дружелюбной. В конце 1-2 эмодзи."""
+Отвечай как Эндерия (2-4 предложения). Будь естественной.
+НЕ используй HTML теги. ОТВЕЧАЙ ТОЛЬКО НА РУССКОМ ЯЗЫКЕ.
+В конце поставь 1-2 эмодзи."""
 
     system_prompt = get_system_prompt(username, current_time, current_online, current_max)
     
-    for model in MODELS_CHAIN:
+    # Пробуем модели по очереди
+    for model_index, model in enumerate(MODELS_CHAIN):
+        print(f"🔄 [{model_index + 1}/{len(MODELS_CHAIN)}] Пробуем {model}")
+        
         result, success = await ask_model(model, system_prompt, full_prompt)
-        if success and result:
+        
+        if success and result and len(result) > 10:
+            has_russian = any(ord(c) > 1024 for c in result)
+            if not has_russian:
+                print(f"⚠️ Модель {model} ответила не на русском, пробуем дальше")
+                continue
+                
+            print(f"✅ УСПЕХ! Модель {model} ответила по-русски!")
+            
             result = re.sub(r'<[^>]+>', '', result)
-            if not already_greeted:
+            
+            if not any(emoji_id in result for emoji_id in ENDERIA_EMOJI.values()):
+                result += f" {get_enderia_emojis()}"
+            
+            if not already_greeted and not is_reply:
                 mark_greeted(username)
+            
             add_to_memory(username, user_message, result)
             add_to_chat_memory(username, result, is_bot=True)
+            
             return result
+        
         await asyncio.sleep(0.3)
     
-    fallback = f"💜 {username}, связь с Краем потеряна! Повтори позже 🐱"
+    print("❌ Все модели не ответили!")
+    emojis = get_enderia_emojis()
+    fallback = random.choice(FALLBACK_RESPONSES).format(emojis=emojis, username=username)
     add_to_memory(username, user_message, fallback)
     add_to_chat_memory(username, fallback, is_bot=True)
     return fallback
