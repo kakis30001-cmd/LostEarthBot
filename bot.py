@@ -14,7 +14,6 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKe
 from aiogram.fsm.storage.memory import MemoryStorage
 from dotenv import load_dotenv
 from flask import Flask, send_from_directory
-from mcstatus import JavaServer
 
 from enderia import (
     get_enderia_response,
@@ -317,6 +316,106 @@ async def start_cmd(message: Message):
 {E_RABBIT} {E_ANIME} {E_CAT_DANCE}"""
     await message.answer(text, parse_mode="HTML", reply_markup=get_main_keyboard())
 
+@dp.message(Command("balance"))
+async def balance_cmd(message: Message):
+    username = message.from_user.username or message.from_user.first_name
+    xp = await get_xp(username)
+    await message.answer(f"{E_CROWN} {username}, твой баланс: {xp} xp {E_JOYSTICK}", parse_mode="HTML")
+
+@dp.message(Command("profile"))
+async def profile_cmd(message: Message):
+    username = message.from_user.username or message.from_user.first_name
+    xp = await get_xp(username)
+    stats = await get_stats(username)
+    farm_level = await get_farm_level(username)
+    
+    text = f"""{E_CROWN} <b>профиль игрока</b> {E_CROWN}
+
+{E_HOUSE} имя: {username}
+{E_CROWN} опыт: {xp} xp
+{E_JOYSTICK} побед: {stats['wins']}
+{E_HEART} поражений: {stats['losses']}
+🏭 уровень фармы: {farm_level}
+
+{E_MAGIC} <b>ежедневный бонус: +500 xp</b>
+{E_NOTE} добавь в описание: @lostearth_bot
+
+{E_CAT_OK} /daily - получить бонус {E_HEART}"""
+    await message.answer(text, parse_mode="HTML")
+
+@dp.message(Command("daily"))
+async def daily_cmd(message: Message):
+    username = message.from_user.username or message.from_user.first_name
+    
+    user_bio = await get_user_bio(message.from_user.id)
+    has_bot_in_bio = "@lostearth_bot" in user_bio.lower() if user_bio else False
+    
+    if not has_bot_in_bio:
+        text = f"""{E_CAT_SURPRISED} <b>нет бонуса</b> {E_CAT_SURPRISED}
+
+добавь в описание профиля: @lostearth_bot
+
+📝 как это сделать:
+1. настройки telegram → фото профиля
+2. редактировать профиль → описание
+3. добавь: @lostearth_bot
+4. сохрани и напиши /daily снова
+
+после добавления бот проверит и бонус заработает {E_HEART}"""
+        await message.answer(text, parse_mode="HTML")
+        return
+    
+    if await can_claim_daily_bonus(username):
+        amount = await claim_daily_bonus(username)
+        xp = await get_xp(username)
+        text = f"{E_MAGIC} <b>ежедневный бонус</b> {E_MAGIC}\n\n{E_CROWN} +{amount} xp\n💰 баланс: {xp} xp\n\n{E_RABBIT} заходи завтра снова {E_HEART}"
+        await message.answer(text, parse_mode="HTML")
+    else:
+        text = f"{E_HEART} {username}, ты уже получал бонус сегодня возвращайся завтра {E_CAT_OK}"
+        await message.answer(text, parse_mode="HTML")
+
+@dp.message(Command("leaderboard"))
+@dp.message(Command("top"))
+async def leaderboard_cmd(message: Message):
+    leaders = await get_leaderboard(10)
+    if not leaders:
+        await message.answer(f"{E_CROWN} пока нет игроков в топе будь первым {E_MAGIC}", parse_mode="HTML")
+        return
+    
+    text = f"{E_CROWN} <b>топ игроков по опыту</b> {E_CROWN}\n\n"
+    for i, p in enumerate(leaders, 1):
+        medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else "📌"
+        text += f"{medal} <b>{p['username']}</b> - {p['xp']} xp (фарма: {p['farm_level']} ур)\n"
+    await message.answer(text, parse_mode="HTML")
+
+@dp.message(Command("online"))
+async def cmd_online(message: Message):
+    online, max_players = await get_server_online()
+    await message.answer(f"{E_CROWN} <b>онлайн: {online}/{max_players}</b> {E_CAT_DANCE}", parse_mode="HTML")
+
+@dp.message(Command("games"))
+async def games_cmd(message: Message):
+    text = f"""{E_JOYSTICK} <b>доступные команды</b> {E_JOYSTICK}
+
+🎮 <b>игры:</b>
+• энди кубик 100 - кости (x2)
+• энди футбол 100 - футбол (гол = x2)
+• энди плюнуть - плюнуть в игрока (30 xp)
+
+🏭 <b>фарма:</b>
+• энди фарма - собрать опыт
+• энди фарма инфо - инфо о фарме
+• энди улучши фарму - улучшить фарму
+
+📊 <b>профиль:</b>
+/balance - баланс
+/profile - профиль
+/daily - бонус 500 xp
+/leaderboard - топ игроков
+
+💡 требование для фармы и бонуса: @lostearth_bot в описании профиля"""
+    await message.answer(text, parse_mode="HTML")
+
 # ========== ПЛЕВОК ==========
 @dp.message(lambda msg: msg.text and msg.text.lower() == "энди плюнуть")
 async def spit_cmd(message: Message):
@@ -388,8 +487,16 @@ async def football_game(message: Message):
 @dp.message(lambda msg: msg.text and msg.text.lower() == "энди фарма")
 async def farm_collect_cmd(message: Message):
     username = message.from_user.username or message.from_user.first_name
-    user_bio = await get_user_bio(message.from_user.id)
-    has_bot_in_bio = "@lostearth_bot" in user_bio.lower() if user_bio else False
+    
+    # получаем описание профиля
+    try:
+        user = await bot.get_chat(message.from_user.id)
+        user_bio = user.bio if user.bio else ""
+        has_bot_in_bio = "@lostearth_bot" in user_bio.lower() if user_bio else False
+        print(f"🔍 проверка {username}: bio='{user_bio}', has_bot={has_bot_in_bio}")
+    except Exception as e:
+        print(f"ошибка получения bio: {e}")
+        has_bot_in_bio = False
     
     result_text, game_result = await collect_farm(username, has_bot_in_bio)
     await message.answer(result_text, parse_mode="HTML")
@@ -402,8 +509,13 @@ async def farm_collect_cmd(message: Message):
 @dp.message(lambda msg: msg.text and msg.text.lower() == "энди фарма инфо")
 async def farm_info_cmd(message: Message):
     username = message.from_user.username or message.from_user.first_name
-    user_bio = await get_user_bio(message.from_user.id)
-    has_bot_in_bio = "@lostearth_bot" in user_bio.lower() if user_bio else False
+    
+    try:
+        user = await bot.get_chat(message.from_user.id)
+        user_bio = user.bio if user.bio else ""
+        has_bot_in_bio = "@lostearth_bot" in user_bio.lower() if user_bio else False
+    except:
+        has_bot_in_bio = False
     
     text = await farm_info(username, has_bot_in_bio)
     await message.answer(text, parse_mode="HTML")
@@ -411,8 +523,13 @@ async def farm_info_cmd(message: Message):
 @dp.message(lambda msg: msg.text and msg.text.lower() == "энди улучши фарму")
 async def farm_upgrade_cmd(message: Message):
     username = message.from_user.username or message.from_user.first_name
-    user_bio = await get_user_bio(message.from_user.id)
-    has_bot_in_bio = "@lostearth_bot" in user_bio.lower() if user_bio else False
+    
+    try:
+        user = await bot.get_chat(message.from_user.id)
+        user_bio = user.bio if user.bio else ""
+        has_bot_in_bio = "@lostearth_bot" in user_bio.lower() if user_bio else False
+    except:
+        has_bot_in_bio = False
     
     result_text, game_result = await upgrade_farm_cmd(username, has_bot_in_bio)
     await message.answer(result_text, parse_mode="HTML")
@@ -421,104 +538,6 @@ async def farm_upgrade_cmd(message: Message):
         ai_response = await get_enderia_response(f"{username} {game_result}", username, is_reply=True, game_result=game_result)
         if ai_response:
             await message.answer(f"{E_CAT_DANCE} {ai_response}", parse_mode="HTML")
-
-# ========== ОСТАЛЬНЫЕ КОМАНДЫ ==========
-@dp.message(Command("balance"))
-async def balance_cmd(message: Message):
-    username = message.from_user.username or message.from_user.first_name
-    xp = await get_xp(username)
-    await message.answer(f"{E_CROWN} {username}, твой баланс: {xp} xp {E_JOYSTICK}", parse_mode="HTML")
-
-@dp.message(Command("profile"))
-async def profile_cmd(message: Message):
-    username = message.from_user.username or message.from_user.first_name
-    xp = await get_xp(username)
-    stats = await get_stats(username)
-    farm_level = await get_farm_level(username)
-    
-    text = f"""{E_CROWN} <b>профиль игрока</b> {E_CROWN}
-
-{E_HOUSE} имя: {username}
-{E_CROWN} опыт: {xp} xp
-{E_JOYSTICK} побед: {stats['wins']}
-{E_HEART} поражений: {stats['losses']}
-🏭 уровень фармы: {farm_level}
-
-{E_MAGIC} <b>ежедневный бонус: +500 xp</b>
-{E_NOTE} добавь в описание: @lostearth_bot
-
-{E_CAT_OK} /daily - получить бонус {E_HEART}"""
-    await message.answer(text, parse_mode="HTML")
-
-@dp.message(Command("daily"))
-async def daily_cmd(message: Message):
-    username = message.from_user.username or message.from_user.first_name
-    user_bio = await get_user_bio(message.from_user.id)
-    has_bot_in_bio = "@lostearth_bot" in user_bio.lower() if user_bio else False
-    
-    if not has_bot_in_bio:
-        text = f"""{E_CAT_SURPRISED} <b>нет бонуса</b> {E_CAT_SURPRISED}
-
-добавь в описание профиля: @lostearth_bot
-
-📝 как это сделать:
-1. настройки telegram → фото профиля
-2. редактировать профиль → описание
-3. добавь: @lostearth_bot
-4. сохрани и напиши /daily снова {E_HEART}"""
-        await message.answer(text, parse_mode="HTML")
-        return
-    
-    if await can_claim_daily_bonus(username):
-        amount = await claim_daily_bonus(username)
-        xp = await get_xp(username)
-        text = f"{E_MAGIC} <b>ежедневный бонус</b> {E_MAGIC}\n\n{E_CROWN} +{amount} xp\n💰 баланс: {xp} xp\n\n{E_RABBIT} заходи завтра снова {E_HEART}"
-        await message.answer(text, parse_mode="HTML")
-    else:
-        text = f"{E_HEART} {username}, ты уже получал бонус сегодня возвращайся завтра {E_CAT_OK}"
-        await message.answer(text, parse_mode="HTML")
-
-@dp.message(Command("leaderboard"))
-@dp.message(Command("top"))
-async def leaderboard_cmd(message: Message):
-    leaders = await get_leaderboard(10)
-    if not leaders:
-        await message.answer(f"{E_CROWN} пока нет игроков в топе будь первым {E_MAGIC}", parse_mode="HTML")
-        return
-    
-    text = f"{E_CROWN} <b>топ игроков по опыту</b> {E_CROWN}\n\n"
-    for i, p in enumerate(leaders, 1):
-        medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else "📌"
-        text += f"{medal} <b>{p['username']}</b> - {p['xp']} xp (фарма: {p['farm_level']} ур)\n"
-    await message.answer(text, parse_mode="HTML")
-
-@dp.message(Command("online"))
-async def cmd_online(message: Message):
-    online, max_players = await get_server_online()
-    await message.answer(f"{E_CROWN} <b>онлайн: {online}/{max_players}</b> {E_CAT_DANCE}", parse_mode="HTML")
-
-@dp.message(Command("games"))
-async def games_cmd(message: Message):
-    text = f"""{E_JOYSTICK} <b>доступные команды</b> {E_JOYSTICK}
-
-🎮 <b>игры:</b>
-• энди кубик 100 - кости (x2)
-• энди футбол 100 - футбол (гол = x2)
-• энди плюнуть - плюнуть в игрока (30 xp)
-
-🏭 <b>фарма:</b>
-• энди фарма - собрать опыт
-• энди фарма инфо - инфо о фарме
-• энди улучши фарму - улучшить фарму
-
-📊 <b>профиль:</b>
-/balance - баланс
-/profile - профиль
-/daily - бонус 500 xp
-/leaderboard - топ игроков
-
-💡 требование для фармы и бонуса: @lostearth_bot в описании профиля"""
-    await message.answer(text, parse_mode="HTML")
 
 # ========== ОБРАБОТЧИК ==========
 @dp.message()
