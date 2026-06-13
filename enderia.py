@@ -151,7 +151,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         await save_andy_dialog(username, user_message, response)
         return response
     
-    # ии ответ
+    # ии ответ с 1000 токенов
     if OPENROUTER_API_KEY:
         try:
             system_prompt = f"""ты энди, девушка-эндермен
@@ -160,25 +160,26 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
 {context}
 
 важные правила:
-1. отвечай коротко, без лишних знаков препинания
-2. если игрок пишет "почему" - посмотри в историю, на прошлое сообщение бота
-3. например: если бот написал "онлайн 0/0", а игрок спросил "почему" - объясни что сервер пустует
-4. не пиши про сервер если не спрашивают
-5. пиши с маленькой буквы
-6. используй эмодзи {E_CAT_DANCE} {E_HEART}
-7. без восклицательных знаков в конце
+1. отвечай развёрнуто, но по делу
+2. если игрок пишет "почему" - посмотри в историю и объясни причину
+3. если игрок спрашивает про онлайн - скажи что сейчас {current_online}/{current_max}
+4. если спрашивают про сервер - дай айпи и про режимы
+5. не пиши про сервер если не спрашивают
+6. пиши с маленькой буквы
+7. используй эмодзи {E_CAT_DANCE} {E_HEART} {E_MAGIC}
 
-информация (только если спросят):
-- сервер lostearth
-- ip java: 150.241.85.40:25565, bedrock: 150.241.85.40:19132
-- онлайн: {current_online}/{current_max}
-- тгк: @LostEarthSMP
+информация о сервере lostearth (если спросят):
+- режимы: мирный (нужна заявка через бота) и smp (без заявки)
+- ip java: 150.241.85.40:25565
+- ip bedrock: 150.241.85.40:19132
+- тг канал: @LostEarthSMP
+- админ: @pelmewki379
 
-игры: энди кубик, энди футбол, энди плюнуть, энди фарма
+игры в боте: энди кубик, энди футбол, энди плюнуть, энди фарма
 
 текущее сообщение от {username}: {user_message}
 
-ответь как энди (коротко, с маленькой буквы, с эмодзи, без лишних знаков):"""
+ответь как энди (с маленькой буквы, с эмодзи):"""
             
             for model in MODELS_CHAIN:
                 try:
@@ -189,10 +190,10 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
                             json={
                                 "model": model,
                                 "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_message}],
-                                "max_tokens": 200,
-                                "temperature": 0.8,
+                                "max_tokens": 1000,
+                                "temperature": 0.85,
                             },
-                            timeout=aiohttp.ClientTimeout(total=25)
+                            timeout=aiohttp.ClientTimeout(total=30)
                         ) as response:
                             if response.status == 200:
                                 data = await response.json()
@@ -213,8 +214,8 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     
     # fallback
     fallbacks = [
-        f"{E_CAT_DANCE} {username} {E_HEART}",
-        f"{E_CAT_OK} слушаю {E_HEART}",
+        f"{E_CAT_DANCE} {username}, я тут {E_HEART}",
+        f"{E_CAT_OK} слушаю, {username} {E_HEART}",
     ]
     
     response = random.choice(fallbacks)
