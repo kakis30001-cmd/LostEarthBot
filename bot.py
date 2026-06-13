@@ -69,10 +69,7 @@ from games import (
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv("BOT_TOKEN")
 
-# ID администратора
 ADMIN_IDS = [8493522297]
-
-# Канал для обязательной подписки
 REQUIRED_CHANNEL = "LostEarthSMP"
 
 # ========== FLASK ==========
@@ -184,18 +181,13 @@ async def get_user_bio(user_id: int) -> str:
 
 # ========== ПРОВЕРКА УСЛОВИЙ ==========
 async def check_all_requirements(user_id: int, username: str) -> tuple[bool, bool, str]:
-    """Проверяет все условия для использования бота"""
-    # Сохраняем user_id
     await save_user_id(username, user_id)
     
-    # Проверка подписки на канал
     is_subscribed = await check_user_subscribed(username, bot, REQUIRED_CHANNEL)
     
-    # Проверка описания профиля
     user_bio = await get_user_bio(user_id)
     has_bot_in_bio = "@lostearth_bot" in user_bio.lower() if user_bio else False
     
-    # Формируем сообщение о статусе
     status_msg = ""
     if not is_subscribed and not has_bot_in_bio:
         status_msg = "❌ Ты не подписан на канал и нет @lostearth_bot в описании"
@@ -209,11 +201,10 @@ async def check_all_requirements(user_id: int, username: str) -> tuple[bool, boo
     return is_subscribed, has_bot_in_bio, status_msg
 
 async def get_requirements_keyboard():
-    """Клавиатура для проверки условий"""
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🔄 ПРОВЕРИТЬ", callback_data="check_requirements")],
         [InlineKeyboardButton(text="📢 КАНАЛ", url="https://t.me/LostEarthSMP")],
-        [InlineKeyboardButton(text="❓ КАК ДОБАВИТЬ В ОПИСАНИЕ", callback_data="how_to_add_bio")]
+        [InlineKeyboardButton(text="❓ КАК ДОБАВИТЬ", callback_data="how_to_add_bio")]
     ])
 
 # ========== КЛАВИАТУРЫ ==========
@@ -335,7 +326,6 @@ async def start_cmd(message: Message):
     
     asyncio.create_task(send_spontaneous_message(bot, CHAT_ID))
     
-    # Проверяем условия
     is_subscribed, has_bot_in_bio, status = await check_all_requirements(user_id, username)
     
     text = f"""{E_MAGIC} <b>добро пожаловать на {SERVER['name']}</b> {E_MAGIC}
@@ -372,7 +362,6 @@ async def start_cmd(message: Message):
 
 @dp.message(Command("check"))
 async def check_cmd(message: Message):
-    """Проверить все условия"""
     username = message.from_user.username or message.from_user.first_name
     user_id = message.from_user.id
     
@@ -396,7 +385,6 @@ async def check_cmd(message: Message):
 
 @dp.message(Command("howto"))
 async def howto_cmd(message: Message):
-    """Инструкция как добавить бота в описание"""
     text = f"""📖 <b>КАК ДОБАВИТЬ @lostearth_bot В ОПИСАНИЕ ПРОФИЛЯ</b>
 
 <b>ШАГ 1:</b> Открой настройки Telegram
@@ -454,8 +442,7 @@ async def daily_cmd(message: Message):
     username = message.from_user.username or message.from_user.first_name
     user_id = message.from_user.id
     
-    # Проверяем условия
-    is_subscribed, has_bot_in_bio, status = await check_all_requirements(user_id, username)
+    is_subscribed, has_bot_in_bio, _ = await check_all_requirements(user_id, username)
     
     if not is_subscribed or not has_bot_in_bio:
         text = f"""{E_CAT_SURPRISED} <b>НЕТ БОНУСА</b> {E_CAT_SURPRISED}
@@ -599,7 +586,6 @@ async def farm_collect_cmd(message: Message):
     username = message.from_user.username or message.from_user.first_name
     user_id = message.from_user.id
     
-    # Проверяем условия
     is_subscribed, has_bot_in_bio, _ = await check_all_requirements(user_id, username)
     
     result_text, game_result = await collect_farm(username, has_bot_in_bio, is_subscribed)
@@ -615,7 +601,6 @@ async def farm_info_cmd(message: Message):
     username = message.from_user.username or message.from_user.first_name
     user_id = message.from_user.id
     
-    # Проверяем условия
     is_subscribed, has_bot_in_bio, _ = await check_all_requirements(user_id, username)
     
     text = await farm_info(username, has_bot_in_bio, is_subscribed)
@@ -626,7 +611,6 @@ async def farm_upgrade_cmd(message: Message):
     username = message.from_user.username or message.from_user.first_name
     user_id = message.from_user.id
     
-    # Проверяем условия
     is_subscribed, has_bot_in_bio, _ = await check_all_requirements(user_id, username)
     
     result_text, game_result = await upgrade_farm_cmd(username, has_bot_in_bio, is_subscribed)
