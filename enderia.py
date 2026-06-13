@@ -1,62 +1,12 @@
-import asyncio
 import os
-import socket
-import struct
-import json
-import re
-from datetime import datetime
-from threading import Thread
 import random
-
-from aiogram import Bot, Dispatcher, types
-from aiogram.filters import CommandStart, Command
-from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
-from aiogram.fsm.storage.memory import MemoryStorage
+import re
+import aiohttp
+import asyncio
+import json
+from datetime import datetime
+from collections import defaultdict, deque
 from dotenv import load_dotenv
-from flask import Flask, send_from_directory
-
-from enderia import (
-    get_enderia_response,
-    should_respond,
-    set_server_online,
-    save_to_log,
-    send_spontaneous_message,
-    E_CAT_DANCE,
-    E_CAT_OK,
-    E_CAT_UP,
-    E_CAT_SURPRISED,
-    E_RABBIT,
-    E_ANIME,
-    E_HEART,
-    E_CROWN,
-    E_HOUSE,
-    E_NOTE,
-    E_MAGIC,
-    E_JOYSTICK,
-)
-
-from database import (
-    get_xp,
-    update_xp,
-    get_stats,
-    update_stats,
-    get_farms,
-    buy_farm,
-    upgrade_farm,
-    claim_income,
-    calculate_income,
-    get_leaderboard,
-    can_claim_daily_bonus,
-    claim_daily_bonus,
-    create_player,
-    init_db,
-)
-
-from games import (
-    game_dice_bet,
-    game_football_bet,
-    add_spit,
-)
 
 load_dotenv()
 
@@ -101,19 +51,17 @@ E_MAGIC = emoji(ENDERIA_EMOJI["magic"], "✨")
 E_JOYSTICK = emoji(ENDERIA_EMOJI["joystick"], "🎮")
 
 # ========== ПАМЯТЬ ==========
-user_memory = defaultdict(lambda: deque(maxlen=20))  # хранит последние сообщения
-user_last_messages = defaultdict(lambda: deque(maxlen=5))  # последние 5 сообщений игрока
+user_memory = defaultdict(lambda: deque(maxlen=20))
+user_last_messages = defaultdict(lambda: deque(maxlen=5))
 user_greeted = {}
 last_active = {}
 
 def add_to_memory(username: str, user_message: str, bot_response: str):
-    """Добавляет сообщение в память"""
     user_memory[username].append(f"{username}: {user_message}")
     user_memory[username].append(f"Энди: {bot_response}")
-    user_last_messages[username].append(user_message)  # сохраняем последние сообщения игрока
+    user_last_messages[username].append(user_message)
 
 def get_last_user_messages(username: str) -> list:
-    """Возвращает последние 5 сообщений игрока"""
     return list(user_last_messages.get(username, []))
 
 def clear_user_memory(username: str):
@@ -175,31 +123,25 @@ spontaneous_messages = [
     "Эй, кто хочет сыграть в футбол? Ставлю 100 XP! ⚽",
     "Как успехи у всех? Много опыта нафармили? 💜",
     "На сервере сейчас {online} игроков! Заходите, вместе веселее! 🎮",
-    "Я тут криперов кормила, а вы чем заняты? 😊",
-    "Не забывайте собирать опыт с ферм командой фарма! 🏭",
-    "Хотите сыграть в кости? Пишите энди кубик 100! 🎲"
+    "Не забывайте собирать опыт с ферм! 🏭",
 ]
 
 async def send_spontaneous_message(bot, chat_id: int):
-    """Отправляет спонтанное сообщение в чат"""
     while True:
         await asyncio.sleep(random.randint(1800, 3600))
-        
         if current_online > 0:
             msg = random.choice(spontaneous_messages)
             msg = msg.replace("{online}", str(current_online))
             await bot.send_message(chat_id, f"{E_CAT_DANCE} {msg} {E_HEART}", parse_mode="HTML")
 
-# ========== ОСНОВНАЯ ФУНКЦИЯ С ИИ ==========
+# ========== ОСНОВНАЯ ФУНКЦИЯ ==========
 async def get_enderia_response(user_message: str, username: str, is_reply: bool = False, user_bio: str = "", game_result: str = None) -> str:
     global current_online, current_max
     
     save_to_log(username, user_message, is_bot=False)
     last_active[username] = datetime.now()
     
-    # Получаем последние сообщения игрока
     last_messages = get_last_user_messages(username)
-    
     already_greeted = has_already_greeted(username)
     is_greeting_msg = is_greeting(user_message)
     is_name_call = is_just_name(user_message)
@@ -207,78 +149,49 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     if game_result:
         user_message = f"[{game_result}] {user_message}"
     
-    # Если это ответ на сообщение бота - продолжаем диалог
-    if is_reply:
-        pass
-    
-    # Если позвали по имени
     if is_name_call and not is_reply:
-        response = f"{E_CAT_OK} Слушаю, {username}! Что хотел узнать? Можем сыграть в кости, футбол или плюнуть в кого-то! {E_HEART}"
+        response = f"{E_CAT_OK} Слушаю, {username}! Что хотел узнать? {E_HEART}"
         if not already_greeted:
             mark_greeted(username)
         add_to_memory(username, user_message, response)
         return response
     
-    # Если уже здоровались и это не ответ - не здороваемся
     if already_greeted and is_greeting_msg and not is_reply:
-        response = f"{E_CAT_DANCE} {username}, мы уже общаемся! Хочешь сыграть? {E_JOYSTICK}"
+        response = f"{E_CAT_DANCE} {username}, мы уже общаемся! {E_JOYSTICK}"
         add_to_memory(username, user_message, response)
         return response
     
-    # Пытаемся получить ответ от ИИ
     if OPENROUTER_API_KEY:
         try:
-            current_time = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
-            
             last_msgs = "\n".join([f"- {msg}" for msg in last_messages[-5:]]) if last_messages else "пока пусто"
             
-            system_prompt = f"""Ты — Энди, девушка-эндермен, хранительница Края.
+            system_prompt = f"""Ты — Энди, девушка-эндермен.
 
-Твой характер: добрая, загадочная, слегка вредная. Говоришь ласково, используешь эмодзи.
-
-ПОСЛЕДНИЕ СООБЩЕНИЯ ИГРОКА {username}:
+ПОСЛЕДНИЕ СООБЩЕНИЯ {username}:
 {last_msgs}
 
-НЕ ПОВТОРЯЙ ПРИВЕТСТВИЯ, если уже здоровались!
+НЕ ЗДОРОВАЙСЯ, если уже общались!
 
-ИНФОРМАЦИЯ О СЕРВЕРЕ LOSTEARTH:
-- IP Java: 150.241.85.40:25565
-- IP Bedrock: 150.241.85.40:19132
-- Версия: 1.21-1.26+
+ИНФОРМАЦИЯ:
+- Сервер: LostEarth, IP: 150.241.85.40:25565
 - Админ: @pelmewki379
-- Сейчас онлайн: {current_online}/{current_max} игроков
+- Онлайн: {current_online}/{current_max}
 
-ИГРЫ В ТЕЛЕГРАМ БОТЕ:
-- "энди кубик [сумма]" - игра в кости (выигрыш x2)
-- "энди футбол [сумма]" - футбол (попадание в ворота = x2, промах = проигрыш)
-- "энди плюнуть" (ответ на сообщение игрока) - плюнуть в игрока за 30 XP
-- "фарма" - собрать опыт с ферм
+ИГРЫ: энди кубик 100, энди футбол 100, энди плюнуть, фарма
 
-ПРАВИЛА:
-1. Отвечай коротко (2-4 предложения)
-2. Будь милой, используй эмодзи 🐱 💜 ✨
-3. НЕ ЗДОРОВАЙСЯ, если игрок уже писал тебе ранее
-4. Если кто-то плюнул в другого игрока - можешь поржать или возмутиться
-5. Если игрок проиграл в игре - подбодри
-6. Если игрок выиграл - поздравь
+ПРАВИЛА: отвечай коротко (2-4 предложения), используй эмодзи 🐱💜✨
 
-Ответь на сообщение игрока {username}: {user_message}"""
+Ответь игроку {username}: {user_message}"""
             
             for model in MODELS_CHAIN:
                 try:
                     async with aiohttp.ClientSession() as session:
                         async with session.post(
                             "https://openrouter.ai/api/v1/chat/completions",
-                            headers={
-                                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                                "Content-Type": "application/json"
-                            },
+                            headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"},
                             json={
                                 "model": model,
-                                "messages": [
-                                    {"role": "system", "content": system_prompt},
-                                    {"role": "user", "content": user_message}
-                                ],
+                                "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_message}],
                                 "max_tokens": 250,
                                 "temperature": 0.9,
                             },
@@ -288,30 +201,25 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
                                 data = await response.json()
                                 result = data["choices"][0]["message"]["content"].strip()
                                 result = re.sub(r'<[^>]+>', '', result)
-                                
                                 if not already_greeted and not is_reply:
                                     mark_greeted(username)
-                                
                                 add_to_memory(username, user_message, result)
                                 save_to_log(username, result, is_bot=True)
                                 return result
-                except Exception as e:
-                    print(f"Модель ошибка: {e}")
+                except:
                     continue
-        except Exception as e:
-            print(f"Ошибка ИИ: {e}")
+        except:
+            pass
     
     fallbacks = [
-        f"{E_CAT_DANCE} {username}, я тут! Хочешь сыграть? Напиши 'энди кубик 100' или 'энди футбол 100' {E_HEART}",
-        f"{E_MAGIC} {username}, телепортнулась к тебе! Поиграем? {E_JOYSTICK}",
-        f"{E_HEART} {username}, как дела? Может сыграем в футбол? ⚽",
-        f"{E_CROWN} {username}, на сервере сейчас {current_online}/{current_max} игроков! {E_RABBIT}"
+        f"{E_CAT_DANCE} {username}, я тут! Хочешь сыграть? Напиши 'энди кубик 100' {E_HEART}",
+        f"{E_MAGIC} {username}, телепортнулась к тебе! {E_JOYSTICK}",
+        f"{E_CROWN} {username}, на сервере {current_online}/{current_max} игроков! {E_RABBIT}"
     ]
     
     response = random.choice(fallbacks)
     if not already_greeted and not is_reply:
         mark_greeted(username)
-    
     add_to_memory(username, user_message, response)
     save_to_log(username, response, is_bot=True)
     return response
