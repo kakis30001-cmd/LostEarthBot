@@ -2,14 +2,14 @@ import asyncpg
 import os
 from datetime import datetime, date
 
-DB_URL = os.getenv("DATABASE_URL", "")
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:GVvGhOwThbxIWOruuQkDsZVYPuzrMgdt@postgres.railway.internal:5432/railway")
 
 pool = None
 
 async def connect_db():
     global pool
     try:
-        pool = await asyncpg.create_pool(DB_URL, min_size=1, max_size=5)
+        pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=5)
         
         async with pool.acquire() as conn:
             await conn.execute("""
@@ -25,6 +25,16 @@ async def connect_db():
                 updated_at TIMESTAMP DEFAULT NOW()
             )
             """)
+            
+            # Добавляем колонки если их нет (для совместимости)
+            try:
+                await conn.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS farm_level INTEGER DEFAULT 1")
+            except:
+                pass
+            try:
+                await conn.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS last_farm TIMESTAMP DEFAULT NULL")
+            except:
+                pass
             
         print("✅ PostgreSQL подключена")
         return True
