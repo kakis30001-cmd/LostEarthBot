@@ -7,15 +7,63 @@ from datetime import datetime, date
 # ========== ФАЙЛОВОЕ ХРАНИЛИЩЕ ==========
 PLAYERS_FILE = "players.json"
 
+# СБАЛАНСИРОВАННЫЕ ФЕРМЫ
+# У каждой фермы свои плюсы и минусы:
+# - Пауки: дешёвые, быстро окупаются, но низкий доход
+# - Зомби: средние по всему
+# - Криперы: дорогие, высокий доход, долгая окупаемость
+# - Скелеты: дешёвые, но медленный доход
+# - Эндермены: очень дорогие, максимальный доход, для топ-игроков
 FARMS = {
-    "пауков": {"base_income": 50, "emoji": "🕷️", "cost": 1000},
-    "зомби": {"base_income": 75, "emoji": "🧟", "cost": 1000},
-    "криперов": {"base_income": 100, "emoji": "💥", "cost": 1000},
-    "скелетов": {"base_income": 60, "emoji": "🏹", "cost": 1000},
-    "эндерменов": {"base_income": 150, "emoji": "👾", "cost": 1500},
+    "пауков": {
+        "base_income": 50, 
+        "emoji": "🕷️", 
+        "cost": 500,           # Дешевле! 500 XP
+        "name": "пауков",
+        "description": "Дешёвые, быстро окупаются"
+    },
+    "зомби": {
+        "base_income": 75, 
+        "emoji": "🧟", 
+        "cost": 800,           # 800 XP
+        "name": "зомби",
+        "description": "Сбалансированные"
+    },
+    "криперов": {
+        "base_income": 120,    # Увеличен доход!
+        "emoji": "💥", 
+        "cost": 1500,          # Дорогие, но мощные
+        "name": "криперов",
+        "description": "Высокий доход, долгая окупаемость"
+    },
+    "скелетов": {
+        "base_income": 40,     # Низкий доход
+        "emoji": "🏹", 
+        "cost": 400,           # Очень дешёвые
+        "name": "скелетов",
+        "description": "Очень дешёвые, для старта"
+    },
+    "эндерменов": {
+        "base_income": 200,    # Максимальный доход!
+        "emoji": "👾", 
+        "cost": 2500,          # Очень дорогие
+        "name": "эндерменов",
+        "description": "Топовые, максимальный доход"
+    },
 }
 
-UPGRADE_COSTS = {1: 0, 2: 500, 3: 1000, 4: 2000, 5: 5000}
+UPGRADE_COSTS = {
+    1: 0,
+    2: 300,   # Дешевле улучшения
+    3: 600,
+    4: 1200,
+    5: 2500
+}
+
+# Справочник для быстрого доступа
+FARM_EMOJI = {"пауков": "🕷️", "зомби": "🧟", "криперов": "💥", "скелетов": "🏹", "эндерменов": "👾"}
+FARM_BASE = {"пауков": 50, "зомби": 75, "криперов": 120, "скелетов": 40, "эндерменов": 200}
+FARM_COST = {"пауков": 500, "зомби": 800, "криперов": 1500, "скелетов": 400, "эндерменов": 2500}
 
 def load_players():
     if not os.path.exists(PLAYERS_FILE):
@@ -122,7 +170,10 @@ def buy_farm(username: str, farm_name: str):
     data[username]["farms"] = farms
     save_players(data)
     
-    return True, f"✅ Ты купил ферму {farm_name} 1 уровня! Приносит {FARMS[farm_name]['base_income']} XP в час"
+    base_income = FARMS[farm_name]["base_income"]
+    hours_to_break_even = round(cost / base_income, 1)
+    
+    return True, f"✅ Ты купил ферму {farm_name} 1 уровня!\n💰 Доход: {base_income} XP/час\n⏱️ Окупаемость: {hours_to_break_even} часов"
 
 def upgrade_farm(username: str, farm_name: str):
     farms = get_farms(username)
@@ -146,8 +197,10 @@ def upgrade_farm(username: str, farm_name: str):
     data[username]["farms"] = farms
     save_players(data)
     
+    old_income = FARMS[farm_name]["base_income"] * current_level
     new_income = FARMS[farm_name]["base_income"] * (current_level + 1)
-    return True, f"✅ Ферма {farm_name} улучшена до {current_level + 1} уровня! Теперь приносит {new_income} XP в час"
+    
+    return True, f"✅ Ферма {farm_name} улучшена до {current_level + 1} уровня!\n📈 Доход был: {old_income} XP/час\n📈 Доход стал: {new_income} XP/час (+{FARMS[farm_name]['base_income']} XP/час)"
 
 def calculate_income(farms: dict) -> int:
     total = 0
@@ -158,6 +211,16 @@ def calculate_income(farms: dict) -> int:
             total += base * level
     return total
 
+def calculate_income_per_hour(farms: dict) -> dict:
+    """Возвращает детальный доход с каждой фермы"""
+    result = {}
+    for farm_name, farm_data in farms.items():
+        if farm_name in FARMS:
+            base = FARMS[farm_name]["base_income"]
+            level = farm_data.get("level", 1)
+            result[farm_name] = base * level
+    return result
+
 def claim_income(username: str) -> int:
     farms = get_farms(username)
     if not farms:
@@ -165,6 +228,7 @@ def claim_income(username: str) -> int:
     
     now = datetime.now()
     total_income = 0
+    details = []
     
     data = load_players()
     for farm_name, farm_data in farms.items():
@@ -180,6 +244,7 @@ def claim_income(username: str) -> int:
             income = int(base * level * min(hours_passed, 24))
             if income > 0:
                 total_income += income
+                details.append(f"{FARM_EMOJI.get(farm_name, '🏭')} {farm_name}: +{income} XP")
                 farm_data["last_claim"] = now.timestamp()
     
     if total_income > 0:
@@ -187,17 +252,25 @@ def claim_income(username: str) -> int:
         data[username]["farms"] = farms
         save_players(data)
     
-    return total_income
+    return total_income, details
 
 def get_leaderboard(limit: int = 10) -> list:
     data = load_players()
     players = []
     for username, info in data.items():
+        farms = info.get("farms", {})
+        # Считаем общий потенциал ферм (доход в час)
+        farm_power = 0
+        for farm_name, farm_data in farms.items():
+            if farm_name in FARMS:
+                farm_power += FARMS[farm_name]["base_income"] * farm_data.get("level", 1)
+        
         players.append({
             "username": username,
             "xp": info.get("xp", 0),
             "wins": info.get("wins", 0),
-            "farms_count": len(info.get("farms", {}))
+            "farms_count": len(farms),
+            "farm_power": farm_power
         })
     players.sort(key=lambda x: x["xp"], reverse=True)
     return players[:limit]
