@@ -53,6 +53,7 @@ E_JOYSTICK = emoji(ENDERIA_EMOJI["joystick"], "🎮")
 # ========== ПАМЯТЬ ==========
 user_memory = defaultdict(lambda: deque(maxlen=20))
 user_greeted = {}
+last_message_from_bot = {}  # храним последнее сообщение бота для каждого пользователя
 
 def add_to_memory(username: str, user_message: str, bot_response: str):
     user_memory[username].append(f"{username}: {user_message}")
@@ -61,6 +62,8 @@ def add_to_memory(username: str, user_message: str, bot_response: str):
 def clear_user_memory(username: str):
     if username in user_memory:
         user_memory[username].clear()
+    if username in user_greeted:
+        user_greeted[username] = False
 
 def get_memory_size(username: str) -> int:
     return len(user_memory.get(username, [])) // 2
@@ -116,6 +119,11 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     is_greeting_msg = is_greeting(user_message)
     is_name_call = is_just_name(user_message)
     
+    # Если это ответ на сообщение Энди - продолжаем диалог без приветствия
+    if is_reply:
+        # Это ответ на сообщение бота, продолжаем разговор
+        pass
+    
     # Если позвали по имени
     if is_name_call and not is_reply:
         response = f"{E_CAT_OK} Слушаю, {username}! Что хотел узнать? {E_HEART}"
@@ -124,7 +132,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         add_to_memory(username, user_message, response)
         return response
     
-    # Если уже здоровались - не здороваемся снова
+    # Если уже здоровались и это не ответ на сообщение бота - не здороваемся
     if already_greeted and is_greeting_msg and not is_reply:
         response = f"{E_CAT_DANCE} {username}, мы уже общаемся! Что случилось? {E_HEART}"
         add_to_memory(username, user_message, response)
@@ -146,11 +154,20 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
 - Админ: @pelmewki379
 - Сейчас онлайн: {current_online}/{current_max} игроков
 
+ИГРЫ В ТЕЛЕГРАМ БОТЕ:
+- /bet [сумма] - игра в кости (выигрыш x2)
+- /football [сумма] - футбол (гол = x2)
+
+ФЕРМЫ ОПЫТА:
+- /farms - посмотреть фермы
+- /buy_farm - купить ферму
+- /upgrade_farm - улучшить ферму
+- /claim - собрать опыт
+
 ПРАВИЛА:
-1. Если уже здоровались - НЕ ЗДОРОВАЙСЯ заново
+1. Если это ответ на твоё сообщение - ПРОДОЛЖАЙ диалог, НЕ ЗДОРОВАЙСЯ
 2. Отвечай коротко (2-4 предложения)
 3. Будь милой, используй эмодзи 🐱 💜 ✨
-4. Ты сама играешь на сервере
 
 Ответь на сообщение игрока {username}: {user_message}"""
             
@@ -179,7 +196,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
                                 result = data["choices"][0]["message"]["content"].strip()
                                 result = re.sub(r'<[^>]+>', '', result)
                                 
-                                if not already_greeted:
+                                if not already_greeted and not is_reply:
                                     mark_greeted(username)
                                 
                                 add_to_memory(username, user_message, result)
@@ -193,14 +210,14 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     
     # Fallback
     fallbacks = [
-        f"{E_CAT_DANCE} {username}, привет! Я сейчас на сервере играю, а ты? {E_HEART}",
-        f"{E_MAGIC} {username}, телепортнулась к тебе! Чем могу помочь? {E_CAT_OK}",
-        f"{E_HEART} {username}, как твои дела на LostEarth? {E_RABBIT}",
-        f"{E_CROWN} {username}, на сервере сейчас {current_online}/{current_max} игроков! Заходи! {E_JOYSTICK}"
+        f"{E_CAT_DANCE} {username}, я тут! Чем могу помочь? {E_HEART}",
+        f"{E_MAGIC} {username}, телепортнулась к тебе! {E_CAT_OK}",
+        f"{E_HEART} {username}, как дела на сервере? {E_RABBIT}",
+        f"{E_CROWN} {username}, на сервере сейчас {current_online}/{current_max} игроков! {E_JOYSTICK}"
     ]
     
     response = random.choice(fallbacks)
-    if not already_greeted:
+    if not already_greeted and not is_reply:
         mark_greeted(username)
     
     add_to_memory(username, user_message, response)
