@@ -316,67 +316,56 @@ async def handle_message(message: Message):
         return
     
     username = message.from_user.username or message.from_user.first_name
-    user_message = message.text
+    user_message = message.text.lower()
     user_id = message.from_user.id
     
-    # Проверка на ответ на сообщение Эндерии
+    # Проверка на ответ на сообщение
     is_reply_to_bot = False
     replied_username = None
+    replied_user_id = None
     
     if message.reply_to_message:
         replied_user = message.reply_to_message.from_user
-        if replied_user and replied_user.id == bot.id:
-            is_reply_to_bot = True
-        elif replied_user:
+        if replied_user:
+            replied_user_id = replied_user.id
             replied_username = replied_user.first_name or replied_user.username
+            if replied_user_id == bot.id:
+                is_reply_to_bot = True
     
     # Если ответ на сообщение бота - Эндерия отвечает
     if is_reply_to_bot:
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
-        response = await get_enderia_response(user_message, username, is_reply=True, user_bio="")
+        response = await get_enderia_response(message.text, username, is_reply=True, user_bio="")
         if response:
             await message.reply(response, parse_mode="HTML")
         return
     
-    # Если ответ на сообщение другого человека - плюемся
-    if message.reply_to_message and replied_username:
+    # Если ответ на сообщение другого человека И есть слово "плюнуть"
+    if message.reply_to_message and replied_username and replied_user_id != bot.id and ("плюнуть" in user_message or "плюнь" in user_message or "плюй" in user_message):
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
         
-        # Верхняя часть: кто плюнул на кого
+        # Верхняя часть: кто плюнул на кого (отправитель на того, кому ответил)
         spit_text = f"{E_CAT_SURPRISED} <b>{username}</b> плюнул(а) на <b>{replied_username}</b>! {E_CAT_SURPRISED}"
         
-        # Генерируем ответ Эндерии (без подписи внизу)
-        enderia_response = await get_enderia_response(f"плюнул на {replied_username}", username, is_reply=False, user_bio="")
+        # Генерируем ответ Эндерии
+        enderia_response = await get_enderia_response(f"пользователь {username} плюнул на {replied_username}", username, is_reply=False, user_bio="")
         
-        # Отправляем одним сообщением: сначала плюсок, потом ответ Эндерии
-        await message.reply(f"{spit_text}\n\n{E_HEART} {enderia_response}", parse_mode="HTML")
+        # Отправляем одним сообщением
+        await message.reply(f"{spit_text}\n\n{enderia_response}", parse_mode="HTML")
+        return
+    
+    # Если ответ на сообщение другого человека НО без слова "плюнуть" - игнорируем
+    if message.reply_to_message and replied_username and replied_user_id != bot.id:
         return
     
     # Обычное сообщение с упоминанием Эндерии
-    if should_respond(user_message):
+    if should_respond(message.text):
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
         user_bio = await get_user_bio(user_id)
-        response = await get_enderia_response(user_message, username, is_reply=False, user_bio=user_bio)
+        response = await get_enderia_response(message.text, username, is_reply=False, user_bio=user_bio)
         if response:
             sent_msg = await message.reply(response, parse_mode="HTML")
             last_bot_message_id[user_id] = sent_msg.message_id
-    
-    # Если ответ на сообщение другого человека - плюемся
-    if message.reply_to_message and replied_username:
-        await bot.send_chat_action(chat_id=message.chat.id, action="typing")
-        response = f"{E_CAT_SURPRISED} <b>{username}</b> плюнул(а) в <b>{replied_username}</b>! {E_CAT_SURPRISED}\n\n{E_HEART} Эндерия: Ой-ой, кто тут ссорится? {E_CAT_DANCE}"
-        await message.reply(response, parse_mode="HTML")
-        return
-    
-    # Обычное сообщение с упоминанием Эндерии
-    if should_respond(user_message):
-        await bot.send_chat_action(chat_id=message.chat.id, action="typing")
-        user_bio = await get_user_bio(user_id)
-        response = await get_enderia_response(user_message, username, is_reply=False, user_bio=user_bio)
-        if response:
-            sent_msg = await message.reply(response, parse_mode="HTML")
-            last_bot_message_id[user_id] = sent_msg.message_id
-
 # ========== КОЛБЭКИ ==========
 @dp.callback_query()
 async def handle_callback(callback: CallbackQuery):
