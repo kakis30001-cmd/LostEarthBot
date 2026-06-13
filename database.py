@@ -41,6 +41,24 @@ async def connect_db():
 async def init_db():
     return await connect_db()
 
+async def connect_db():
+    global pool
+    print(f"🔍 DATABASE_URL exists: {DATABASE_URL is not None}")
+    print(f"🔍 DATABASE_URL value: {DATABASE_URL[:50] if DATABASE_URL else 'None'}...")
+    
+    if not DATABASE_URL:
+        print("❌ НЕТ ПЕРЕМЕННОЙ DATABASE_URL")
+        return False
+    
+    try:
+        print(f"🔌 Подключение к БД...")
+        pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=5)
+        print("✅ Пул создан!")
+        # ... остальной код
+    except Exception as e:
+        print(f"❌ Ошибка: {e}")
+        return False
+
 async def get_pool():
     return pool
 
