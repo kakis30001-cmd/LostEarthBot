@@ -255,13 +255,7 @@ async def start_cmd(message: Message):
 
 {E_CAT_DANCE} <b>Я Эндерия - твой живой помощник!</b>
 
-{E_CROWN} <b>Текущий онлайн:</b> {online}/{max_players}
-{E_CROWN} <b>Твой опыт:</b> {xp} XP
-
-{E_HEART} <b>Дневной бонус:</b>
-Добавь @lostearth_bot в описание профиля!
-
-🐰💜🐱"""
+{E_CROWN} <b>Твой опыт:</b> {xp} XP"""
     await message.answer(text, parse_mode="HTML", reply_markup=get_main_keyboard())
 
 @dp.message(Command("online"))
