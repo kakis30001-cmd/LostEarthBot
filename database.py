@@ -7,7 +7,6 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:hgSCmLMXOyemvPAT
 # Кэш
 xp_cache = {}
 stats_cache = {}
-farms_cache = {}
 
 async def init_db():
     try:
@@ -20,20 +19,10 @@ async def init_db():
                 last_bonus DATE,
                 wins INTEGER DEFAULT 0,
                 losses INTEGER DEFAULT 0,
+                farm_level INTEGER DEFAULT 1,
+                last_farm TIMESTAMP DEFAULT NULL,
                 created_at TIMESTAMP DEFAULT NOW(),
                 updated_at TIMESTAMP DEFAULT NOW()
-            )
-        """)
-        
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS farms (
-                id SERIAL PRIMARY KEY,
-                username TEXT REFERENCES players(username) ON DELETE CASCADE,
-                farm_name TEXT NOT NULL,
-                level INTEGER DEFAULT 1,
-                last_claim TIMESTAMP DEFAULT NOW(),
-                created_at TIMESTAMP DEFAULT NOW(),
-                UNIQUE(username, farm_name)
             )
         """)
         
@@ -131,140 +120,51 @@ async def get_stats(username: str) -> dict:
     except:
         return {"wins": 0, "losses": 0}
 
-async def get_farms(username: str) -> dict:
-    if username in farms_cache:
-        return farms_cache[username]
+async def get_farm_level(username: str) -> int:
     try:
         conn = await asyncpg.connect(DATABASE_URL)
-        rows = await conn.fetch("SELECT farm_name, level, last_claim FROM farms WHERE username = $1", username)
+        row = await conn.fetchrow("SELECT farm_level FROM players WHERE username = $1", username)
         await conn.close()
-        farms = {}
-        for row in rows:
-            farms[row[0]] = {"level": row[1], "last_claim": row[2].timestamp() if row[2] else None}
-        farms_cache[username] = farms
-        return farms
+        if row:
+            return row[0]
+        return 1
     except:
-        return {}
+        return 1
 
-async def buy_farm(username: str, farm_name: str):
-    farms_data = {
-        "пауков": {"base_income": 50, "cost": 1000},
-        "зомби": {"base_income": 75, "cost": 1000},
-        "криперов": {"base_income": 100, "cost": 1000},
-        "скелетов": {"base_income": 60, "cost": 1000},
-        "эндерменов": {"base_income": 150, "cost": 1500},
-    }
-    
-    if farm_name not in farms_data:
-        return False, f"❌ Фермы '{farm_name}' нет!"
-    
-    xp = await get_xp(username)
-    cost = farms_data[farm_name]["cost"]
-    
-    if xp < cost:
-        return False, f"❌ Нужно {cost} XP, у тебя {xp} XP"
-    
+async def update_farm_level(username: str, new_level: int):
     try:
         conn = await asyncpg.connect(DATABASE_URL)
-        await conn.execute("INSERT INTO farms (username, farm_name, level, last_claim) VALUES ($1, $2, 1, NOW())", username, farm_name)
+        await conn.execute("UPDATE players SET farm_level = $1, updated_at = NOW() WHERE username = $2", new_level, username)
         await conn.close()
-        await update_xp(username, -cost)
-        if username in farms_cache:
-            farms_cache[username] = await get_farms(username)
-        return True, f"✅ Ферма {farm_name} куплена!"
     except Exception as e:
-        return False, f"❌ Ошибка: {e}"
+        print(f"Ошибка обновления уровня фармы: {e}")
 
-async def upgrade_farm(username: str, farm_name: str):
-    upgrade_costs = {1: 0, 2: 500, 3: 1000, 4: 2000, 5: 5000}
-    farms_data = {"пауков": 50, "зомби": 75, "криперов": 100, "скелетов": 60, "эндерменов": 150}
-    
-    if farm_name not in farms_data:
-        return False, f"❌ Фермы '{farm_name}' нет!"
-    
+async def get_last_farm(username: str):
     try:
         conn = await asyncpg.connect(DATABASE_URL)
-        row = await conn.fetchrow("SELECT level FROM farms WHERE username = $1 AND farm_name = $2", username, farm_name)
-        
-        if not row:
-            await conn.close()
-            return False, f"❌ У тебя нет фермы {farm_name}!"
-        
-        current_level = row[0]
-        if current_level >= 5:
-            await conn.close()
-            return False, f"⭐ Ферма уже 5 уровня!"
-        
-        cost = upgrade_costs[current_level + 1]
-        xp = await get_xp(username)
-        
-        if xp < cost:
-            await conn.close()
-            return False, f"❌ Нужно {cost} XP для улучшения!"
-        
-        await conn.execute("UPDATE farms SET level = level + 1 WHERE username = $1 AND farm_name = $2", username, farm_name)
+        row = await conn.fetchrow("SELECT last_farm FROM players WHERE username = $1", username)
         await conn.close()
-        await update_xp(username, -cost)
-        
-        if username in farms_cache:
-            farms_cache[username] = await get_farms(username)
-        
-        return True, f"✅ Ферма {farm_name} улучшена до {current_level + 1} уровня!"
-    except Exception as e:
-        return False, f"❌ Ошибка: {e}"
-
-async def calculate_income(username: str) -> int:
-    farms = await get_farms(username)
-    farms_data = {"пауков": 50, "зомби": 75, "криперов": 100, "скелетов": 60, "эндерменов": 150}
-    total = 0
-    for name, data in farms.items():
-        base = farms_data.get(name, 50)
-        level = data.get("level", 1)
-        total += base * level
-    return total
-
-async def claim_income(username: str) -> int:
-    farms = await get_farms(username)
-    if not farms:
-        return 0
-    
-    farms_data = {"пауков": 50, "зомби": 75, "криперов": 100, "скелетов": 60, "эндерменов": 150}
-    now = datetime.now()
-    total_income = 0
-    
-    try:
-        conn = await asyncpg.connect(DATABASE_URL)
-        for name, data in farms.items():
-            last_claim = data.get("last_claim")
-            if last_claim:
-                last_claim_time = datetime.fromtimestamp(last_claim)
-                hours_passed = (now - last_claim_time).total_seconds() / 3600
-                if hours_passed > 0:
-                    base = farms_data.get(name, 50)
-                    level = data.get("level", 1)
-                    income = int(base * level * min(hours_passed, 24))
-                    if income > 0:
-                        total_income += income
-                        await conn.execute("UPDATE farms SET last_claim = NOW() WHERE username = $1 AND farm_name = $2", username, name)
-        await conn.close()
-        
-        if total_income > 0:
-            await update_xp(username, total_income)
-            if username in farms_cache:
-                farms_cache[username] = await get_farms(username)
-        return total_income
+        if row and row[0]:
+            return row[0]
+        return None
     except:
-        return 0
+        return None
+
+async def update_last_farm(username: str):
+    try:
+        conn = await asyncpg.connect(DATABASE_URL)
+        await conn.execute("UPDATE players SET last_farm = NOW() WHERE username = $1", username)
+        await conn.close()
+    except Exception as e:
+        print(f"Ошибка обновления времени фармы: {e}")
 
 async def get_leaderboard(limit: int = 10) -> list:
     try:
         conn = await asyncpg.connect(DATABASE_URL)
         rows = await conn.fetch("""
-            SELECT p.username, p.xp, p.wins, COUNT(f.id) as farms_count
-            FROM players p
-            LEFT JOIN farms f ON p.username = f.username
-            GROUP BY p.username, p.xp, p.wins
-            ORDER BY p.xp DESC
+            SELECT username, xp, wins, losses, farm_level
+            FROM players
+            ORDER BY xp DESC
             LIMIT $1
         """, limit)
         await conn.close()
