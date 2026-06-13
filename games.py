@@ -1,7 +1,10 @@
 import asyncio
-from datetime import datetime
 
-from database import get_xp, update_xp, update_stats
+from database import (
+    get_xp, update_xp, update_stats,
+    get_farm_level, update_farm_level,
+    get_last_farm, update_last_farm
+)
 
 # ========== ПЛЕВОК ==========
 async def add_spit(username: str, target: str) -> tuple[bool, str, int]:
@@ -14,120 +17,12 @@ async def add_spit(username: str, target: str) -> tuple[bool, str, int]:
     return True, f"💨 {username} плюнул(а) в {target} эндер-жемчугом!", new_xp
 
 # ========== ФАРМА ==========
-# Данные о фарме для каждого игрока хранятся в БД в таблице players
-# Добавляем колонки: farm_level, last_farm
-
-async def init_farm_tables():
-    """Инициализация таблиц для фармы"""
-    from database import DATABASE_URL
-    import asyncpg
-    try:
-        conn = await asyncpg.connect(DATABASE_URL)
-        # Добавляем колонки для фармы если их нет
-        await conn.execute("""
-            ALTER TABLE players ADD COLUMN IF NOT EXISTS farm_level INTEGER DEFAULT 1,
-            ADD COLUMN IF NOT EXISTS last_farm TIMESTAMP DEFAULT NULL
-        """)
-        await conn.close()
-        print("✅ Таблицы фармы инициализированы")
-    except Exception as e:
-        print(f"Ошибка инициализации фармы: {e}")
-
-async def get_farm_level(username: str) -> int:
-    """Получает уровень фармы игрока"""
-    from database import DATABASE_URL
-    import asyncpg
-    try:
-        conn = await asyncpg.connect(DATABASE_URL)
-        row = await conn.fetchrow("SELECT farm_level FROM players WHERE username = $1", username)
-        await conn.close()
-        if row:
-            return row[0]
-        return 1
-    except:
-        return 1
-
-async def get_last_farm(username: str):
-    """Получает время последнего сбора фармы"""
-    from database import DATABASE_URL
-    import asyncpg
-    try:
-        conn = await asyncpg.connect(DATABASE_URL)
-        row = await conn.fetchrow("SELECT last_farm FROM players WHERE username = $1", username)
-        await conn.close()
-        if row and row[0]:
-            return row[0]
-        return None
-    except:
-        return None
-
-async def update_farm_level(username: str, new_level: int):
-    """Обновляет уровень фармы"""
-    from database import DATABASE_URL
-    import asyncpg
-    try:
-        conn = await asyncpg.connect(DATABASE_URL)
-        await conn.execute("UPDATE players SET farm_level = $1 WHERE username = $2", new_level, username)
-        await conn.close()
-    except Exception as e:
-        print(f"Ошибка обновления уровня фармы: {e}")
-
-async def update_last_farm(username: str):
-    """Обновляет время последнего сбора фармы"""
-    from database import DATABASE_URL
-    import asyncpg
-    try:
-        conn = await asyncpg.connect(DATABASE_URL)
-        await conn.execute("UPDATE players SET last_farm = NOW() WHERE username = $1", username)
-        await conn.close()
-    except Exception as e:
-        print(f"Ошибка обновления времени фармы: {e}")
-
-# Доход от фармы в зависимости от уровня
-FARM_INCOME = {
-    1: 50,
-    2: 100,
-    3: 200,
-    4: 350,
-    5: 550,
-    6: 800,
-    7: 1100,
-    8: 1500,
-    9: 2000,
-    10: 3000,
-}
-
-# Стоимость прокачки уровня
-UPGRADE_COST = {
-    1: 0,
-    2: 500,
-    3: 1000,
-    4: 2000,
-    5: 3500,
-    6: 5500,
-    7: 8000,
-    8: 11000,
-    9: 15000,
-    10: 20000,
-}
+FARM_INCOME = {1: 50, 2: 100, 3: 200, 4: 350, 5: 550, 6: 800, 7: 1100, 8: 1500, 9: 2000, 10: 3000}
+UPGRADE_COST = {1: 0, 2: 500, 3: 1000, 4: 2000, 5: 3500, 6: 5500, 7: 8000, 8: 11000, 9: 15000, 10: 20000}
 
 async def farm_info(username: str, has_bot_in_bio: bool) -> str:
-    """Показывает информацию о фарме"""
     if not has_bot_in_bio:
-        return f"""❌ ФАРМА НЕ ДОСТУПНА!
-
-Чтобы пользоваться фармой, добавь в описание своего профиля:
-
-<b>@lostearth_bot</b>
-
-📝 Как это сделать:
-1. Зайди в настройки Telegram
-2. Нажми на свою фотографию
-3. Выбери "Редактировать профиль"
-4. В разделе "Описание" добавь: @lostearth_bot
-5. Сохрани и возвращайся!
-
-После добавления бот проверит и фарма заработает! 💜"""
+        return f"❌ ФАРМА НЕ ДОСТУПНА!\n\nДобавь @lostearth_bot в описание профиля!"
     
     level = await get_farm_level(username)
     income = FARM_INCOME.get(level, 50)
@@ -150,6 +45,7 @@ async def farm_info(username: str, has_bot_in_bio: bool) -> str:
         text += f"⭐ МАКСИМАЛЬНЫЙ УРОВЕНЬ! ⭐\n"
     
     if last_farm:
+        from datetime import datetime
         now = datetime.now()
         time_passed = (now - last_farm).total_seconds() / 3600
         if time_passed >= 3:
@@ -164,11 +60,11 @@ async def farm_info(username: str, has_bot_in_bio: bool) -> str:
     return text
 
 async def collect_farm(username: str, has_bot_in_bio: bool) -> tuple[str, str]:
-    """Собирает опыт с фармы"""
     if not has_bot_in_bio:
         return f"❌ ФАРМА НЕ ДОСТУПНА!\n\nДобавь @lostearth_bot в описание профиля!", None
     
     last_farm = await get_last_farm(username)
+    from datetime import datetime
     now = datetime.now()
     
     if last_farm:
@@ -188,7 +84,6 @@ async def collect_farm(username: str, has_bot_in_bio: bool) -> tuple[str, str]:
     return f"🏭 Ты собрал {income} XP с фармы!\n💰 Баланс: {new_xp} XP", f"Собрал {income} XP с фармы"
 
 async def upgrade_farm_cmd(username: str, has_bot_in_bio: bool) -> tuple[str, str]:
-    """Улучшает фарму"""
     if not has_bot_in_bio:
         return f"❌ ФАРМА НЕ ДОСТУПНА!\n\nДобавь @lostearth_bot в описание профиля!", None
     
@@ -235,16 +130,14 @@ async def game_dice_bet(username: str, bet_amount: int, bot, chat_id: int) -> tu
         await update_xp(username, win_amount)
         await update_stats(username, is_win=True)
         new_xp = await get_xp(username)
-        result_text = f"🎉 ПОБЕДА! 🎉\n\nТвой кубик: {player_value}\nМой кубик: {bot_value}\n\n✨ Ты выиграл {win_amount} XP!\n💰 Баланс: {new_xp} XP"
-        return result_text, f"Выиграл {win_amount} XP в кости!"
+        return f"🎉 ПОБЕДА! 🎉\n\nТвой кубик: {player_value}\nМой кубик: {bot_value}\n\n✨ Ты выиграл {win_amount} XP!\n💰 Баланс: {new_xp} XP", f"Выиграл {win_amount} XP в кости!"
     elif player_value < bot_value:
         await update_xp(username, -bet_amount)
         await update_stats(username, is_win=False)
         new_xp = await get_xp(username)
-        result_text = f"😔 ПРОИГРЫШ...\n\nТвой кубик: {player_value}\nМой кубик: {bot_value}\n\n💔 Ты проиграл {bet_amount} XP!\n💰 Баланс: {new_xp} XP"
-        return result_text, f"Проиграл {bet_amount} XP в кости!"
+        return f"😔 ПРОИГРЫШ...\n\nТвой кубик: {player_value}\nМой кубик: {bot_value}\n\n💔 Ты проиграл {bet_amount} XP!\n💰 Баланс: {new_xp} XP", f"Проиграл {bet_amount} XP в кости!"
     else:
-        return f"🤝 НИЧЬЯ!\n\nОба выбросили {player_value}\n\n💰 Ставка возвращена!\n💰 Баланс: {xp} XP", f"Ничья в кости! Ставка {bet_amount} XP возвращена"
+        return f"🤝 НИЧЬЯ!\n\nОба выбросили {player_value}\n\n💰 Ставка возвращена!\n💰 Баланс: {xp} XP", f"Ничья в кости!"
 
 # ========== ФУТБОЛ ==========
 async def play_football(bot, chat_id: int):
@@ -273,13 +166,11 @@ async def game_football_bet(username: str, bet_amount: int, bot, chat_id: int) -
         await update_xp(username, win_amount)
         await update_stats(username, is_win=True)
         new_xp = await get_xp(username)
-        result_text = f"⚽ ГОЛ! ПОБЕДА! ⚽\n\nТвой удар: {player_value}\nЭнди: {bot_value} (не поймала)\n\n✨ Ты выиграл {win_amount} XP!\n💰 Баланс: {new_xp} XP"
-        return result_text, f"Забил гол и выиграл {win_amount} XP в футболе!"
+        return f"⚽ ГОЛ! ПОБЕДА! ⚽\n\nТвой удар: {player_value}\nЭнди: {bot_value} (не поймала)\n\n✨ Ты выиграл {win_amount} XP!\n💰 Баланс: {new_xp} XP", f"Забил гол и выиграл {win_amount} XP!"
     elif not player_goal and bot_caught:
         await update_xp(username, -bet_amount)
         await update_stats(username, is_win=False)
         new_xp = await get_xp(username)
-        result_text = f"😔 ПРОМАХ...\n\nТвой удар: {player_value}\nЭнди: {bot_value} (поймала мяч)\n\n💔 Ты проиграл {bet_amount} XP!\n💰 Баланс: {new_xp} XP"
-        return result_text, f"Промахнулся и проиграл {bet_amount} XP в футболе!"
+        return f"😔 ПРОМАХ...\n\nТвой удар: {player_value}\nЭнди: {bot_value} (поймала)\n\n💔 Ты проиграл {bet_amount} XP!\n💰 Баланс: {new_xp} XP", f"Промахнулся и проиграл {bet_amount} XP!"
     else:
-        return f"🤝 НИЧЬЯ!\n\nТвой удар: {player_value}\nЭнди: {bot_value}\n\n💰 Ставка возвращена!\n💰 Баланс: {xp} XP", f"Ничья в футболе! Ставка {bet_amount} XP возвращена"
+        return f"🤝 НИЧЬЯ!\n\nТвой удар: {player_value}\nЭнди: {bot_value}\n\n💰 Ставка возвращена!\n💰 Баланс: {xp} XP", f"Ничья!"
