@@ -53,7 +53,7 @@ E_JOYSTICK = emoji(ENDERIA_EMOJI["joystick"], "🎮")
 # ========== ПАМЯТЬ ==========
 user_memory = defaultdict(lambda: deque(maxlen=20))
 user_greeted = {}
-last_message_from_bot = {}  # храним последнее сообщение бота для каждого пользователя
+last_active = {}
 
 def add_to_memory(username: str, user_message: str, bot_response: str):
     user_memory[username].append(f"{username}: {user_message}")
@@ -109,32 +109,58 @@ def save_to_log(username: str, message: str, is_bot: bool = False):
     except:
         pass
 
+# ========== СПОНТАННЫЕ СООБЩЕНИЯ ==========
+spontaneous_messages = [
+    "Народ, как дела на фермах? У меня криперы уже 3 уровень! 🐱",
+    "Что молчим? Пойдёмте вместе фармить опыт! ✨",
+    "Эй, кто хочет сыграть в футбол? Ставлю 100 XP! ⚽",
+    "Как успехи у всех? Много опыта нафармили? 💜",
+    "На сервере сейчас {online} игроков! Заходите, вместе веселее! 🎮",
+    "Я тут криперов кормила, а вы чем заняты? 😊",
+    "Не забывайте собирать опыт с ферм командой фарма! 🏭",
+    "Хотите сыграть в кости? Пишите энди кубик 100! 🎲"
+]
+
+async def send_spontaneous_message(bot, chat_id: int):
+    """Отправляет спонтанное сообщение в чат"""
+    while True:
+        await asyncio.sleep(random.randint(1800, 3600))  # 30-60 минут
+        
+        if current_online > 0:
+            msg = random.choice(spontaneous_messages)
+            msg = msg.replace("{online}", str(current_online))
+            await bot.send_message(chat_id, f"{E_CAT_DANCE} {msg} {E_HEART}", parse_mode="HTML")
+
 # ========== ОСНОВНАЯ ФУНКЦИЯ С ИИ ==========
-async def get_enderia_response(user_message: str, username: str, is_reply: bool = False, user_bio: str = "") -> str:
+async def get_enderia_response(user_message: str, username: str, is_reply: bool = False, user_bio: str = "", game_result: str = None) -> str:
     global current_online, current_max
     
     save_to_log(username, user_message, is_bot=False)
+    last_active[username] = datetime.now()
     
     already_greeted = has_already_greeted(username)
     is_greeting_msg = is_greeting(user_message)
     is_name_call = is_just_name(user_message)
     
-    # Если это ответ на сообщение Энди - продолжаем диалог без приветствия
+    # Если есть результат игры - отправляем в ИИ для реакции
+    if game_result:
+        user_message = f"[РЕЗУЛЬТАТ ИГРЫ: {game_result}] {user_message}"
+    
+    # Если это ответ на сообщение Энди - продолжаем диалог
     if is_reply:
-        # Это ответ на сообщение бота, продолжаем разговор
         pass
     
     # Если позвали по имени
     if is_name_call and not is_reply:
-        response = f"{E_CAT_OK} Слушаю, {username}! Что хотел узнать? {E_HEART}"
+        response = f"{E_CAT_OK} Слушаю, {username}! Что хотел узнать? Можем сыграть в кости или футбол! {E_HEART}"
         if not already_greeted:
             mark_greeted(username)
         add_to_memory(username, user_message, response)
         return response
     
-    # Если уже здоровались и это не ответ на сообщение бота - не здороваемся
+    # Если уже здоровались и это не ответ - не здороваемся
     if already_greeted and is_greeting_msg and not is_reply:
-        response = f"{E_CAT_DANCE} {username}, мы уже общаемся! Что случилось? {E_HEART}"
+        response = f"{E_CAT_DANCE} {username}, мы уже общаемся! Хочешь сыграть? {E_JOYSTICK}"
         add_to_memory(username, user_message, response)
         return response
     
@@ -155,19 +181,20 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
 - Сейчас онлайн: {current_online}/{current_max} игроков
 
 ИГРЫ В ТЕЛЕГРАМ БОТЕ:
-- /bet [сумма] - игра в кости (выигрыш x2)
-- /football [сумма] - футбол (гол = x2)
+- "энди кубик [сумма]" - игра в кости (выигрыш x2)
+- "энди футбол [сумма]" - футбол (гол = x2)
+- "фарма" - собрать опыт с ферм
 
 ФЕРМЫ ОПЫТА:
 - /farms - посмотреть фермы
 - /buy_farm - купить ферму
-- /upgrade_farm - улучшить ферму
-- /claim - собрать опыт
 
 ПРАВИЛА:
-1. Если это ответ на твоё сообщение - ПРОДОЛЖАЙ диалог, НЕ ЗДОРОВАЙСЯ
-2. Отвечай коротко (2-4 предложения)
-3. Будь милой, используй эмодзи 🐱 💜 ✨
+1. Отвечай коротко (2-4 предложения)
+2. Будь милой, используй эмодзи 🐱 💜 ✨
+3. Если игрок написал "энди кубик 100" - объясни что это игра в кости
+4. Если игрок написал "энди футбол 100" - объясни что это футбол
+5. Если игрок написал "фарма" - объясни что это сбор опыта
 
 Ответь на сообщение игрока {username}: {user_message}"""
             
@@ -210,10 +237,10 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     
     # Fallback
     fallbacks = [
-        f"{E_CAT_DANCE} {username}, я тут! Чем могу помочь? {E_HEART}",
-        f"{E_MAGIC} {username}, телепортнулась к тебе! {E_CAT_OK}",
-        f"{E_HEART} {username}, как дела на сервере? {E_RABBIT}",
-        f"{E_CROWN} {username}, на сервере сейчас {current_online}/{current_max} игроков! {E_JOYSTICK}"
+        f"{E_CAT_DANCE} {username}, я тут! Хочешь сыграть? Напиши 'энди кубик 100' или 'энди футбол 100' {E_HEART}",
+        f"{E_MAGIC} {username}, телепортнулась к тебе! Поиграем? {E_JOYSTICK}",
+        f"{E_HEART} {username}, как дела? Может сыграем в футбол? ⚽",
+        f"{E_CROWN} {username}, на сервере сейчас {current_online}/{current_max} игроков! {E_RABBIT}"
     ]
     
     response = random.choice(fallbacks)
