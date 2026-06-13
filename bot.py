@@ -1,5 +1,7 @@
 import asyncio
 import os
+import socket
+import struct
 import json
 import re
 from datetime import datetime
@@ -20,6 +22,7 @@ from enderia import (
     set_server_online,
     save_to_log,
     send_spontaneous_message,
+    spontaneous_enabled,
     E_CAT_DANCE,
     E_CAT_OK,
     E_CAT_UP,
@@ -32,6 +35,7 @@ from enderia import (
     E_NOTE,
     E_MAGIC,
     E_JOYSTICK,
+    spontaneous_messages_list,
 )
 
 from database import (
@@ -43,11 +47,13 @@ from database import (
     can_claim_daily_bonus,
     claim_daily_bonus,
     create_player,
-    init_db,
+    connect_db,
     get_farm_level,
     update_farm_level,
     get_last_farm,
     update_last_farm,
+    save_chat_message,
+    get_chat_history,
 )
 
 from games import (
@@ -61,6 +67,9 @@ from games import (
 
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv("BOT_TOKEN")
+
+# ID администратора
+ADMIN_IDS = [8493522297]
 
 # ========== FLASK ==========
 app = Flask(__name__, static_folder='static')
@@ -89,7 +98,6 @@ def run_flask():
 bot = Bot(token=TELEGRAM_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
-# ========== ПРЕМИУМ ЭМОДЗИ ДЛЯ КНОПОК ==========
 BUTTON_EMOJI_ID = {
     "door": "5873147866364514353",
     "note": "5870930744116776638",
@@ -103,7 +111,6 @@ BUTTON_EMOJI_ID = {
     "joystick": "5870717606364713020",
 }
 
-# ========== КОНФИГ ==========
 SERVER = {
     "name": "LostEarth",
     "java_ip": "150.241.85.40",
@@ -116,97 +123,53 @@ BASE_URL = os.getenv("BASE_URL", "https://lostearthbot-production.up.railway.app
 RULES_URL = f"{BASE_URL}/rules.html"
 APPLY_URL = f"{BASE_URL}/apply.html"
 
-# Кэш для онлайна
 online_cache = {}
 last_update = {}
 CHAT_ID = None
 
-# ========== MINECRAFT API (через mcstatus) ==========
+# ========== MINECRAFT API ==========
+async def get_java_status(ip: str, port: int = 25565):
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(5)
+        sock.connect((ip, port))
+        
+        handshake = bytearray()
+        handshake.append(0x00)
+        handshake.extend(struct.pack('>i', 0))
+        handshake.append(len(ip))
+        handshake.extend(ip.encode())
+        handshake.extend(struct.pack('>H', port))
+        handshake.append(0x01)
+        
+        sock.send(struct.pack('>i', len(handshake)))
+        sock.send(handshake)
+        sock.send(b'\x00\x00')
+        
+        data = sock.recv(1024)
+        sock.close()
+        
+        data_str = data.decode('utf-8', errors='ignore')
+        json_start = data_str.find('{')
+        if json_start != -1:
+            json_end = data_str.rfind('}') + 1
+            json_data = json.loads(data_str[json_start:json_end])
+            players = json_data.get("players", {})
+            return players.get("online", 0), players.get("max", 0)
+        return 0, 0
+    except:
+        return 0, 0
+
 async def get_server_online():
-    """Получение онлайна сервера через mcstatus"""
-    global last_update, online_cache
-    
     now = datetime.now().timestamp()
-    
-    # Кэшируем на 30 секунд
     if "online" in last_update and now - last_update["online"] < 30:
         return online_cache.get("online", 0), online_cache.get("max", 0)
-    
-    try:
-        # Подключаемся к серверу
-        server = JavaServer.lookup(f"{SERVER['java_ip']}:{SERVER['java_port']}")
-        
-        # Получаем статус (таймаут 5 секунд)
-        status = await server.async_status(timeout=5)
-        
-        online = status.players.online
-        max_players = status.players.max
-        
-        # Получаем список игроков если есть
-        players_list = []
-        if status.players.sample:
-            players_list = [p.name for p in status.players.sample]
-        
-        # Получаем MOTD
-        motd = status.description
-        if isinstance(motd, dict):
-            motd = motd.get('text', str(motd))
-        
-        # Кэшируем
-        online_cache["online"] = online
-        online_cache["max"] = max_players
-        online_cache["players"] = players_list
-        online_cache["motd"] = motd
-        online_cache["version"] = status.version.name
-        
-        last_update["online"] = now
-        set_server_online(online, max_players)
-        
-        print(f"✅ Онлайн обновлён: {online}/{max_players} | Игроки: {players_list}")
-        return online, max_players
-        
-    except Exception as e:
-        print(f"❌ Ошибка получения онлайна: {e}")
-        
-        # Если ошибка, возвращаем заглушку
-        online_cache["online"] = "?"
-        online_cache["max"] = "?"
-        last_update["online"] = now
-        set_server_online(0, 0)
-        return "?", "?"
-
-async def get_server_status_text() -> str:
-    """Возвращает красивое сообщение со статусом сервера"""
-    online, max_players = await get_server_online()
-    
-    if online == "?" or online == 0:
-        return f"{E_CROWN} <b>СТАТУС СЕРВЕРА</b> {E_CROWN}\n\n🟡 Сервер не отвечает\nПроверьте IP и порт!\n\n💻 Java: <code>{SERVER['java_ip']}:{SERVER['java_port']}</code>\n📱 Bedrock: <code>{SERVER['bedrock_ip']}:{SERVER['bedrock_port']}</code>"
-    
-    text = f"{E_CROWN} <b>СТАТУС СЕРВЕРА</b> {E_CROWN}\n\n"
-    text += f"🟢 <b>Онлайн:</b> {online}/{max_players}\n"
-    
-    # Добавляем MOTD если есть
-    if "motd" in online_cache and online_cache["motd"]:
-        text += f"📝 <b>MOTD:</b> {online_cache['motd']}\n"
-    
-    # Добавляем версию
-    if "version" in online_cache and online_cache["version"]:
-        text += f"📦 <b>Версия:</b> {online_cache['version']}\n"
-    
-    # Добавляем список игроков
-    if "players" in online_cache and online_cache["players"]:
-        players = online_cache["players"]
-        if players:
-            text += f"\n👥 <b>Игроки в сети:</b>\n"
-            for p in players[:10]:
-                text += f"  • {p}\n"
-            if len(players) > 10:
-                text += f"  • и ещё {len(players) - 10}...\n"
-    
-    text += f"\n💻 <b>IP Java:</b> <code>{SERVER['java_ip']}:{SERVER['java_port']}</code>"
-    text += f"\n📱 <b>IP Bedrock:</b> <code>{SERVER['bedrock_ip']}:{SERVER['bedrock_port']}</code>"
-    
-    return text
+    online, max_players = await get_java_status(SERVER["java_ip"], SERVER["java_port"])
+    online_cache["online"] = online
+    online_cache["max"] = max_players
+    last_update["online"] = now
+    set_server_online(online, max_players)
+    return online, max_players
 
 async def get_user_bio(user_id: int) -> str:
     try:
@@ -238,47 +201,121 @@ def get_back_keyboard():
         [InlineKeyboardButton(text="НАЗАД", callback_data="menu_main", icon_custom_emoji_id=BUTTON_EMOJI_ID["back"])]
     ])
 
-# ========== КОМАНДЫ ==========
+# ========== АДМИН КОМАНДЫ ==========
+@dp.message(Command("say"))
+async def admin_say(message: Message):
+    if message.from_user.id not in ADMIN_IDS:
+        await message.answer("❌ у тебя нет прав", parse_mode="HTML")
+        return
+    
+    text = message.text.replace("/say", "").strip()
+    if not text:
+        await message.answer("📝 /say <текст>\nпример: /say привет всем", parse_mode="HTML")
+        return
+    
+    await message.answer(f"{E_CAT_DANCE} {text} {E_HEART}", parse_mode="HTML")
+    await message.answer("✅ отправлено", parse_mode="HTML")
+
+@dp.message(Command("sayto"))
+async def admin_say_to(message: Message):
+    if message.from_user.id not in ADMIN_IDS:
+        await message.answer("❌ у тебя нет прав", parse_mode="HTML")
+        return
+    
+    parts = message.text.split(maxsplit=2)
+    if len(parts) < 3:
+        await message.answer("📝 /sayto <chat_id> <текст>", parse_mode="HTML")
+        return
+    
+    try:
+        chat_id = int(parts[1])
+        text = parts[2]
+        await bot.send_message(chat_id, f"{E_CAT_DANCE} {text} {E_HEART}", parse_mode="HTML")
+        await message.answer(f"✅ отправлено в {chat_id}", parse_mode="HTML")
+    except Exception as e:
+        await message.answer(f"❌ ошибка: {e}", parse_mode="HTML")
+
+@dp.message(Command("test_spontaneous"))
+async def test_spontaneous(message: Message):
+    if message.from_user.id not in ADMIN_IDS:
+        await message.answer("❌ у тебя нет прав", parse_mode="HTML")
+        return
+    
+    msg = random.choice(spontaneous_messages_list)
+    await message.answer(f"{E_CAT_DANCE} 🧪 ТЕСТ: {msg} {E_HEART}", parse_mode="HTML")
+
+@dp.message(Command("spontaneous"))
+async def toggle_spontaneous(message: Message):
+    if message.from_user.id not in ADMIN_IDS:
+        await message.answer("❌ у тебя нет прав", parse_mode="HTML")
+        return
+    
+    global spontaneous_enabled
+    spontaneous_enabled = not spontaneous_enabled
+    status = "включены" if spontaneous_enabled else "выключены"
+    await message.answer(f"✅ спонтанные сообщения {status}", parse_mode="HTML")
+
+@dp.message(Command("chatlog"))
+async def chat_log(message: Message):
+    if message.from_user.id not in ADMIN_IDS:
+        await message.answer("❌ у тебя нет прав", parse_mode="HTML")
+        return
+    
+    try:
+        with open("chat.log", "r", encoding="utf-8") as f:
+            lines = f.readlines()
+            last_lines = lines[-30:]
+            log_text = "".join(last_lines)
+            if len(log_text) > 4000:
+                log_text = log_text[-4000:]
+            await message.answer(f"📋 последние сообщения:\n<code>{log_text}</code>", parse_mode="HTML")
+    except Exception as e:
+        await message.answer(f"❌ ошибка: {e}", parse_mode="HTML")
+
+@dp.message(Command("clear_all_memory"))
+async def clear_all_memory(message: Message):
+    if message.from_user.id not in ADMIN_IDS:
+        await message.answer("❌ у тебя нет прав", parse_mode="HTML")
+        return
+    
+    from enderia import user_memory, user_greeted
+    user_memory.clear()
+    user_greeted.clear()
+    await message.answer("✅ память всех очищена", parse_mode="HTML")
+
+# ========== ОСНОВНЫЕ КОМАНДЫ ==========
 @dp.message(CommandStart())
 async def start_cmd(message: Message):
     global CHAT_ID
     CHAT_ID = message.chat.id
     username = message.from_user.username or message.from_user.first_name
     await create_player(username)
-    
-    # Получаем статус сервера
     online, max_players = await get_server_online()
-    online_text = f"{online}/{max_players}" if online != "?" else "❓ Нет ответа"
     
     asyncio.create_task(send_spontaneous_message(bot, CHAT_ID))
     
-    text = f"""{E_MAGIC} <b>Добро пожаловать на {SERVER['name']}</b> {E_MAGIC}
+    text = f"""{E_MAGIC} <b>добро пожаловать на {SERVER['name']}</b> {E_MAGIC}
 
-{E_HOUSE} <b>Мирный режим по заявкам!</b>
+{E_HOUSE} <b>мирный режим по заявкам</b>
 
-{E_CAT_DANCE} <b>Я Энди - твой живой помощник!</b>
+{E_CAT_DANCE} <b>я энди - твой живой помощник</b>
 
-{E_CROWN} <b>Текущий онлайн:</b> {online_text}
+{E_CROWN} <b>текущий онлайн:</b> {online}/{max_players}
 
-{E_CROWN} <b>Стартовый баланс: 1000 XP</b>
-{E_HEART} <b>Как получить бонус?</b>
-Добавь @lostearth_bot в описание профиля!
+{E_CROWN} <b>стартовый баланс: 1000 xp</b>
+{E_HEART} <b>как получить бонус?</b>
+добавь @lostearth_bot в описание профиля
 
-📝 <b>Команды:</b>
-• <b>энди кубик 100</b> - игра в кости
-• <b>энди футбол 100</b> - футбол
-• <b>энди плюнуть</b> - плюнуть в игрока (30 XP)
-• <b>энди фарма</b> - собрать опыт
-• <b>энди фарма инфо</b> - инфо о фарме
-• <b>энди улучши фарму</b> - улучшить фарму
+📝 <b>команды:</b>
+• энди кубик 100 - игра в кости
+• энди футбол 100 - футбол
+• энди плюнуть - плюнуть в игрока (30 xp)
+• энди фарма - собрать опыт
+• энди фарма инфо - инфо о фарме
+• энди улучши фарму - улучшить фарму
 
 {E_RABBIT} {E_ANIME} {E_CAT_DANCE}"""
     await message.answer(text, parse_mode="HTML", reply_markup=get_main_keyboard())
-
-@dp.message(Command("online"))
-async def cmd_online(message: Message):
-    text = await get_server_status_text()
-    await message.answer(text, parse_mode="HTML")
 
 # ========== ПЛЕВОК ==========
 @dp.message(lambda msg: msg.text and msg.text.lower() == "энди плюнуть")
@@ -286,23 +323,21 @@ async def spit_cmd(message: Message):
     username = message.from_user.username or message.from_user.first_name
     
     if not message.reply_to_message:
-        response = f"{E_CAT_SURPRISED} {username}, в кого плюнуть? Ответь на сообщение игрока и напиши 'энди плюнуть'! {E_HEART}"
-        await message.answer(response, parse_mode="HTML")
+        await message.answer(f"{E_CAT_SURPRISED} в кого плюнуть? ответь на сообщение игрока и напиши 'энди плюнуть' {E_HEART}", parse_mode="HTML")
         return
     
     target = message.reply_to_message.from_user.first_name or message.reply_to_message.from_user.username or "игрок"
     
     if message.reply_to_message.from_user.id == message.from_user.id:
-        response = f"{E_CAT_SURPRISED} {username}, ты хочешь плюнуть в себя? Странно... {E_HEART}"
-        await message.answer(response, parse_mode="HTML")
+        await message.answer(f"{E_CAT_SURPRISED} ты хочешь плюнуть в себя? странно... {E_HEART}", parse_mode="HTML")
         return
     
     success, msg, new_xp = await add_spit(username, target)
     
     if success:
-        await message.answer(f"{msg}\n\n{E_CROWN} У тебя осталось {new_xp} XP {E_MAGIC}", parse_mode="HTML")
+        await message.answer(f"{msg}\n\n{E_CROWN} у тебя осталось {new_xp} xp {E_MAGIC}", parse_mode="HTML")
         
-        ai_response = await get_enderia_response(f"{username} плюнул(а) в {target}", username, is_reply=True, game_result=f"Плевок в {target}")
+        ai_response = await get_enderia_response(f"{username} плюнул в {target}", username, is_reply=True, game_result=f"плевок в {target}")
         if ai_response:
             await message.answer(f"{E_CAT_DANCE} {ai_response}", parse_mode="HTML")
     else:
@@ -316,8 +351,7 @@ async def dice_game(message: Message):
     
     match = re.search(r"энди кубик\s+(\d+)", text)
     if not match:
-        response = f"{E_CAT_DANCE} {username}, напиши ставку! Например: энди кубик 100 {E_JOYSTICK}"
-        await message.reply(response, parse_mode="HTML")
+        await message.reply(f"{E_CAT_DANCE} напиши ставку например: энди кубик 100 {E_JOYSTICK}", parse_mode="HTML")
         return
     
     bet_amount = int(match.group(1))
@@ -337,8 +371,7 @@ async def football_game(message: Message):
     
     match = re.search(r"энди футбол\s+(\d+)", text)
     if not match:
-        response = f"{E_CAT_DANCE} {username}, напиши ставку! Например: энди футбол 100 ⚽"
-        await message.reply(response, parse_mode="HTML")
+        await message.reply(f"{E_CAT_DANCE} напиши ставку например: энди футбол 100 ⚽", parse_mode="HTML")
         return
     
     bet_amount = int(match.group(1))
@@ -391,11 +424,10 @@ async def farm_upgrade_cmd(message: Message):
 
 # ========== ОСТАЛЬНЫЕ КОМАНДЫ ==========
 @dp.message(Command("balance"))
-@dp.message(Command("bal"))
 async def balance_cmd(message: Message):
     username = message.from_user.username or message.from_user.first_name
     xp = await get_xp(username)
-    await message.answer(f"{E_CROWN} {username}, твой баланс: {xp} XP! {E_JOYSTICK}", parse_mode="HTML")
+    await message.answer(f"{E_CROWN} {username}, твой баланс: {xp} xp {E_JOYSTICK}", parse_mode="HTML")
 
 @dp.message(Command("profile"))
 async def profile_cmd(message: Message):
@@ -404,18 +436,18 @@ async def profile_cmd(message: Message):
     stats = await get_stats(username)
     farm_level = await get_farm_level(username)
     
-    text = f"""{E_CROWN} <b>ПРОФИЛЬ ИГРОКА</b> {E_CROWN}
+    text = f"""{E_CROWN} <b>профиль игрока</b> {E_CROWN}
 
-{E_HOUSE} Имя: {username}
-{E_CROWN} Опыт: {xp} XP
-{E_JOYSTICK} Побед: {stats['wins']}
-{E_HEART} Поражений: {stats['losses']}
-🏭 Уровень фармы: {farm_level}
+{E_HOUSE} имя: {username}
+{E_CROWN} опыт: {xp} xp
+{E_JOYSTICK} побед: {stats['wins']}
+{E_HEART} поражений: {stats['losses']}
+🏭 уровень фармы: {farm_level}
 
-{E_MAGIC} <b>Ежедневный бонус: +500 XP</b>
-{E_NOTE} Добавь в описание: @lostearth_bot
+{E_MAGIC} <b>ежедневный бонус: +500 xp</b>
+{E_NOTE} добавь в описание: @lostearth_bot
 
-{E_CAT_OK} /daily - получить бонус! {E_HEART}"""
+{E_CAT_OK} /daily - получить бонус {E_HEART}"""
     await message.answer(text, parse_mode="HTML")
 
 @dp.message(Command("daily"))
@@ -425,25 +457,25 @@ async def daily_cmd(message: Message):
     has_bot_in_bio = "@lostearth_bot" in user_bio.lower() if user_bio else False
     
     if not has_bot_in_bio:
-        text = f"""{E_CAT_SURPRISED} <b>НЕТ БОНУСА!</b> {E_CAT_SURPRISED}
+        text = f"""{E_CAT_SURPRISED} <b>нет бонуса</b> {E_CAT_SURPRISED}
 
-Добавь в описание профиля: @lostearth_bot
+добавь в описание профиля: @lostearth_bot
 
-📝 <b>Как это сделать:</b>
-1. Настройки Telegram → фото профиля
-2. Редактировать профиль → Описание
-3. Добавь: @lostearth_bot
-4. Сохрани и напиши /daily снова! {E_HEART}"""
+📝 как это сделать:
+1. настройки telegram → фото профиля
+2. редактировать профиль → описание
+3. добавь: @lostearth_bot
+4. сохрани и напиши /daily снова {E_HEART}"""
         await message.answer(text, parse_mode="HTML")
         return
     
     if await can_claim_daily_bonus(username):
         amount = await claim_daily_bonus(username)
         xp = await get_xp(username)
-        text = f"{E_MAGIC} <b>ЕЖЕДНЕВНЫЙ БОНУС!</b> {E_MAGIC}\n\n{E_CROWN} +{amount} XP!\n💰 Баланс: {xp} XP\n\n{E_RABBIT} Заходи завтра снова! {E_HEART}"
+        text = f"{E_MAGIC} <b>ежедневный бонус</b> {E_MAGIC}\n\n{E_CROWN} +{amount} xp\n💰 баланс: {xp} xp\n\n{E_RABBIT} заходи завтра снова {E_HEART}"
         await message.answer(text, parse_mode="HTML")
     else:
-        text = f"{E_HEART} {username}, ты уже получал бонус сегодня! Возвращайся завтра! {E_CAT_OK}"
+        text = f"{E_HEART} {username}, ты уже получал бонус сегодня возвращайся завтра {E_CAT_OK}"
         await message.answer(text, parse_mode="HTML")
 
 @dp.message(Command("leaderboard"))
@@ -451,39 +483,44 @@ async def daily_cmd(message: Message):
 async def leaderboard_cmd(message: Message):
     leaders = await get_leaderboard(10)
     if not leaders:
-        await message.answer(f"{E_CROWN} Пока нет игроков в топе! Будь первым! {E_MAGIC}", parse_mode="HTML")
+        await message.answer(f"{E_CROWN} пока нет игроков в топе будь первым {E_MAGIC}", parse_mode="HTML")
         return
     
-    text = f"{E_CROWN} <b>ТОП ИГРОКОВ ПО ОПЫТУ</b> {E_CROWN}\n\n"
+    text = f"{E_CROWN} <b>топ игроков по опыту</b> {E_CROWN}\n\n"
     for i, p in enumerate(leaders, 1):
         medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else "📌"
-        text += f"{medal} <b>{p['username']}</b> - {p['xp']} XP (фарма: {p['farm_level']} ур.)\n"
+        text += f"{medal} <b>{p['username']}</b> - {p['xp']} xp (фарма: {p['farm_level']} ур)\n"
     await message.answer(text, parse_mode="HTML")
+
+@dp.message(Command("online"))
+async def cmd_online(message: Message):
+    online, max_players = await get_server_online()
+    await message.answer(f"{E_CROWN} <b>онлайн: {online}/{max_players}</b> {E_CAT_DANCE}", parse_mode="HTML")
 
 @dp.message(Command("games"))
 async def games_cmd(message: Message):
-    text = f"""{E_JOYSTICK} <b>ДОСТУПНЫЕ КОМАНДЫ</b> {E_JOYSTICK}
+    text = f"""{E_JOYSTICK} <b>доступные команды</b> {E_JOYSTICK}
 
-🎮 <b>ИГРЫ:</b>
+🎮 <b>игры:</b>
 • энди кубик 100 - кости (x2)
 • энди футбол 100 - футбол (гол = x2)
-• энди плюнуть - плюнуть в игрока (30 XP)
+• энди плюнуть - плюнуть в игрока (30 xp)
 
-🏭 <b>ФАРМА:</b>
+🏭 <b>фарма:</b>
 • энди фарма - собрать опыт
 • энди фарма инфо - инфо о фарме
 • энди улучши фарму - улучшить фарму
 
-📊 <b>ПРОФИЛЬ:</b>
+📊 <b>профиль:</b>
 /balance - баланс
 /profile - профиль
-/daily - бонус 500 XP
+/daily - бонус 500 xp
 /leaderboard - топ игроков
 
-💡 Требование для фармы и бонуса: @lostearth_bot в описании профиля!"""
+💡 требование для фармы и бонуса: @lostearth_bot в описании профиля"""
     await message.answer(text, parse_mode="HTML")
 
-# ========== ОБРАБОТЧИК СООБЩЕНИЙ ==========
+# ========== ОБРАБОТЧИК ==========
 @dp.message()
 async def handle_message(message: Message):
     global CHAT_ID
@@ -519,36 +556,36 @@ async def handle_callback(callback: CallbackQuery):
     
     if data == "menu_main":
         online, max_players = await get_server_online()
-        online_text = f"{online}/{max_players}" if online != "?" else "❓ Нет ответа"
-        text = f"{E_HEART} <b>Главное меню</b>\n\n{E_CROWN} Онлайн: {online_text}\n\n{E_CAT_DANCE} /games - все команды"
+        text = f"{E_HEART} <b>главное меню</b>\n\n{E_CROWN} онлайн: {online}/{max_players}\n\n{E_CAT_DANCE} /games - все команды"
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_main_keyboard())
         await callback.answer()
     
     elif data == "menu_ip":
-        text = await get_server_status_text()
+        online, max_players = await get_server_online()
+        text = f"{E_CROWN} <b>lostearth</b> {E_CROWN}\n\n{E_HOUSE} <b>java:</b> <code>{SERVER['java_ip']}:{SERVER['java_port']}</code>\n{E_NOTE} <b>bedrock:</b> <code>{SERVER['bedrock_ip']}:{SERVER['bedrock_port']}</code>\n{E_CROWN} <b>онлайн:</b> {online}/{max_players}\n\n{E_RABBIT} <i>приятной игры</i>"
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_ip_keyboard())
         await callback.answer()
     
     elif data == "refresh_online":
-        # Очищаем кэш
         online_cache.clear()
         last_update.clear()
-        text = await get_server_status_text()
+        online, max_players = await get_server_online()
+        text = f"{E_CROWN} <b>lostearth</b> {E_CROWN}\n\n{E_HOUSE} <b>java:</b> <code>{SERVER['java_ip']}:{SERVER['java_port']}</code>\n{E_NOTE} <b>bedrock:</b> <code>{SERVER['bedrock_ip']}:{SERVER['bedrock_port']}</code>\n{E_CROWN} <b>онлайн:</b> {online}/{max_players}\n\n{E_RABBIT} <i>приятной игры</i>"
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_ip_keyboard())
-        await callback.answer("🔄 Онлайн обновлён!")
+        await callback.answer("онлайн обновлён")
     
     elif data == "menu_premium":
-        text = f"{E_CROWN} <b>ПРЕМИУМ ДОСТУП</b> {E_CROWN}\n\n{E_MAGIC} <b>Друид</b> - 50₽\n{E_NOTE} <b>Оракул</b> - 100₽\n{E_CROWN} <b>Монарх</b> - 200₽\n{E_RABBIT} <b>Херувим</b> - 300₽\n{E_HOUSE} <b>Архонт</b> - 400₽\n{E_CAT_DANCE} <b>Серафим</b> - 600₽\n\n{E_HEART} <b>По вопросам:</b> @pelmewki379"
+        text = f"{E_CROWN} <b>премиум доступ</b> {E_CROWN}\n\n{E_MAGIC} <b>друид</b> - 50₽\n{E_NOTE} <b>оракул</b> - 100₽\n{E_CROWN} <b>монарх</b> - 200₽\n{E_RABBIT} <b>херувим</b> - 300₽\n{E_HOUSE} <b>архонт</b> - 400₽\n{E_CAT_DANCE} <b>серафим</b> - 600₽\n\n{E_HEART} <b>по вопросам:</b> @pelmewki379"
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_back_keyboard())
         await callback.answer()
     
     elif data == "menu_enderia":
-        text = f"{E_HEART} <b>Энди - твой помощник</b> {E_HEART}\n\n{E_CAT_DANCE} Напиши 'энди' и я отвечу!\n\n📝 Команды: /games"
+        text = f"{E_HEART} <b>энди - твой помощник</b> {E_HEART}\n\n{E_CAT_DANCE} напиши 'энди' и я отвечу\n\n📝 команды: /games"
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_back_keyboard())
         await callback.answer()
     
     elif data == "menu_farm":
-        await callback.message.edit_text(f"🏭 Напиши 'энди фарма инфо' для информации о фарме", parse_mode="HTML", reply_markup=get_back_keyboard())
+        await callback.message.edit_text(f"{E_HOUSE} напиши 'энди фарма инфо' для информации о фарме", parse_mode="HTML", reply_markup=get_back_keyboard())
         await callback.answer()
     
     elif data == "menu_top":
@@ -557,16 +594,15 @@ async def handle_callback(callback: CallbackQuery):
 
 # ========== ЗАПУСК ==========
 async def main():
-    await init_db()
+    await connect_db()
     
     flask_thread = Thread(target=run_flask, daemon=True)
     flask_thread.start()
     
     bot_info = await bot.get_me()
     print("=" * 50)
-    print("🚀 БОТ LOSTEARTH ЗАПУЩЕН")
-    print(f"🤖 Бот: @{bot_info.username}")
-    print("✅ Онлайн проверяется через mcstatus")
+    print("бот lostearth запущен")
+    print(f"бот: @{bot_info.username}")
     print("=" * 50)
     
     await dp.start_polling(bot)
