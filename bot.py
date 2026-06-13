@@ -9,6 +9,7 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.filters import CommandStart, Command
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.exceptions import TelegramBadRequest
 from dotenv import load_dotenv
 from flask import Flask, send_from_directory
 from mcstatus import JavaServer
@@ -129,7 +130,8 @@ async def get_java_status(ip: str, port: int = 25565) -> tuple:
     try:
         print(f"🔍 Подключаюсь к {ip}:{port}...")
         
-        server = JavaServer.lookup(f"{ip}:{port}")
+        # Заменили lookup на прямую инициализацию
+        server = JavaServer(ip, port)
         status = await server.async_status()
         
         online = status.players.online
@@ -530,8 +532,24 @@ async def handle_callback(callback: CallbackQuery):
         online_cache.clear()
         last_update.clear()
         online, max_players = await get_server_online()
-        text = f"{E_CROWN} <b>lostearth</b> {E_CROWN}\n\n{E_HOUSE} <b>java:</b> <code>{SERVER['java_ip']}:{SERVER['java_port']}</code>\n{E_NOTE} <b>bedrock:</b> <code>{SERVER['bedrock_ip']}:{SERVER['bedrock_port']}</code>\n{E_CROWN} <b>онлайн:</b> {online}/{max_players}\n\n{E_RABBIT} <i>приятной игры</i>"
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_ip_keyboard())
+        
+        # Защита от ошибки TelegramBadRequest
+        current_time = datetime.now().strftime("%H:%M:%S")
+        
+        text = (
+            f"{E_CROWN} <b>lostearth</b> {E_CROWN}\n\n"
+            f"{E_HOUSE} <b>java:</b> <code>{SERVER['java_ip']}:{SERVER['java_port']}</code>\n"
+            f"{E_NOTE} <b>bedrock:</b> <code>{SERVER['bedrock_ip']}:{SERVER['bedrock_port']}</code>\n"
+            f"{E_CROWN} <b>онлайн:</b> {online}/{max_players}\n\n"
+            f"{E_RABBIT} <i>приятной игры</i>\n"
+            f"🕒 <i>обновлено: {current_time}</i>"
+        )
+        
+        try:
+            await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_ip_keyboard())
+        except TelegramBadRequest:
+            pass
+            
         await callback.answer("онлайн обновлён")
     
     elif data == "menu_premium":
