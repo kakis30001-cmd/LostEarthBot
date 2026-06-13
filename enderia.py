@@ -54,7 +54,6 @@ E_JOYSTICK = emoji(ENDERIA_EMOJI["joystick"], "🎮")
 user_memory = defaultdict(lambda: deque(maxlen=20))
 user_last_messages = defaultdict(lambda: deque(maxlen=5))
 user_greeted = {}
-last_active = {}
 
 def add_to_memory(username: str, user_message: str, bot_response: str):
     user_memory[username].append(f"{username}: {user_message}")
@@ -71,9 +70,6 @@ def clear_user_memory(username: str):
         user_last_messages[username].clear()
     if username in user_greeted:
         user_greeted[username] = False
-
-def get_memory_size(username: str) -> int:
-    return len(user_memory.get(username, [])) // 2
 
 def has_already_greeted(username: str) -> bool:
     return user_greeted.get(username, False)
@@ -118,12 +114,12 @@ def save_to_log(username: str, message: str, is_bot: bool = False):
 
 # ========== СПОНТАННЫЕ СООБЩЕНИЯ ==========
 spontaneous_messages = [
-    "Народ, как дела на фермах? У меня криперы уже 3 уровень! 🐱",
-    "Что молчим? Пойдёмте вместе фармить опыт! ✨",
+    "Народ, как дела? У меня фарма уже 5 уровень! 🐱",
+    "Что молчим? Пойдёмте вместе играть! ✨",
     "Эй, кто хочет сыграть в футбол? Ставлю 100 XP! ⚽",
     "Как успехи у всех? Много опыта нафармили? 💜",
-    "На сервере сейчас {online} игроков! Заходите, вместе веселее! 🎮",
-    "Не забывайте собирать опыт с ферм! 🏭",
+    "На сервере сейчас {online} игроков! Заходите! 🎮",
+    "Не забывайте собирать фарму! 🏭",
 ]
 
 async def send_spontaneous_message(bot, chat_id: int):
@@ -139,7 +135,6 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     global current_online, current_max
     
     save_to_log(username, user_message, is_bot=False)
-    last_active[username] = datetime.now()
     
     last_messages = get_last_user_messages(username)
     already_greeted = has_already_greeted(username)
@@ -177,7 +172,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
 - Админ: @pelmewki379
 - Онлайн: {current_online}/{current_max}
 
-ИГРЫ: энди кубик 100, энди футбол 100, энди плюнуть, фарма
+ИГРЫ: энди кубик 100, энди футбол 100, энди плюнуть, энди фарма
 
 ПРАВИЛА: отвечай коротко (2-4 предложения), используй эмодзи 🐱💜✨
 
