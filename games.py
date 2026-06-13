@@ -211,6 +211,18 @@ async def play_football(bot, chat_id: int):
     msg = await bot.send_dice(chat_id, emoji="⚽")
     return msg.dice.value
 
+# Добавь в games.py новую функцию:
+
+def add_spit(username: str, target: str) -> tuple[bool, str, int]:
+    """Плюнуть в игрока за 30 XP"""
+    xp = get_xp(username)
+    if xp < 30:
+        return False, f"❌ {username}, у тебя всего {xp} XP! Нужно 30 XP для плевка! 💔", 0
+    
+    update_xp(username, -30)
+    new_xp = get_xp(username)
+    return True, f"💨 {username} плюнул(а) в {target} эндер-жемчугом!", new_xp
+
 async def game_dice_bet(username: str, bet_amount: int, bot, chat_id: int) -> tuple[str, str]:
     xp = get_xp(username)
     if xp < bet_amount:
