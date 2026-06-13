@@ -53,8 +53,6 @@ from database import (
     update_last_farm,
     save_chat_message,
     get_chat_history,
-    save_user_id,
-    check_user_subscribed,
 )
 
 from games import (
@@ -70,7 +68,6 @@ load_dotenv()
 TELEGRAM_TOKEN = os.getenv("BOT_TOKEN")
 
 ADMIN_IDS = [8493522297]
-REQUIRED_CHANNEL = "LostEarthSMP"
 
 # ========== FLASK ==========
 app = Flask(__name__, static_folder='static')
@@ -178,34 +175,6 @@ async def get_user_bio(user_id: int) -> str:
         return user.bio if user.bio else ""
     except:
         return ""
-
-# ========== ПРОВЕРКА УСЛОВИЙ ==========
-async def check_all_requirements(user_id: int, username: str) -> tuple[bool, bool, str]:
-    await save_user_id(username, user_id)
-    
-    is_subscribed = await check_user_subscribed(username, bot, REQUIRED_CHANNEL)
-    
-    user_bio = await get_user_bio(user_id)
-    has_bot_in_bio = "@lostearth_bot" in user_bio.lower() if user_bio else False
-    
-    status_msg = ""
-    if not is_subscribed and not has_bot_in_bio:
-        status_msg = "❌ Ты не подписан на канал и нет @lostearth_bot в описании"
-    elif not is_subscribed:
-        status_msg = "❌ Ты не подписан на канал"
-    elif not has_bot_in_bio:
-        status_msg = "❌ Нет @lostearth_bot в описании профиля"
-    else:
-        status_msg = "✅ Все условия выполнены!"
-    
-    return is_subscribed, has_bot_in_bio, status_msg
-
-async def get_requirements_keyboard():
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔄 ПРОВЕРИТЬ", callback_data="check_requirements")],
-        [InlineKeyboardButton(text="📢 КАНАЛ", url="https://t.me/LostEarthSMP")],
-        [InlineKeyboardButton(text="❓ КАК ДОБАВИТЬ", callback_data="how_to_add_bio")]
-    ])
 
 # ========== КЛАВИАТУРЫ ==========
 def get_main_keyboard():
@@ -318,15 +287,10 @@ async def start_cmd(message: Message):
     global CHAT_ID
     CHAT_ID = message.chat.id
     username = message.from_user.username or message.from_user.first_name
-    user_id = message.from_user.id
-    
     await create_player(username)
-    await save_user_id(username, user_id)
     online, max_players = await get_server_online()
     
     asyncio.create_task(send_spontaneous_message(bot, CHAT_ID))
-    
-    is_subscribed, has_bot_in_bio, status = await check_all_requirements(user_id, username)
     
     text = f"""{E_MAGIC} <b>добро пожаловать на {SERVER['name']}</b> {E_MAGIC}
 
@@ -338,77 +302,16 @@ async def start_cmd(message: Message):
 
 {E_CROWN} <b>стартовый баланс: 1000 xp</b>
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-<b>⚡ ДЛЯ ИСПОЛЬЗОВАНИЯ БОТА:</b>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-1️⃣ <b>Подпишись на канал:</b>
-👉 https://t.me/LostEarthSMP
-
-2️⃣ <b>Добавь в описание профиля:</b>
-👉 @lostearth_bot
-
-📝 <b>как добавить в описание?</b>
-• настройки telegram → фото профиля
-• редактировать профиль → описание
-• добавь: @lostearth_bot
-• сохрани
-
-{status}
+📝 <b>команды:</b>
+• энди кубик 100 - игра в кости
+• энди футбол 100 - футбол
+• энди плюнуть - плюнуть в игрока (30 xp)
+• энди фарма - собрать опыт
+• энди фарма инфо - инфо о фарме
+• энди улучши фарму - улучшить фарму
 
 {E_RABBIT} {E_ANIME} {E_CAT_DANCE}"""
-    
-    await message.answer(text, parse_mode="HTML", reply_markup=await get_requirements_keyboard())
-
-@dp.message(Command("check"))
-async def check_cmd(message: Message):
-    username = message.from_user.username or message.from_user.first_name
-    user_id = message.from_user.id
-    
-    is_subscribed, has_bot_in_bio, status = await check_all_requirements(user_id, username)
-    
-    text = f"""📋 <b>ПРОВЕРКА УСЛОВИЙ</b>
-
-1️⃣ <b>Подписка на канал</b> @LostEarthSMP:
-{'✅ ПОДПИСАН' if is_subscribed else '❌ НЕ ПОДПИСАН'}
-
-2️⃣ <b>Описание профиля</b> (@lostearth_bot):
-{'✅ НАЙДЕН' if has_bot_in_bio else '❌ НЕ НАЙДЕН'}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-<b>СТАТУС:</b> {status}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-{'🎉 Все условия выполнены! Фарма и бонусы работают 💜' if is_subscribed and has_bot_in_bio else '⚠️ Выполни все условия выше и нажми /check снова'}"""
-    
-    await message.answer(text, parse_mode="HTML", reply_markup=await get_requirements_keyboard())
-
-@dp.message(Command("howto"))
-async def howto_cmd(message: Message):
-    text = f"""📖 <b>КАК ДОБАВИТЬ @lostearth_bot В ОПИСАНИЕ ПРОФИЛЯ</b>
-
-<b>ШАГ 1:</b> Открой настройки Telegram
-• iOS: Настройки → Редактировать профиль
-• Android: Настройки → Нажать на фото/имя
-• PC: Настройки → Редактировать профиль
-
-<b>ШАГ 2:</b> Найди поле "Описание" (Bio)
-
-<b>ШАГ 3:</b> Впиши туда:
-<code>@lostearth_bot</code>
-
-<b>ШАГ 4:</b> Нажми "Сохранить"
-
-<b>ШАГ 5:</b> Вернись в бот и напиши /check
-
-⚠️ <b>ВАЖНО:</b> Описание проверяется автоматически!
-Если добавил, но бот не видит - подожди 1-2 минуты и напиши /check снова
-
-💡 <b>СОВЕТ:</b> Можешь добавить что-то ещё в описание, главное чтобы был <b>@lostearth_bot</b>
-
-{E_HEART} После выполнения всех условий фарма и бонусы заработают!"""
-    
-    await message.answer(text, parse_mode="HTML")
+    await message.answer(text, parse_mode="HTML", reply_markup=get_main_keyboard())
 
 @dp.message(Command("balance"))
 async def balance_cmd(message: Message):
@@ -432,7 +335,6 @@ async def profile_cmd(message: Message):
 🏭 уровень фармы: {farm_level}
 
 {E_MAGIC} <b>ежедневный бонус: +500 xp</b>
-{E_NOTE} добавь в описание: @lostearth_bot
 
 {E_CAT_OK} /daily - получить бонус {E_HEART}"""
     await message.answer(text, parse_mode="HTML")
@@ -440,24 +342,6 @@ async def profile_cmd(message: Message):
 @dp.message(Command("daily"))
 async def daily_cmd(message: Message):
     username = message.from_user.username or message.from_user.first_name
-    user_id = message.from_user.id
-    
-    is_subscribed, has_bot_in_bio, _ = await check_all_requirements(user_id, username)
-    
-    if not is_subscribed or not has_bot_in_bio:
-        text = f"""{E_CAT_SURPRISED} <b>НЕТ БОНУСА</b> {E_CAT_SURPRISED}
-
-<b>Чтобы получать бонусы:</b>
-
-1️⃣ {'✅' if is_subscribed else '❌'} <b>Подписка на канал:</b> @LostEarthSMP
-2️⃣ {'✅' if has_bot_in_bio else '❌'} <b>В описании профиля:</b> @lostearth_bot
-
-<b>📝 Как исправить:</b>
-• Подпишись: https://t.me/LostEarthSMP
-• Добавь в описание: @lostearth_bot
-• Напиши /check для проверки"""
-        await message.answer(text, parse_mode="HTML")
-        return
     
     if await can_claim_daily_bonus(username):
         amount = await claim_daily_bonus(username)
@@ -505,12 +389,7 @@ async def games_cmd(message: Message):
 /balance - баланс
 /profile - профиль
 /daily - бонус 500 xp
-/leaderboard - топ игроков
-/check - проверить условия
-
-💡 <b>требование для фармы и бонуса:</b>
-• Подписка: @LostEarthSMP
-• @lostearth_bot в описании профиля"""
+/leaderboard - топ игроков"""
     await message.answer(text, parse_mode="HTML")
 
 # ========== ПЛЕВОК ==========
@@ -584,11 +463,7 @@ async def football_game(message: Message):
 @dp.message(lambda msg: msg.text and msg.text.lower() == "энди фарма")
 async def farm_collect_cmd(message: Message):
     username = message.from_user.username or message.from_user.first_name
-    user_id = message.from_user.id
-    
-    is_subscribed, has_bot_in_bio, _ = await check_all_requirements(user_id, username)
-    
-    result_text, game_result = await collect_farm(username, has_bot_in_bio, is_subscribed)
+    result_text, game_result = await collect_farm(username)
     await message.answer(result_text, parse_mode="HTML")
     
     if game_result:
@@ -599,21 +474,13 @@ async def farm_collect_cmd(message: Message):
 @dp.message(lambda msg: msg.text and msg.text.lower() == "энди фарма инфо")
 async def farm_info_cmd(message: Message):
     username = message.from_user.username or message.from_user.first_name
-    user_id = message.from_user.id
-    
-    is_subscribed, has_bot_in_bio, _ = await check_all_requirements(user_id, username)
-    
-    text = await farm_info(username, has_bot_in_bio, is_subscribed)
+    text = await farm_info(username)
     await message.answer(text, parse_mode="HTML")
 
 @dp.message(lambda msg: msg.text and msg.text.lower() == "энди улучши фарму")
 async def farm_upgrade_cmd(message: Message):
     username = message.from_user.username or message.from_user.first_name
-    user_id = message.from_user.id
-    
-    is_subscribed, has_bot_in_bio, _ = await check_all_requirements(user_id, username)
-    
-    result_text, game_result = await upgrade_farm_cmd(username, has_bot_in_bio, is_subscribed)
+    result_text, game_result = await upgrade_farm_cmd(username)
     await message.answer(result_text, parse_mode="HTML")
     
     if game_result:
@@ -691,51 +558,6 @@ async def handle_callback(callback: CallbackQuery):
     
     elif data == "menu_top":
         await callback.message.edit_text(f"{E_CROWN} /leaderboard - топ игроков", parse_mode="HTML", reply_markup=get_back_keyboard())
-        await callback.answer()
-    
-    elif data == "check_requirements":
-        user_id = callback.from_user.id
-        username = callback.from_user.username or callback.from_user.first_name
-        is_subscribed, has_bot_in_bio, status = await check_all_requirements(user_id, username)
-        
-        text = f"""📋 <b>ПРОВЕРКА УСЛОВИЙ</b>
-
-1️⃣ <b>Подписка на канал</b> @LostEarthSMP:
-{'✅ ПОДПИСАН' if is_subscribed else '❌ НЕ ПОДПИСАН'}
-
-2️⃣ <b>Описание профиля</b> (@lostearth_bot):
-{'✅ НАЙДЕН' if has_bot_in_bio else '❌ НЕ НАЙДЕН'}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-<b>СТАТУС:</b> {status}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-{'🎉 Все условия выполнены! Фарма и бонусы работают 💜' if is_subscribed and has_bot_in_bio else '⚠️ Выполни все условия выше и нажми /check снова'}"""
-        
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=await get_requirements_keyboard())
-        await callback.answer()
-    
-    elif data == "how_to_add_bio":
-        text = f"""📖 <b>КАК ДОБАВИТЬ @lostearth_bot В ОПИСАНИЕ ПРОФИЛЯ</b>
-
-<b>ШАГ 1:</b> Открой настройки Telegram
-
-<b>ШАГ 2:</b> Нажми на свою фотографию / имя
-
-<b>ШАГ 3:</b> Найди поле "Описание" (Bio)
-
-<b>ШАГ 4:</b> Впиши туда:
-<code>@lostearth_bot</code>
-
-<b>ШАГ 5:</b> Нажми "Сохранить"
-
-<b>ШАГ 6:</b> Вернись в бот и нажми "ПРОВЕРИТЬ"
-
-⚠️ <b>ВАЖНО:</b> Если добавил, но бот не видит - подожди 1-2 минуты и проверь снова
-
-{E_HEART} После выполнения всех условий фарма и бонусы заработают!"""
-        
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=await get_requirements_keyboard())
         await callback.answer()
 
 # ========== ЗАПУСК ==========
