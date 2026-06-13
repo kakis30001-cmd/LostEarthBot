@@ -51,6 +51,7 @@ from games import (
     init_player,
     game_dice_bet,
     game_football_bet,
+    add_spit,
 )
 
 load_dotenv()
@@ -111,7 +112,7 @@ APPLY_URL = f"{BASE_URL}/apply.html"
 
 online_cache = {}
 last_update = {}
-CHAT_ID = None  # Будет установлен при первом сообщении
+CHAT_ID = None
 
 # ========== MINECRAFT API ==========
 async def get_java_status(ip: str, port: int = 25565):
@@ -196,7 +197,6 @@ async def start_cmd(message: Message):
     init_player(username)
     online, max_players = await get_server_online()
     
-    # Запускаем спонтанные сообщения
     asyncio.create_task(send_spontaneous_message(bot, CHAT_ID))
     
     text = f"""{E_MAGIC} <b>Добро пожаловать на {SERVER['name']}</b> {E_MAGIC}
@@ -216,20 +216,51 @@ async def start_cmd(message: Message):
 📝 <b>Как играть:</b>
 • <b>энди кубик 100</b> - игра в кости
 • <b>энди футбол 100</b> - футбол
-• <b>фарма</b> - собрать опыт с ферм
-• <b>/games</b> - все команды"""
+• <b>энди плюнуть</b> - плюнуть в игрока (30 XP)
+• <b>фарма</b> - собрать опыт с ферм"""
     await message.answer(text, parse_mode="HTML", reply_markup=get_main_keyboard())
 
-# ========== РУССКИЕ КОМАНДЫ ==========
+# ========== ПЛЕВОК ==========
+@dp.message(lambda msg: msg.text and msg.text.lower() == "энди плюнуть")
+async def spit_cmd(message: Message):
+    username = message.from_user.username or message.from_user.first_name
+    
+    if not message.reply_to_message:
+        response = f"{E_CAT_SURPRISED} {username}, в кого плюнуть? Ответь на сообщение игрока и напиши 'энди плюнуть'! {E_HEART}"
+        await message.answer(response, parse_mode="HTML")
+        return
+    
+    target = message.reply_to_message.from_user.first_name or message.reply_to_message.from_user.username or "игрок"
+    
+    if message.reply_to_message.from_user.id == message.from_user.id:
+        response = f"{E_CAT_SURPRISED} {username}, ты хочешь плюнуть в себя? Странно... {E_HEART}"
+        await message.answer(response, parse_mode="HTML")
+        return
+    
+    success, msg, new_xp = add_spit(username, target)
+    
+    if success:
+        await message.answer(f"{msg}\n\n{E_CROWN} У тебя осталось {new_xp} XP {E_MAGIC}", parse_mode="HTML")
+        
+        ai_response = await get_enderia_response(
+            f"{username} плюнул(а) в {target} и потратил(а) 30 XP", 
+            username, 
+            is_reply=True,
+            game_result=f"Плевок в {target}"
+        )
+        if ai_response:
+            await message.answer(f"{E_CAT_DANCE} {ai_response}", parse_mode="HTML")
+    else:
+        await message.answer(f"{E_CAT_SURPRISED} {msg}", parse_mode="HTML")
+
+# ========== ИГРЫ ==========
 @dp.message(lambda msg: msg.text and msg.text.lower().startswith("энди кубик"))
 async def dice_game(message: Message):
     username = message.from_user.username or message.from_user.first_name
     text = message.text.lower()
     
-    # Парсим ставку
     match = re.search(r"энди кубик\s+(\d+)", text)
     if not match:
-        # Если нет ставки - предлагаем
         response = f"{E_CAT_DANCE} {username}, напиши ставку! Например: энди кубик 100 {E_JOYSTICK}"
         await message.reply(response, parse_mode="HTML")
         return
@@ -237,10 +268,8 @@ async def dice_game(message: Message):
     bet_amount = int(match.group(1))
     result_text, game_result = await game_dice_bet(username, bet_amount, bot, message.chat.id)
     
-    # Отправляем результат игры
     await message.answer(result_text, parse_mode="HTML")
     
-    # Получаем реакцию от ИИ
     if game_result:
         ai_response = await get_enderia_response(f"{username} {game_result}", username, is_reply=True, game_result=game_result)
         if ai_response:
@@ -467,6 +496,7 @@ async def games_cmd(message: Message):
 🎮 <b>ИГРЫ (русские команды):</b>
 • <b>энди кубик 100</b> - игра в кости (x2)
 • <b>энди футбол 100</b> - футбол (гол = x2)
+• <b>энди плюнуть</b> - плюнуть в игрока (30 XP)
 • <b>фарма</b> - собрать опыт с ферм
 
 📊 <b>БАЛАНС:</b>
@@ -486,6 +516,7 @@ async def games_cmd(message: Message):
 💡 <b>Примеры:</b>
 • энди кубик 100
 • энди футбол 200
+• энди плюнуть (ответ на сообщение)
 • фарма"""
     await message.answer(text, parse_mode="HTML")
 
@@ -506,7 +537,6 @@ async def handle_message(message: Message):
     if user_message.startswith("/"):
         return
     
-    # Проверяем, является ли это ответом на сообщение бота
     is_reply_to_bot = False
     if message.reply_to_message:
         if message.reply_to_message.from_user.id == bot.id:
@@ -550,7 +580,7 @@ async def handle_callback(callback: CallbackQuery):
         await callback.answer()
     
     elif data == "menu_enderia":
-        text = f"{E_HEART} <b>Энди - твой живой помощник</b> {E_HEART}\n\n{E_CAT_DANCE} <b>Кто я?</b>\nЯ девушка-эндермен, хранительница Края.\n\n{E_NOTE} <b>Как играть:</b>\n• энди кубик 100\n• энди футбол 100\n• фарма\n\n{E_MAGIC} <b>Ежедневный бонус 500 XP</b>\nДобавь @lostearth_bot в описание профиля!"
+        text = f"{E_HEART} <b>Энди - твой живой помощник</b> {E_HEART}\n\n{E_CAT_DANCE} <b>Кто я?</b>\nЯ девушка-эндермен, хранительница Края.\n\n{E_NOTE} <b>Как играть:</b>\n• энди кубик 100\n• энди футбол 100\n• энди плюнуть\n• фарма\n\n{E_MAGIC} <b>Ежедневный бонус 500 XP</b>\nДобавь @lostearth_bot в описание профиля!"
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_back_keyboard())
         await callback.answer()
     
@@ -571,7 +601,7 @@ async def main():
     print("=" * 50)
     print("🚀 БОТ LOSTEARTH ЗАПУЩЕН")
     print(f"🤖 Бот: @{bot_info.username}")
-    print("🎮 Команды: энди кубик 100, энди футбол 100, фарма")
+    print("🎮 Команды: энди кубик 100, энди футбол 100, энди плюнуть, фарма")
     print("=" * 50)
     
     await dp.start_polling(bot)
