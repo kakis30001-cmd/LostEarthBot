@@ -200,15 +200,15 @@ async def start_cmd(message: Message):
 {E_CROWN} <b>Текущий онлайн:</b> {online}/{max_players}
 
 {E_JOYSTICK} <b>ИГРЫ:</b>
-/bet [сумма] - игра в кости (x2)
+/bet (сумма) - игра в кости (x2)
 /balance - баланс опыта
 /profile - твой профиль
 /daily - бонус 500 XP
 
 {E_HOUSE} <b>ФЕРМЫ ОПЫТА:</b>
 /farms - твои фермы
-/buy_farm - купить ферму
-/upgrade_farm - улучшить ферму
+/buy_farm (название) - купить ферму
+/upgrade_farm (название) - улучшить ферму
 /claim - собрать опыт
 /leaderboard - топ игроков
 
@@ -292,14 +292,17 @@ async def daily_cmd(message: Message):
 
 @dp.message(Command("bet"))
 async def bet_cmd(message: Message):
-    import asyncio
     username = message.from_user.username or message.from_user.first_name
     match = re.match(r"^/bet\s+(\d+)$", message.text)
     if not match:
-        await message.answer(f"{E_JOYSTICK} Используй: /bet [сумма]\n{E_CROWN} Минимальная ставка: 50 XP\nПример: /bet 100", parse_mode="HTML")
+        await message.answer(f"{E_JOYSTICK} Используй: /bet (сумма)\n{E_CROWN} Минимальная ставка: 50 XP\nПример: /bet 100", parse_mode="HTML")
         return
     
     bet_amount = int(match.group(1))
+    if bet_amount < 50:
+        await message.answer(f"{E_JOYSTICK} Минимальная ставка 50 XP!", parse_mode="HTML")
+        return
+    
     response = await game_dice_bet(username, bet_amount, bot, message.chat.id)
     await message.answer(response, parse_mode="HTML")
 
@@ -318,7 +321,7 @@ async def farms_cmd(message: Message):
 🏹 <b>Скелеты</b> - 1000 XP (60/час)
 👾 <b>Эндермены</b> - 1500 XP (150/час)
 
-{E_NOTE} /buy_farm <название> - купить ферму
+{E_NOTE} /buy_farm (название) - купить ферму
 {E_MAGIC} /claim - собрать опыт
 
 Пример: /buy_farm криперов"""
@@ -340,7 +343,7 @@ async def farms_cmd(message: Message):
     
     text += f"\n{E_CROWN} <b>Общий доход:</b> {total_income} XP/час"
     text += f"\n{E_MAGIC} /claim - собрать опыт"
-    text += f"\n{E_CAT_UP} /upgrade_farm <название> - улучшить ферму"
+    text += f"\n{E_CAT_UP} /upgrade_farm (название) - улучшить ферму"
     await message.answer(text, parse_mode="HTML")
 
 @dp.message(Command("buy_farm"))
@@ -348,7 +351,7 @@ async def buy_farm_cmd(message: Message):
     username = message.from_user.username or message.from_user.first_name
     parts = message.text.split(maxsplit=1)
     if len(parts) < 2:
-        await message.answer(f"{E_NOTE} Используй: /buy_farm <название>\n\nДоступны: пауков, зомби, криперов, скелетов, эндерменов", parse_mode="HTML")
+        await message.answer(f"{E_NOTE} Используй: /buy_farm (название)\n\nДоступны: пауков, зомби, криперов, скелетов, эндерменов", parse_mode="HTML")
         return
     
     farm_name = parts[1].lower()
@@ -361,7 +364,7 @@ async def buy_farm_cmd(message: Message):
     }
     
     if farm_name not in farm_map:
-        await message.answer(f"{E_CAT_SURPRISED} Ферма не найдена!", parse_mode="HTML")
+        await message.answer(f"{E_CAT_SURPRISED} Ферма не найдена! Доступны: пауков, зомби, криперов, скелетов, эндерменов", parse_mode="HTML")
         return
     
     success, msg = buy_farm(username, farm_map[farm_name])
@@ -372,7 +375,7 @@ async def upgrade_farm_cmd(message: Message):
     username = message.from_user.username or message.from_user.first_name
     parts = message.text.split(maxsplit=1)
     if len(parts) < 2:
-        await message.answer(f"{E_NOTE} Используй: /upgrade_farm <название>\n\nПример: /upgrade_farm криперов", parse_mode="HTML")
+        await message.answer(f"{E_NOTE} Используй: /upgrade_farm (название)\n\nПример: /upgrade_farm криперов", parse_mode="HTML")
         return
     
     farm_name = parts[1].lower()
@@ -429,12 +432,12 @@ async def games_cmd(message: Message):
 /daily - бонус 500 XP
 
 {E_JOYSTICK} <b>ИГРЫ:</b>
-/bet [сумма] - игра в кости (x2)
+/bet (сумма) - игра в кости (x2)
 
 {E_HOUSE} <b>ФЕРМЫ:</b>
 /farms - мои фермы
-/buy_farm <название> - купить ферму
-/upgrade_farm <название> - улучшить ферму
+/buy_farm (название) - купить ферму
+/upgrade_farm (название) - улучшить ферму
 /claim - собрать опыт
 /leaderboard - топ игроков
 
@@ -459,12 +462,12 @@ async def help_cmd(message: Message):
 /daily - бонус 500 XP
 
 {E_JOYSTICK} <b>ИГРЫ:</b>
-/bet [сумма] - игра в кости (x2)
+/bet (сумма) - игра в кости (x2)
 
 {E_HOUSE} <b>ФЕРМЫ:</b>
 /farms - мои фермы
-/buy_farm <название> - купить ферму
-/upgrade_farm <название> - улучшить ферму
+/buy_farm (название) - купить ферму
+/upgrade_farm (название) - улучшить ферму
 /claim - собрать опыт
 /leaderboard - топ игроков
 
@@ -517,7 +520,7 @@ async def handle_callback(callback: CallbackQuery):
         online, max_players = await get_server_online()
         text = f"{E_CROWN} <b>LOSTEARTH</b> {E_CROWN}\n\n{E_HOUSE} <b>JAVA:</b> <code>{SERVER['java_ip']}:{SERVER['java_port']}</code>\n{E_NOTE} <b>BEDROCK:</b> <code>{SERVER['bedrock_ip']}:{SERVER['bedrock_port']}</code>\n{E_CROWN} <b>Онлайн:</b> {online}/{max_players}\n\n{E_RABBIT} <i>Приятной игры!</i>"
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_ip_keyboard())
-        await callback.answer("🔄 Онлайн обновлён!")
+        await callback.answer("Онлайн обновлён!")
     
     elif data == "menu_premium":
         text = f"{E_CROWN} <b>ПРЕМИУМ ДОСТУП</b> {E_CROWN}\n\n{E_MAGIC} <b>Друид</b> - 50₽\n{E_NOTE} <b>Оракул</b> - 100₽\n{E_CROWN} <b>Монарх</b> - 200₽\n{E_RABBIT} <b>Херувим</b> - 300₽ (полёт!)\n{E_HOUSE} <b>Архонт</b> - 400₽\n{E_CAT_DANCE} <b>Серафим</b> - 600₽\n\n{E_HEART} <b>По вопросам:</b> @pelmewki379"
@@ -544,8 +547,8 @@ async def main():
     
     bot_info = await bot.get_me()
     print("=" * 50)
-    print("🚀 БОТ LOSTEARTH ЗАПУЩЕН")
-    print(f"🤖 Бот: @{bot_info.username}")
+    print("БОТ LOSTEARTH ЗАПУЩЕН")
+    print(f"Бот: @{bot_info.username}")
     print("=" * 50)
     
     await dp.start_polling(bot)
