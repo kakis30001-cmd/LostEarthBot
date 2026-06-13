@@ -2,15 +2,22 @@ import asyncpg
 import os
 from datetime import datetime, date
 
+# Используем публичный URL для подключения
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:hgSCmLMXOyemvPATDDMerzJWtMBxFamM@postgres.railway.internal:5432/railway")
+
+# Также пробуем PUBLIC_URL если внутренний не работает
+if not DATABASE_URL:
+    DATABASE_URL = os.getenv("DATABASE_PUBLIC_URL")
 
 # Кэш
 xp_cache = {}
 stats_cache = {}
 
 async def init_db():
+    """Создаёт таблицы если их нет"""
     try:
-        conn = await asyncpg.connect(DATABASE_URL)
+        # Пробуем подключиться с таймаутом
+        conn = await asyncpg.connect(DATABASE_URL, timeout=10)
         
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS players (
@@ -33,11 +40,19 @@ async def init_db():
         print(f"❌ Ошибка БД: {e}")
         return False
 
+async def get_connection():
+    """Получает соединение с БД с повторными попытками"""
+    try:
+        return await asyncpg.connect(DATABASE_URL, timeout=10)
+    except Exception as e:
+        print(f"Ошибка подключения к БД: {e}")
+        raise
+
 async def get_xp(username: str) -> int:
     if username in xp_cache:
         return xp_cache[username]
     try:
-        conn = await asyncpg.connect(DATABASE_URL)
+        conn = await get_connection()
         row = await conn.fetchrow("SELECT xp FROM players WHERE username = $1", username)
         await conn.close()
         if row:
@@ -46,21 +61,23 @@ async def get_xp(username: str) -> int:
         else:
             await create_player(username)
             return 1000
-    except:
+    except Exception as e:
+        print(f"Ошибка get_xp: {e}")
         return xp_cache.get(username, 1000)
 
 async def create_player(username: str):
     try:
-        conn = await asyncpg.connect(DATABASE_URL)
+        conn = await get_connection()
         await conn.execute("INSERT INTO players (username, xp) VALUES ($1, 1000)", username)
         await conn.close()
         xp_cache[username] = 1000
+        print(f"✅ Создан игрок {username}")
     except Exception as e:
-        print(f"Ошибка создания: {e}")
+        print(f"Ошибка создания игрока: {e}")
 
 async def update_xp(username: str, delta: int):
     try:
-        conn = await asyncpg.connect(DATABASE_URL)
+        conn = await get_connection()
         await conn.execute("UPDATE players SET xp = xp + $1, updated_at = NOW() WHERE username = $2", delta, username)
         await conn.close()
         if username in xp_cache:
@@ -72,7 +89,7 @@ async def update_xp(username: str, delta: int):
 
 async def can_claim_daily_bonus(username: str) -> bool:
     try:
-        conn = await asyncpg.connect(DATABASE_URL)
+        conn = await get_connection()
         row = await conn.fetchrow("SELECT last_bonus FROM players WHERE username = $1", username)
         await conn.close()
         if not row or row[0] is None:
@@ -83,7 +100,7 @@ async def can_claim_daily_bonus(username: str) -> bool:
 
 async def claim_daily_bonus(username: str) -> int:
     try:
-        conn = await asyncpg.connect(DATABASE_URL)
+        conn = await get_connection()
         await conn.execute("UPDATE players SET xp = xp + 500, last_bonus = $1, updated_at = NOW() WHERE username = $2", date.today(), username)
         await conn.close()
         if username in xp_cache:
@@ -96,7 +113,7 @@ async def claim_daily_bonus(username: str) -> int:
 
 async def update_stats(username: str, is_win: bool):
     try:
-        conn = await asyncpg.connect(DATABASE_URL)
+        conn = await get_connection()
         if is_win:
             await conn.execute("UPDATE players SET wins = wins + 1, updated_at = NOW() WHERE username = $1", username)
         else:
@@ -109,7 +126,7 @@ async def get_stats(username: str) -> dict:
     if username in stats_cache:
         return stats_cache[username]
     try:
-        conn = await asyncpg.connect(DATABASE_URL)
+        conn = await get_connection()
         row = await conn.fetchrow("SELECT wins, losses FROM players WHERE username = $1", username)
         await conn.close()
         if row:
@@ -122,7 +139,7 @@ async def get_stats(username: str) -> dict:
 
 async def get_farm_level(username: str) -> int:
     try:
-        conn = await asyncpg.connect(DATABASE_URL)
+        conn = await get_connection()
         row = await conn.fetchrow("SELECT farm_level FROM players WHERE username = $1", username)
         await conn.close()
         if row:
@@ -133,7 +150,7 @@ async def get_farm_level(username: str) -> int:
 
 async def update_farm_level(username: str, new_level: int):
     try:
-        conn = await asyncpg.connect(DATABASE_URL)
+        conn = await get_connection()
         await conn.execute("UPDATE players SET farm_level = $1, updated_at = NOW() WHERE username = $2", new_level, username)
         await conn.close()
     except Exception as e:
@@ -141,7 +158,7 @@ async def update_farm_level(username: str, new_level: int):
 
 async def get_last_farm(username: str):
     try:
-        conn = await asyncpg.connect(DATABASE_URL)
+        conn = await get_connection()
         row = await conn.fetchrow("SELECT last_farm FROM players WHERE username = $1", username)
         await conn.close()
         if row and row[0]:
@@ -152,7 +169,7 @@ async def get_last_farm(username: str):
 
 async def update_last_farm(username: str):
     try:
-        conn = await asyncpg.connect(DATABASE_URL)
+        conn = await get_connection()
         await conn.execute("UPDATE players SET last_farm = NOW() WHERE username = $1", username)
         await conn.close()
     except Exception as e:
@@ -160,7 +177,7 @@ async def update_last_farm(username: str):
 
 async def get_leaderboard(limit: int = 10) -> list:
     try:
-        conn = await asyncpg.connect(DATABASE_URL)
+        conn = await get_connection()
         rows = await conn.fetch("""
             SELECT username, xp, wins, losses, farm_level
             FROM players
