@@ -10,38 +10,14 @@ UPGRADE_COST = {1: 0, 2: 500, 3: 1000, 4: 2000, 5: 3500, 6: 5500, 7: 8000, 8: 11
 async def add_spit(username: str, target: str) -> tuple[bool, str, int]:
     xp = await get_xp(username)
     if xp < 30:
-        return False, f"у тебя всего {xp} xp нужно 30 xp для плевка", 0
+        return False, f"❌ у тебя всего {xp} xp нужно 30 xp для плевка", 0
     
     await update_xp(username, -30)
     new_xp = await get_xp(username)
     return True, f"💨 {username} плюнул в {target} эндер-жемчугом", new_xp
 
 # ========== ФАРМА ==========
-async def farm_info(username: str, has_bot_in_bio: bool, is_subscribed: bool = False) -> str:
-    if not is_subscribed or not has_bot_in_bio:
-        return f"""❌ <b>ФАРМА НЕ ДОСТУПНА</b>
-
-<b>Требования для доступа к фарме:</b>
-
-1️⃣ {'✅' if is_subscribed else '❌'} <b>Подписка на канал:</b> @LostEarthSMP
-   {'✅ Вы подписаны' if is_subscribed else '❌ Вы НЕ подписаны'}
-
-2️⃣ {'✅' if has_bot_in_bio else '❌'} <b>Описание профиля:</b> @lostearth_bot
-   {'✅ Найдено в описании' if has_bot_in_bio else '❌ Не найдено'}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-<b>📝 Как исправить:</b>
-
-🔹 <b>Подписаться на канал:</b>
-👉 https://t.me/LostEarthSMP
-
-🔹 <b>Добавить в описание профиля:</b>
-• Настройки Telegram → Редактировать профиль
-• В поле "Описание" добавь: @lostearth_bot
-• Сохрани изменения
-
-После выполнения напиши /check для проверки ✅"""
-    
+async def farm_info(username: str) -> str:
     level = await get_farm_level(username)
     income = FARM_INCOME.get(level, 50)
     next_cost = UPGRADE_COST.get(level + 1, "MAX")
@@ -78,27 +54,7 @@ async def farm_info(username: str, has_bot_in_bio: bool, is_subscribed: bool = F
     
     return text
 
-async def collect_farm(username: str, has_bot_in_bio: bool, is_subscribed: bool = False) -> tuple[str, str]:
-    if not is_subscribed or not has_bot_in_bio:
-        missing = []
-        if not is_subscribed:
-            missing.append("• Подпишись на канал: https://t.me/LostEarthSMP")
-        if not has_bot_in_bio:
-            missing.append("• Добавь в описание профиля: @lostearth_bot")
-        
-        return f"""❌ <b>ФАРМА НЕ ДОСТУПНА</b>
-
-<b>Чтобы собирать опыт с фармы, нужно:</b>
-
-{chr(10).join(missing)}
-
-<b>📝 Как добавить в описание:</b>
-1. Настройки Telegram → Редактировать профиль
-2. В поле "Описание" добавь: @lostearth_bot
-3. Сохрани изменения
-
-После выполнения напиши /check для проверки ✅""", None
-    
+async def collect_farm(username: str) -> tuple[str, str]:
     last_farm = await get_last_farm(username)
     now = datetime.now()
     
@@ -120,22 +76,7 @@ async def collect_farm(username: str, has_bot_in_bio: bool, is_subscribed: bool 
     
     return f"🏭 Ты собрал {income} XP с фармы!\n💰 Баланс: {new_xp} XP", f"собрал {income} XP с фармы"
 
-async def upgrade_farm_cmd(username: str, has_bot_in_bio: bool, is_subscribed: bool = False) -> tuple[str, str]:
-    if not is_subscribed or not has_bot_in_bio:
-        missing = []
-        if not is_subscribed:
-            missing.append("• Подпишись на канал: https://t.me/LostEarthSMP")
-        if not has_bot_in_bio:
-            missing.append("• Добавь в описание профиля: @lostearth_bot")
-        
-        return f"""❌ <b>УЛУЧШЕНИЕ ФАРМЫ НЕ ДОСТУПНО</b>
-
-<b>Чтобы улучшать фарму, нужно:</b>
-
-{chr(10).join(missing)}
-
-После выполнения напиши /check для проверки ✅""", None
-    
+async def upgrade_farm_cmd(username: str) -> tuple[str, str]:
     current_level = await get_farm_level(username)
     
     if current_level >= 10:
@@ -180,18 +121,18 @@ async def game_dice_bet(username: str, bet_amount: int, bot, chat_id: int) -> tu
     if player_value > bot_value:
         win_amount = bet_amount
         await update_xp(username, win_amount)
-        await update_stats(username, is_win=True)
+        await update_stats(username, True)
         new_xp = await get_xp(username)
         result_text = f"🎉 ПОБЕДА! 🎉\n\nТвой кубик: {player_value}\nМой кубик: {bot_value}\n\n✨ Ты выиграл {win_amount} XP!\n💰 Баланс: {new_xp} XP"
         return result_text, f"выиграл {win_amount} XP в кости!"
     elif player_value < bot_value:
         await update_xp(username, -bet_amount)
-        await update_stats(username, is_win=False)
+        await update_stats(username, False)
         new_xp = await get_xp(username)
         result_text = f"😔 ПРОИГРЫШ...\n\nТвой кубик: {player_value}\nМой кубик: {bot_value}\n\n💔 Ты проиграл {bet_amount} XP!\n💰 Баланс: {new_xp} XP"
         return result_text, f"проиграл {bet_amount} XP в кости!"
     else:
-        return f"🤝 НИЧЬЯ!\n\nОба выбросили {player_value}\n\n💰 Ставка возвращена!\n💰 Баланс: {xp} XP", f"ничья в кости! ставка {bet_amount} XP возвращена"
+        return f"🤝 НИЧЬЯ!\n\nОба выбросили {player_value}\n\n💰 Ставка возвращена!\n💰 Баланс: {xp} XP", f"ничья в кости!"
 
 # ========== ФУТБОЛ ==========
 async def play_football(bot, chat_id: int):
@@ -221,15 +162,15 @@ async def game_football_bet(username: str, bet_amount: int, bot, chat_id: int) -
     if player_goal and not bot_caught:
         win_amount = bet_amount * 2
         await update_xp(username, win_amount)
-        await update_stats(username, is_win=True)
+        await update_stats(username, True)
         new_xp = await get_xp(username)
         result_text = f"⚽ ГОЛ! ПОБЕДА! ⚽\n\nТвой удар: {player_value}\nЭнди: {bot_value} (не поймала)\n\n✨ Ты выиграл {win_amount} XP!\n💰 Баланс: {new_xp} XP"
         return result_text, f"забил гол и выиграл {win_amount} XP!"
     elif not player_goal and bot_caught:
         await update_xp(username, -bet_amount)
-        await update_stats(username, is_win=False)
+        await update_stats(username, False)
         new_xp = await get_xp(username)
         result_text = f"😔 ПРОМАХ...\n\nТвой удар: {player_value}\nЭнди: {bot_value} (поймала)\n\n💔 Ты проиграл {bet_amount} XP!\n💰 Баланс: {new_xp} XP"
         return result_text, f"промахнулся и проиграл {bet_amount} XP!"
     else:
-        return f"🤝 НИЧЬЯ!\n\nТвой удар: {player_value}\nЭнди: {bot_value}\n\n💰 Ставка возвращена!\n💰 Баланс: {xp} XP", f"ничья! ставка {bet_amount} XP возвращена"
+        return f"🤝 НИЧЬЯ!\n\nТвой удар: {player_value}\nЭнди: {bot_value}\n\n💰 Ставка возвращена!\n💰 Баланс: {xp} XP", f"ничья!"
