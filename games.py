@@ -1,8 +1,8 @@
 import os
 import json
 import re
+import asyncio
 from datetime import datetime, date
-from collections import defaultdict
 
 # ========== ФАЙЛОВОЕ ХРАНИЛИЩЕ ==========
 PLAYERS_FILE = "players.json"
