@@ -24,15 +24,6 @@ FARM_LEVELS = {
 
 SPIT_COST = 10
 
-# Эмодзи
-E_CAT_DANCE = "🐱"
-E_CAT_SURPRISED = "😲"
-E_HEART = "💜"
-E_MAGIC = "✨"
-E_JOYSTICK = "🎮"
-E_CROWN = "👑"
-E_HOUSE = "🏠"
-
 def load_players():
     if not os.path.exists(PLAYERS_FILE):
         return {}
@@ -198,13 +189,13 @@ def start_farm_upgrade(username: str):
     return True, f"Улучшение фермы до {current_level + 1} уровня началось! 🚀 Закончится через {hours} часов"
 
 def claim_farm_income(username: str):
-    """Собирает доход с фермы (раз в 3 часа максимум)"""
+    """Собирает доход с фермы (раз в час максимум)"""
     data = load_players()
     if username not in data:
         init_player(username)
         return 0, 0, None
     
-    # Проверяем завершение улучшения
+    # Проверяем завершение улучшения (обновляем статус)
     farm_info = get_farm_info(username)
     
     last_claim = data[username].get("farm_last_claim", datetime.now().timestamp())
@@ -212,11 +203,15 @@ def claim_farm_income(username: str):
         last_claim = float(last_claim)
     last_claim_time = datetime.fromtimestamp(last_claim)
     
+    # Сколько часов прошло с последнего сбора
     hours_passed = (datetime.now() - last_claim_time).total_seconds() / 3600
-    hours_to_claim = min(hours_passed, 3)
     
-    if hours_to_claim < 1:
+    # Можно собирать если прошёл хотя бы 1 час
+    if hours_passed < 1:
         return 0, hours_passed, farm_info
+    
+    # Сколько часов забираем (максимум 24 чтобы не накапливалось слишком много)
+    hours_to_claim = min(hours_passed, 24)
     
     level = data[username].get("farm_level", 1)
     income_per_hour = FARM_LEVELS[level]["income"]
@@ -252,17 +247,17 @@ async def game_dice_bet(username: str, bot, chat_id: int, bet_amount: int = 50) 
     xp = get_xp(username)
     
     if bet_amount < 10:
-        return f"🎲 Минимальная ставка 10 XP! {E_CAT_SURPRISED}"
+        return f"🎲 Минимальная ставка 10 XP! 😲"
     
     if xp < bet_amount:
-        return f"💔 У тебя всего {xp} XP! Не хватает на ставку {bet_amount} {E_CAT_SURPRISED}"
+        return f"💔 У тебя всего {xp} XP! Не хватает на ставку {bet_amount} 😲"
     
     # Анимация бросков
     await bot.send_message(chat_id, f"🎲 {username} бросает кубик...")
     player_value = await roll_dice_animated(bot, chat_id)
     
     await asyncio.sleep(1.5)
-    await bot.send_message(chat_id, f"{E_CAT_DANCE} Эндерия бросает кубик...")
+    await bot.send_message(chat_id, f"🐱 Эндерия бросает кубик...")
     bot_value = await roll_dice_animated(bot, chat_id)
     
     # Результат
@@ -277,7 +272,7 @@ async def game_dice_bet(username: str, bot, chat_id: int, bet_amount: int = 50) 
 🐱 Мой кубик: {bot_value}
 
 ✨ Ты выиграл {win_amount} XP!
-💰 Баланс: {new_xp} XP {E_HEART}"""
+💰 Баланс: {new_xp} XP 💜"""
     
     elif player_value < bot_value:
         lose_amount = bet_amount
@@ -290,7 +285,7 @@ async def game_dice_bet(username: str, bot, chat_id: int, bet_amount: int = 50) 
 🐱 Мой кубик: {bot_value}
 
 💔 Ты проиграл {lose_amount} XP!
-💰 Баланс: {new_xp} XP {E_CAT_SURPRISED}"""
+💰 Баланс: {new_xp} XP 😲"""
     
     else:
         return f"""🤝 <b>НИЧЬЯ!</b> 🤝
@@ -299,4 +294,4 @@ async def game_dice_bet(username: str, bot, chat_id: int, bet_amount: int = 50) 
 🐱 Мой кубик: {bot_value}
 
 💰 Ставка возвращена!
-💰 Баланс: {xp} XP {E_JOYSTICK}"""
+💰 Баланс: {xp} XP 🎮"""
