@@ -249,7 +249,7 @@ async def start_cmd(message: Message):
     online, max_players = await get_server_online()
     xp = get_xp(username)
     
-    text = f"""{E_MAGIC} <b>Добро пожаловать на {SERVER['name']}</b> {E_MAGIC}
+    text = f"""{E_MAGIC} <b>Добро пожаловать на {SERVER['name']}</b>
 
 {E_HOUSE} <b>Мирный режим по заявкам!</b>
 
