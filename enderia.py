@@ -52,7 +52,8 @@ E_JOYSTICK = emoji(ENDERIA_EMOJI["joystick"], "🎮")
 
 # ========== ПАМЯТЬ ==========
 user_memory = defaultdict(lambda: deque(maxlen=20))
-user_greeted = {}
+user_last_message_time = {}  # Время последнего сообщения от пользователя
+user_conversation_active = {}  # Активен ли диалог
 
 def add_to_memory(username: str, user_message: str, bot_response: str):
     user_memory[username].append(f"{username}: {user_message}")
@@ -65,14 +66,18 @@ def clear_user_memory(username: str):
 def get_memory_size(username: str) -> int:
     return len(user_memory.get(username, [])) // 2
 
-def has_already_greeted(username: str) -> bool:
-    return user_greeted.get(username, False)
+def is_conversation_active(username: str) -> bool:
+    """Проверяет, активен ли диалог (последнее сообщение было меньше 5 минут назад)"""
+    if username not in user_last_message_time:
+        return False
+    time_diff = (datetime.now() - user_last_message_time[username]).total_seconds()
+    return time_diff < 300  # 5 минут
 
-def mark_greeted(username: str):
-    user_greeted[username] = True
+def update_last_message_time(username: str):
+    user_last_message_time[username] = datetime.now()
 
 def is_greeting(text: str) -> bool:
-    greetings = ["привет", "здравствуй", "хай", "hello", "приветик", "здарова"]
+    greetings = ["привет", "здравствуй", "хай", "hello", "приветик", "здарова", "доброе утро", "добрый день", "добрый вечер"]
     return any(g in text.lower() for g in greetings)
 
 def is_just_name(text: str) -> bool:
@@ -111,22 +116,29 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     global current_online, current_max
     
     save_to_log(username, user_message, is_bot=False)
+    update_last_message_time(username)
     
-    already_greeted = has_already_greeted(username)
     is_greeting_msg = is_greeting(user_message)
     is_name_call = is_just_name(user_message)
+    conversation_active = is_conversation_active(username)
     
+    # Если диалог активен и это не приветствие и не обращение по имени - просто отвечаем
+    if conversation_active and not is_greeting_msg and not is_name_call:
+        # Продолжаем диалог без приветствия
+        pass
     # Если позвали по имени
-    if is_name_call and not is_reply:
+    elif is_name_call:
         response = f"{E_CAT_OK} Слушаю, {username}! Что хотел узнать? {E_HEART}"
-        if not already_greeted:
-            mark_greeted(username)
         add_to_memory(username, user_message, response)
         return response
-    
-    # Если уже здоровались - не здороваемся снова
-    if already_greeted and is_greeting_msg and not is_reply:
-        response = f"{E_CAT_DANCE} {username}, мы уже общаемся! Что случилось? {E_HEART}"
+    # Если написали привет и диалог неактивен
+    elif is_greeting_msg and not conversation_active:
+        response = f"{E_CAT_DANCE} Привет, {username}! Рада тебя видеть! {E_HEART}"
+        add_to_memory(username, user_message, response)
+        return response
+    # Если написали привет но диалог активен - НЕ ЗДОРОВАЕМСЯ!
+    elif is_greeting_msg and conversation_active:
+        response = f"{E_CAT_OK} {username}, я тут! Что случилось? {E_HEART}"
         add_to_memory(username, user_message, response)
         return response
     
@@ -134,6 +146,11 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     if OPENROUTER_API_KEY:
         try:
             current_time = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
+            
+            # Берём последние 5 сообщений для контекста
+            history = ""
+            if username in user_memory and len(user_memory[username]) > 0:
+                history = "\n".join(list(user_memory[username])[-6:])
             
             system_prompt = f"""Ты — Эндерия (Энди), девушка-эндермен, хранительница Края.
 
@@ -146,13 +163,14 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
 - Админ: @pelmewki379
 - Сейчас онлайн: {current_online}/{current_max} игроков
 
-ПРАВИЛА:
-1. Если уже здоровались - НЕ ЗДОРОВАЙСЯ заново
-2. Отвечай коротко (2-4 предложения)
-3. Будь милой, используй эмодзи 🐱 💜 ✨
-4. Ты сама играешь на сервере
+ВАЖНО: Ты уже общаешься с {username}. НЕ ЗДОРОВАЙСЯ заново! Просто продолжай разговор.
 
-Ответь на сообщение игрока {username}: {user_message}"""
+История диалога:
+{history if history else "Диалог только начинается"}
+
+Сейчас {username} написал: {user_message}
+
+Ответь коротко (2-4 предложения), по делу, используй эмодзи. НЕ ЗДОРОВАЙСЯ!"""
             
             for model in MODELS_CHAIN:
                 try:
@@ -179,9 +197,6 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
                                 result = data["choices"][0]["message"]["content"].strip()
                                 result = re.sub(r'<[^>]+>', '', result)
                                 
-                                if not already_greeted:
-                                    mark_greeted(username)
-                                
                                 add_to_memory(username, user_message, result)
                                 save_to_log(username, result, is_bot=True)
                                 return result
@@ -191,18 +206,15 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         except Exception as e:
             print(f"Ошибка ИИ: {e}")
     
-    # Fallback
+    # Fallback ответы (без приветствий)
     fallbacks = [
-        f"{E_CAT_DANCE} {username}, привет! Я сейчас на сервере играю, а ты? {E_HEART}",
-        f"{E_MAGIC} {username}, телепортнулась к тебе! Чем могу помочь? {E_CAT_OK}",
-        f"{E_HEART} {username}, как твои дела на LostEarth? {E_RABBIT}",
-        f"{E_CROWN} {username}, на сервере сейчас {current_online}/{current_max} игроков! Заходи! {E_JOYSTICK}"
+        f"{E_CAT_DANCE} Поняла, {username}! {E_HEART}",
+        f"{E_MAGIC} Хорошо, {username}! {E_CAT_OK}",
+        f"{E_HEART} Ясно, {username}! {E_RABBIT}",
+        f"{E_CROWN} Запомнила, {username}! {E_JOYSTICK}"
     ]
     
     response = random.choice(fallbacks)
-    if not already_greeted:
-        mark_greeted(username)
-    
     add_to_memory(username, user_message, response)
     save_to_log(username, response, is_bot=True)
     return response
