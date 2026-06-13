@@ -14,10 +14,13 @@ load_dotenv()
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
+# 5 моделей ИИ как было
 MODELS_CHAIN = [
     "openai/gpt-4o-mini",
     "openai/gpt-3.5-turbo",
     "meta-llama/llama-3.3-70b-instruct",
+    "qwen/qwen2.5-7b-instruct",
+    "google/gemini-flash-1.5",
 ]
 
 # ========== ПРЕМИУМ ЭМОДЗИ ==========
@@ -53,7 +56,7 @@ E_MAGIC = emoji(ENDERIA_EMOJI["magic"], "✨")
 E_JOYSTICK = emoji(ENDERIA_EMOJI["joystick"], "🎮")
 
 # ========== ПАМЯТЬ ==========
-user_memory = defaultdict(lambda: deque(maxlen=50))  # увеличил до 50
+user_memory = defaultdict(lambda: deque(maxlen=50))
 user_greeted = {}
 last_active = {}
 
@@ -64,8 +67,8 @@ def add_to_memory(username: str, user_message: str, bot_response: str):
 def get_user_context(username: str) -> str:
     """возвращает последние сообщения диалога для контекста"""
     if username not in user_memory or len(user_memory[username]) == 0:
-        return "диалог только начинается"
-    # берём последние 20 сообщений для контекста
+        return ""
+    # берём последние 20 сообщений
     context = "\n".join(list(user_memory[username])[-20:])
     return context
 
@@ -82,7 +85,7 @@ def mark_greeted(username: str):
     user_greeted[username] = True
 
 def is_greeting(text: str) -> bool:
-    greetings = ["привет", "здравствуй", "хай", "hello", "приветик", "здарова", "доброе утро", "добрый день", "добрый вечер"]
+    greetings = ["привет", "здравствуй", "хай", "hello", "приветик", "здарова", "ку", "доброе утро", "добрый день", "добрый вечер"]
     return any(g in text.lower() for g in greetings)
 
 def is_just_name(text: str) -> bool:
@@ -101,15 +104,11 @@ def should_respond(message_text: str) -> bool:
 # ========== ОНЛАЙН ==========
 current_online = 0
 current_max = 0
-current_server_status = "онлайн"
 
 def set_server_online(online: int, max_players: int):
     global current_online, current_max
     current_online = online
     current_max = max_players
-    if online == 0:
-        global current_server_status
-        current_server_status = "пустует"
 
 def save_to_log(username: str, message: str, is_bot: bool = False):
     try:
@@ -125,9 +124,6 @@ spontaneous_messages = [
     "народ, как дела на фермах? у меня криперы уже 3 уровень! {cat}",
     "что молчим? пойдёмте вместе на сервер, там сейчас {online} игроков! {magic}",
     "эй, кто хочет сыграть в футбол? пиши 'энди футбол 100'! {joystick}",
-    "не забывайте, на мирный режим нужна заявка через бота! а на smp можно сразу заходить {house}",
-    "айпи сервера: java 150.241.85.40:25565, bedrock 150.241.85.40:19132 {rabbit}",
-    "официальный тгк сервера @LostEarthSMP, там все новости! {heart}",
 ]
 
 async def send_spontaneous_message(bot, chat_id: int):
@@ -138,14 +134,11 @@ async def send_spontaneous_message(bot, chat_id: int):
         msg = msg.replace("{cat}", E_CAT_DANCE)
         msg = msg.replace("{magic}", E_MAGIC)
         msg = msg.replace("{joystick}", E_JOYSTICK)
-        msg = msg.replace("{house}", E_HOUSE)
-        msg = msg.replace("{rabbit}", E_RABBIT)
-        msg = msg.replace("{heart}", E_HEART)
         await bot.send_message(chat_id, f"{E_CAT_DANCE} {msg}", parse_mode="HTML")
 
 # ========== ОСНОВНАЯ ФУНКЦИЯ ==========
 async def get_enderia_response(user_message: str, username: str, is_reply: bool = False, user_bio: str = "", game_result: str = None) -> str:
-    global current_online, current_max, current_server_status
+    global current_online, current_max
     
     save_to_log(username, user_message, is_bot=False)
     last_active[username] = datetime.now()
@@ -172,9 +165,9 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         await save_andy_dialog(username, user_message, response)
         return response
     
-    # если уже здоровались - не здороваемся
+    # если уже здоровались и написали привет - не здороваемся заново
     if already_greeted and is_greeting_msg and not is_reply:
-        response = f"{E_CAT_DANCE} {username}, мы уже общаемся! {E_JOYSTICK}"
+        response = f"{E_CAT_DANCE} да, {username}, я тут! что случилось? {E_HEART}"
         add_to_memory(username, user_message, response)
         await save_chat_message(username, response, is_bot=True)
         await save_andy_dialog(username, user_message, response)
@@ -188,40 +181,32 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
             # важный промпт с контекстом
             system_prompt = f"""ты энди, девушка-эндермен. ты должна внимательно читать историю диалога и отвечать последовательно!
 
-история диалога с {username} (последние сообщения):
+вот история диалога с {username}:
 {context}
 
-вот что важно из истории:
-- если игрок недавно что-то спрашивал, помни об этом
-- если игрок пишет короткий ответ типа "в боте" - пойми, что он отвечает на твой предыдущий вопрос
-- не повторяй одно и то же в каждом сообщении
-- отвечай по существу
+правила которые ты должна строго соблюдать:
+1. НЕ ПИШИ ПРО СЕРВЕР В КАЖДОМ СООБЩЕНИИ! только если игрок сам спросил про сервер
+2. отвечай по существу вопроса, не повторяй одно и то же
+3. если игрок пишет "почему" - посмотри в историю, на что он отвечает
+4. если игрок пишет "понял" или "ок" - просто ответь "хорошо" или "отлично"
+5. пиши с маленькой буквы
+6. используй эмодзи {E_CAT_DANCE} {E_HEART} {E_MAGIC}
+7. отвечай коротко (1-3 предложения)
 
-информация о сервере lostearth:
-- режимы: мирный (нужна заявка через бота, нет гриферства) и smp (можно рейдить, заявка не нужна)
-- ip java: 150.241.85.40:25565
-- ip bedrock: 150.241.85.40:19132
+информация о сервере (говори только если спросят):
+- режимы: мирный (нужна заявка) и smp (без заявки)
+- ip java: 150.241.85.40:25565, bedrock: 150.241.85.40:19132
 - тг канал: @LostEarthSMP
-- админ: @pelmewki379
 - онлайн сейчас: {current_online}/{current_max}
 
 игры в боте:
-- энди кубик [ставка] - игра в кости
-- энди футбол [ставка] - футбол  
-- энди плюнуть - плюнуть в игрока (30 xp)
-- энди фарма - собрать опыт
-
-правила:
-1. пиши с маленькой буквы
-2. используй эмодзи {E_CAT_DANCE} {E_HEART} {E_MAGIC}
-3. запоминай что говорили ранее!
-4. если игрок отвечает кратко - свяжи с предыдущим вопросом
-5. не призывай заходить на сервер в каждом сообщении
-6. отвечай коротко (2-3 предложения)
+- энди кубик [ставка] - кости
+- энди футбол [ставка] - футбол
+- энди плюнуть - плюнуть в игрока
 
 текущее сообщение от {username}: "{user_message}"
 
-ответь как энди (с маленькой буквы, с эмодзи):"""
+ответь как энди (с маленькой буквы, с эмодзи, НЕ ПИШИ ПРО СЕРВЕР если не спрашивали):"""
             
             for model in MODELS_CHAIN:
                 try:
@@ -257,17 +242,16 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
                                 await save_andy_dialog(username, user_message, result)
                                 return result
                 except Exception as e:
-                    print(f"модель ошибка: {e}")
+                    print(f"модель {model} ошибка: {e}")
                     continue
         except Exception as e:
             print(f"ошибка ии: {e}")
     
     # fallback если ии не ответил
     fallbacks = [
-        f"{E_CAT_DANCE} {username}, я тут! хочешь сыграть? напиши 'энди кубик 100' {E_HEART}",
-        f"{E_MAGIC} {username}, телепортнулась к тебе! на сервере сейчас {current_online}/{current_max} игроков {E_JOYSTICK}",
-        f"{E_HEART} {username}, айпи сервера: java 150.241.85.40:25565, бедрок 150.241.85.40:19132 {E_RABBIT}",
-        f"{E_CROWN} {username}, на мирный режим нужна заявка через бота, а на smp можно сразу {E_HOUSE}"
+        f"{E_CAT_DANCE} {username}, я тут! {E_HEART}",
+        f"{E_MAGIC} {username}, слушаю! {E_CAT_OK}",
+        f"{E_HEART} да, {username}?",
     ]
     
     response = random.choice(fallbacks)
