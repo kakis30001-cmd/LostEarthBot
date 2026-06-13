@@ -20,20 +20,20 @@ UPGRADE_COST = {1: 0, 2: 500, 3: 1000, 4: 2000, 5: 3500, 6: 5500, 7: 8000, 8: 11
 async def farm_info(username: str, has_bot_in_bio: bool) -> str:
     """показывает информацию о фарме"""
     if not has_bot_in_bio:
-        return f"""❌ фарма не доступна
+        return f"""❌ ФАРМА НЕ ДОСТУПНА
 
-чтобы пользоваться фармой, добавь в описание своего профиля:
+Чтобы пользоваться фармой, добавь в описание своего профиля:
 
 <b>@lostearth_bot</b>
 
-📝 как это сделать:
-1. зайди в настройки telegram
-2. нажми на свою фотографию
-3. выбери "редактировать профиль"
-4. в разделе "описание" добавь: @lostearth_bot
-5. сохрани и возвращайся
+📝 КАК ЭТО СДЕЛАТЬ:
+1. Зайди в настройки Telegram
+2. Нажми на свою фотографию
+3. Выбери "Редактировать профиль"
+4. В разделе "Описание" добавь: @lostearth_bot
+5. Сохрани и возвращайся
 
-после добавления бот проверит и фарма заработает 💜"""
+После добавления бот проверит и фарма заработает 💜"""
     
     level = await get_farm_level(username)
     income = FARM_INCOME.get(level, 50)
@@ -41,19 +41,19 @@ async def farm_info(username: str, has_bot_in_bio: bool) -> str:
     xp = await get_xp(username)
     last_farm = await get_last_farm(username)
     
-    text = f"🏭 <b>твоя фарма</b> 🏭\n\n"
-    text += f"📊 уровень: {level}\n"
-    text += f"💰 доход за сбор: {income} xp\n"
-    text += f"⏰ перезарядка: 3 часа\n"
+    text = f"🏭 <b>ТВОЯ ФАРМА</b> 🏭\n\n"
+    text += f"📊 Уровень: {level}\n"
+    text += f"💰 Доход за сбор: {income} XP\n"
+    text += f"⏰ Перезарядка: 3 часа\n"
     
     if level < 10:
-        text += f"⬆️ следующий уровень: {next_cost} xp\n"
+        text += f"⬆️ Следующий уровень: {next_cost} XP\n"
         if xp >= next_cost:
-            text += f"✅ ты можешь улучшить фарму напиши: энди улучши фарму\n"
+            text += f"✅ Ты можешь улучшить фарму! Напиши: энди улучши фарму\n"
         else:
-            text += f"❌ не хватает {next_cost - xp} xp для улучшения\n"
+            text += f"❌ Не хватает {next_cost - xp} XP для улучшения\n"
     else:
-        text += f"⭐ максимальный уровень\n"
+        text += f"⭐ МАКСИМАЛЬНЫЙ УРОВЕНЬ!\n"
     
     if last_farm:
         now = datetime.now()
@@ -61,30 +61,33 @@ async def farm_info(username: str, has_bot_in_bio: bool) -> str:
             last_farm = datetime.fromisoformat(last_farm)
         time_passed = (now - last_farm).total_seconds() / 3600
         if time_passed >= 3:
-            text += f"\n✅ фарма готова напиши: энди фарма"
+            text += f"\n✅ ФАРМА ГОТОВА! Напиши: энди фарма"
         else:
             hours_left = int(3 - time_passed)
             minutes_left = int((3 - time_passed) * 60) % 60
-            text += f"\n⏳ до следующего сбора: {hours_left}ч {minutes_left}мин"
+            text += f"\n⏳ До следующего сбора: {hours_left}ч {minutes_left}мин"
     else:
-        text += f"\n✅ фарма готова напиши: энди фарма"
+        text += f"\n✅ ФАРМА ГОТОВА! Напиши: энди фарма"
     
     return text
 
 async def collect_farm(username: str, has_bot_in_bio: bool) -> tuple[str, str]:
-    """собирает опыт с фармы"""
+    """собирает опыт с фармы - ТРЕБУЕТ ПРОВЕРКУ БОТА В ОПИСАНИИ"""
     if not has_bot_in_bio:
-        return f"""❌ фарма не доступна
+        return f"""❌ ФАРМА НЕ ДОСТУПНА
 
-добавь в описание профиля: @lostearth_bot
+Чтобы собирать опыт с фармы, добавь в описание своего профиля:
 
-📝 как это сделать:
-1. настройки telegram → фото профиля
-2. редактировать профиль → описание
-3. добавь: @lostearth_bot
-4. сохрани и напиши 'энди фарма' снова
+<b>@lostearth_bot</b>
 
-после добавления бот проверит и фарма заработает 💜""", None
+📝 КАК ЭТО СДЕЛАТЬ:
+1. Зайди в настройки Telegram
+2. Нажми на свою фотографию
+3. Выбери "Редактировать профиль"
+4. В разделе "Описание" добавь: @lostearth_bot
+5. Сохрани и возвращайся
+
+После добавления бот проверит и фарма заработает 💜""", None
     
     last_farm = await get_last_farm(username)
     now = datetime.now()
@@ -96,7 +99,7 @@ async def collect_farm(username: str, has_bot_in_bio: bool) -> tuple[str, str]:
         if time_passed < 3:
             hours_left = int(3 - time_passed)
             minutes_left = int((3 - time_passed) * 60) % 60
-            return f"⏳ фарма ещё не готова приходи через {hours_left}ч {minutes_left}мин", None
+            return f"⏳ Фарма ещё не готова! Приходи через {hours_left}ч {minutes_left}мин", None
     
     level = await get_farm_level(username)
     income = FARM_INCOME.get(level, 50)
@@ -105,27 +108,29 @@ async def collect_farm(username: str, has_bot_in_bio: bool) -> tuple[str, str]:
     await update_last_farm(username)
     new_xp = await get_xp(username)
     
-    return f"🏭 ты собрал {income} xp с фармы\n💰 баланс: {new_xp} xp", f"собрал {income} xp с фармы"
+    return f"🏭 Ты собрал {income} XP с фармы!\n💰 Баланс: {new_xp} XP", f"собрал {income} XP с фармы"
 
 async def upgrade_farm_cmd(username: str, has_bot_in_bio: bool) -> tuple[str, str]:
-    """улучшает фарму"""
+    """улучшает фарму - ТРЕБУЕТ ПРОВЕРКУ БОТА В ОПИСАНИИ"""
     if not has_bot_in_bio:
-        return f"""❌ фарма не доступна
+        return f"""❌ ФАРМА НЕ ДОСТУПНА
 
-добавь в описание профиля: @lostearth_bot
+Чтобы улучшать фарму, добавь в описание своего профиля:
 
-после добавления бот проверит и фарма заработает 💜""", None
+<b>@lostearth_bot</b>
+
+После добавления бот проверит и фарма заработает 💜""", None
     
     current_level = await get_farm_level(username)
     
     if current_level >= 10:
-        return f"⭐ у тебя уже максимальный 10 уровень фармы", None
+        return f"⭐ У тебя уже максимальный 10 уровень фармы!", None
     
     cost = UPGRADE_COST.get(current_level + 1, 999999)
     xp = await get_xp(username)
     
     if xp < cost:
-        return f"❌ не хватает опыта нужно {cost} xp у тебя {xp} xp", None
+        return f"❌ Не хватает опыта! Нужно {cost} XP, у тебя {xp} XP", None
     
     await update_xp(username, -cost)
     await update_farm_level(username, current_level + 1)
@@ -133,7 +138,7 @@ async def upgrade_farm_cmd(username: str, has_bot_in_bio: bool) -> tuple[str, st
     new_income = FARM_INCOME.get(new_level, 50)
     new_xp = await get_xp(username)
     
-    return f"✅ фарма улучшена до {new_level} уровня\n📈 теперь приносит {new_income} xp за сбор\n💰 баланс: {new_xp} xp", f"улучшил фарму до {new_level} уровня"
+    return f"✅ Фарма улучшена до {new_level} уровня!\n📈 Теперь приносит {new_income} XP за сбор\n💰 Баланс: {new_xp} XP", f"улучшил фарму до {new_level} уровня"
 
 # ========== КУБИК ==========
 async def roll_dice(bot, chat_id: int):
@@ -143,15 +148,15 @@ async def roll_dice(bot, chat_id: int):
 async def game_dice_bet(username: str, bet_amount: int, bot, chat_id: int) -> tuple[str, str]:
     xp = await get_xp(username)
     if xp < bet_amount:
-        return f"💰 {username}, у тебя всего {xp} xp не хватает на ставку {bet_amount}", None
+        return f"💰 {username}, у тебя всего {xp} XP! Не хватает на ставку {bet_amount}", None
     if bet_amount < 50:
-        return f"🎲 {username}, минимальная ставка 50 xp", None
+        return f"🎲 {username}, минимальная ставка 50 XP!", None
     
     await bot.send_message(chat_id, f"🎲 {username} бросает кубик...")
     player_value = await roll_dice(bot, chat_id)
     
     await asyncio.sleep(1.5)
-    await bot.send_message(chat_id, f"🐱 энди бросает кубик...")
+    await bot.send_message(chat_id, f"🐱 Энди бросает кубик...")
     bot_value = await roll_dice(bot, chat_id)
     
     if player_value > bot_value:
@@ -159,16 +164,16 @@ async def game_dice_bet(username: str, bet_amount: int, bot, chat_id: int) -> tu
         await update_xp(username, win_amount)
         await update_stats(username, is_win=True)
         new_xp = await get_xp(username)
-        result_text = f"🎉 победа\n\nтвой кубик: {player_value}\nмой кубик: {bot_value}\n\n✨ ты выиграл {win_amount} xp\n💰 баланс: {new_xp} xp"
-        return result_text, f"выиграл {win_amount} xp в кости"
+        result_text = f"🎉 ПОБЕДА! 🎉\n\nТвой кубик: {player_value}\nМой кубик: {bot_value}\n\n✨ Ты выиграл {win_amount} XP!\n💰 Баланс: {new_xp} XP"
+        return result_text, f"выиграл {win_amount} XP в кости!"
     elif player_value < bot_value:
         await update_xp(username, -bet_amount)
         await update_stats(username, is_win=False)
         new_xp = await get_xp(username)
-        result_text = f"😔 проигрыш\n\nтвой кубик: {player_value}\nмой кубик: {bot_value}\n\n💔 ты проиграл {bet_amount} xp\n💰 баланс: {new_xp} xp"
-        return result_text, f"проиграл {bet_amount} xp в кости"
+        result_text = f"😔 ПРОИГРЫШ...\n\nТвой кубик: {player_value}\nМой кубик: {bot_value}\n\n💔 Ты проиграл {bet_amount} XP!\n💰 Баланс: {new_xp} XP"
+        return result_text, f"проиграл {bet_amount} XP в кости!"
     else:
-        return f"🤝 ничья\n\nоба выбросили {player_value}\n\n💰 ставка возвращена\n💰 баланс: {xp} xp", f"ничья в кости ставка {bet_amount} xp возвращена"
+        return f"🤝 НИЧЬЯ!\n\nОба выбросили {player_value}\n\n💰 Ставка возвращена!\n💰 Баланс: {xp} XP", f"ничья в кости! ставка {bet_amount} XP возвращена"
 
 # ========== ФУТБОЛ ==========
 async def play_football(bot, chat_id: int):
@@ -178,15 +183,15 @@ async def play_football(bot, chat_id: int):
 async def game_football_bet(username: str, bet_amount: int, bot, chat_id: int) -> tuple[str, str]:
     xp = await get_xp(username)
     if xp < bet_amount:
-        return f"💰 {username}, у тебя всего {xp} xp не хватает на ставку {bet_amount}", None
+        return f"💰 {username}, у тебя всего {xp} XP! Не хватает на ставку {bet_amount}", None
     if bet_amount < 50:
-        return f"⚽ {username}, минимальная ставка 50 xp", None
+        return f"⚽ {username}, минимальная ставка 50 XP!", None
     
     await bot.send_message(chat_id, f"⚽ {username} бьёт по воротам...")
     player_value = await play_football(bot, chat_id)
     
     await asyncio.sleep(1.5)
-    await bot.send_message(chat_id, f"🧤 энди защищает ворота...")
+    await bot.send_message(chat_id, f"🧤 Энди защищает ворота...")
     bot_value = await play_football(bot, chat_id)
     
     player_goal = player_value >= 4
@@ -197,13 +202,13 @@ async def game_football_bet(username: str, bet_amount: int, bot, chat_id: int) -
         await update_xp(username, win_amount)
         await update_stats(username, is_win=True)
         new_xp = await get_xp(username)
-        result_text = f"⚽ гол победа\n\nтвой удар: {player_value}\nэнди: {bot_value} (не поймала)\n\n✨ ты выиграл {win_amount} xp\n💰 баланс: {new_xp} xp"
-        return result_text, f"забил гол и выиграл {win_amount} xp"
+        result_text = f"⚽ ГОЛ! ПОБЕДА! ⚽\n\nТвой удар: {player_value}\nЭнди: {bot_value} (не поймала)\n\n✨ Ты выиграл {win_amount} XP!\n💰 Баланс: {new_xp} XP"
+        return result_text, f"забил гол и выиграл {win_amount} XP!"
     elif not player_goal and bot_caught:
         await update_xp(username, -bet_amount)
         await update_stats(username, is_win=False)
         new_xp = await get_xp(username)
-        result_text = f"😔 промах\n\nтвой удар: {player_value}\nэнди: {bot_value} (поймала)\n\n💔 ты проиграл {bet_amount} xp\n💰 баланс: {new_xp} xp"
-        return result_text, f"промахнулся и проиграл {bet_amount} xp"
+        result_text = f"😔 ПРОМАХ...\n\nТвой удар: {player_value}\nЭнди: {bot_value} (поймала)\n\n💔 Ты проиграл {bet_amount} XP!\n💰 Баланс: {new_xp} XP"
+        return result_text, f"промахнулся и проиграл {bet_amount} XP!"
     else:
-        return f"🤝 ничья\n\nтвой удар: {player_value}\nэнди: {bot_value}\n\n💰 ставка возвращена\n💰 баланс: {xp} xp", f"ничья ставка {bet_amount} xp возвращена"
+        return f"🤝 НИЧЬЯ!\n\nТвой удар: {player_value}\nЭнди: {bot_value}\n\n💰 Ставка возвращена!\n💰 Баланс: {xp} XP", f"ничья! ставка {bet_amount} XP возвращена"
