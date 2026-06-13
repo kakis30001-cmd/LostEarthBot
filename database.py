@@ -2,70 +2,36 @@ import asyncpg
 import os
 from datetime import datetime, date
 
-# Берем переменные из окружения Railway (из твоего скриншота)
-DB_HOST = os.getenv("PGHOST", "postgres.railway.internal")
-DB_PORT = os.getenv("PGPORT", "5432")
-DB_USER = os.getenv("PGUSER", "postgres")
-DB_PASSWORD = os.getenv("PGPASSWORD", "GvVgH0wThbxIW0ruuQkDsZVVYpuzrMgdt")  # Берем из скриншота
-DB_NAME = os.getenv("PGDATABASE", "railway")
+# Берём переменные ТОЛЬКО из окружения Railway
+DB_PUBLIC_URL = os.getenv("DATABASE_PUBLIC_URL", "")
+DB_URL = os.getenv("DATABASE_URL", "")
 
-# Собираем URL из переменных
-DB_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+# Альтернативно, собираем из отдельных переменных
+PGHOST = os.getenv("PGHOST", "")
+PGPORT = os.getenv("PGPORT", "5432")
+PGUSER = os.getenv("PGUSER", "postgres")
+PGPASSWORD = os.getenv("PGPASSWORD", "")
+PGDATABASE = os.getenv("PGDATABASE", "railway")
 
-# Публичный URL для внешнего подключения
-PUBLIC_HOST = "thomas.proxy.rlwy.net"
-PUBLIC_PORT = "37739"
-PUBLIC_DB_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{PUBLIC_HOST}:{PUBLIC_PORT}/{DB_NAME}"
-
-print(f"🔍 Параметры БД:")
-print(f"   Хост: {DB_HOST}")
-print(f"   Порт: {DB_PORT}")
-print(f"   Пользователь: {DB_USER}")
-print(f"   База: {DB_NAME}")
-print(f"   URL: {DB_URL.replace(DB_PASSWORD, '***')}")
+# Показываем параметры для отладки
+print(f"🔍 Параметры подключения:")
+print(f"   DATABASE_URL: {DB_URL[:50] if DB_URL else 'None'}...")
+print(f"   DATABASE_PUBLIC_URL: {DB_PUBLIC_URL[:50] if DB_PUBLIC_URL else 'None'}...")
+print(f"   PGHOST: {PGHOST}")
+print(f"   PGPASSWORD: {'***' if PGPASSWORD else 'None'}")
+print(f"   PGPORT: {PGPORT}")
 
 pool = None
 
 async def connect_db():
     global pool
-    try:
-        print("🔌 Подключение через внутренний URL...")
-        pool = await asyncpg.create_pool(DB_URL, min_size=1, max_size=5, timeout=15)
-        
-        async with pool.acquire() as conn:
-            await conn.execute("""
-            CREATE TABLE IF NOT EXISTS players(
-                username TEXT PRIMARY KEY,
-                xp INTEGER DEFAULT 1000,
-                last_bonus DATE,
-                wins INTEGER DEFAULT 0,
-                losses INTEGER DEFAULT 0,
-                farm_level INTEGER DEFAULT 1,
-                last_farm TIMESTAMP DEFAULT NULL,
-                created_at TIMESTAMP DEFAULT NOW(),
-                updated_at TIMESTAMP DEFAULT NOW()
-            )
-            """)
-            
-            # Добавляем колонки если их нет
-            try:
-                await conn.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS farm_level INTEGER DEFAULT 1")
-            except Exception as e:
-                print(f"   Колонка farm_level уже есть или ошибка: {e}")
-            try:
-                await conn.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS last_farm TIMESTAMP DEFAULT NULL")
-            except Exception as e:
-                print(f"   Колонка last_farm уже есть или ошибка: {e}")
-            
-        print("✅ PostgreSQL подключена через внутренний URL")
-        return True
-    except Exception as e:
-        print(f"❌ Ошибка через внутренний URL: {e}")
-        
-        # Пробуем через публичный URL
+    print("🔌 Подключение к БД...")
+    
+    # Пробуем через DATABASE_URL (внутренний)
+    if DB_URL:
         try:
-            print("🔌 Подключение через публичный URL...")
-            pool = await asyncpg.create_pool(PUBLIC_DB_URL, min_size=1, max_size=5, timeout=15)
+            print("   Пробую через DATABASE_URL...")
+            pool = await asyncpg.create_pool(DB_URL, min_size=1, max_size=5, timeout=15)
             
             async with pool.acquire() as conn:
                 await conn.execute("""
@@ -91,11 +57,84 @@ async def connect_db():
                 except:
                     pass
                 
-            print("✅ PostgreSQL подключена через публичный URL")
+            print("✅ PostgreSQL подключена через DATABASE_URL")
             return True
-        except Exception as e2:
-            print(f"❌ Ошибка через публичный URL: {e2}")
-            return False
+        except Exception as e:
+            print(f"❌ Ошибка через DATABASE_URL: {e}")
+    
+    # Пробуем через DATABASE_PUBLIC_URL
+    if DB_PUBLIC_URL:
+        try:
+            print("   Пробую через DATABASE_PUBLIC_URL...")
+            pool = await asyncpg.create_pool(DB_PUBLIC_URL, min_size=1, max_size=5, timeout=15)
+            
+            async with pool.acquire() as conn:
+                await conn.execute("""
+                CREATE TABLE IF NOT EXISTS players(
+                    username TEXT PRIMARY KEY,
+                    xp INTEGER DEFAULT 1000,
+                    last_bonus DATE,
+                    wins INTEGER DEFAULT 0,
+                    losses INTEGER DEFAULT 0,
+                    farm_level INTEGER DEFAULT 1,
+                    last_farm TIMESTAMP DEFAULT NULL,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                )
+                """)
+                
+                try:
+                    await conn.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS farm_level INTEGER DEFAULT 1")
+                except:
+                    pass
+                try:
+                    await conn.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS last_farm TIMESTAMP DEFAULT NULL")
+                except:
+                    pass
+                
+            print("✅ PostgreSQL подключена через DATABASE_PUBLIC_URL")
+            return True
+        except Exception as e:
+            print(f"❌ Ошибка через DATABASE_PUBLIC_URL: {e}")
+    
+    # Пробуем собрать URL из отдельных переменных
+    if PGHOST and PGPASSWORD:
+        try:
+            manual_url = f"postgresql://{PGUSER}:{PGPASSWORD}@{PGHOST}:{PGPORT}/{PGDATABASE}"
+            print(f"   Пробую ручной URL: postgresql://{PGUSER}:***@{PGHOST}:{PGPORT}/{PGDATABASE}")
+            pool = await asyncpg.create_pool(manual_url, min_size=1, max_size=5, timeout=15)
+            
+            async with pool.acquire() as conn:
+                await conn.execute("""
+                CREATE TABLE IF NOT EXISTS players(
+                    username TEXT PRIMARY KEY,
+                    xp INTEGER DEFAULT 1000,
+                    last_bonus DATE,
+                    wins INTEGER DEFAULT 0,
+                    losses INTEGER DEFAULT 0,
+                    farm_level INTEGER DEFAULT 1,
+                    last_farm TIMESTAMP DEFAULT NULL,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                )
+                """)
+                
+                try:
+                    await conn.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS farm_level INTEGER DEFAULT 1")
+                except:
+                    pass
+                try:
+                    await conn.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS last_farm TIMESTAMP DEFAULT NULL")
+                except:
+                    pass
+                
+            print("✅ PostgreSQL подключена через ручной URL")
+            return True
+        except Exception as e:
+            print(f"❌ Ошибка через ручной URL: {e}")
+    
+    print("❌ Не удалось подключиться к БД ни одним способом")
+    return False
 
 async def init_db():
     return await connect_db()
@@ -112,7 +151,6 @@ async def get_xp(username: str) -> int:
 async def create_player(username: str):
     async with pool.acquire() as conn:
         await conn.execute("INSERT INTO players (username, xp) VALUES ($1, 1000) ON CONFLICT (username) DO NOTHING", username)
-        print(f"✅ Создан игрок {username}")
 
 async def update_xp(username: str, delta: int):
     async with pool.acquire() as conn:
