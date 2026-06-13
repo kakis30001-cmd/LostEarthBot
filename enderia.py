@@ -115,6 +115,22 @@ def save_to_log(username: str, message: str, is_bot: bool = False):
     except:
         pass
 
+# ========== СПОНТАННЫЕ СООБЩЕНИЯ ==========
+spontaneous_messages = [
+    "народ, как дела на фермах? у меня криперы уже 3 уровень",
+    "что молчим? пойдёмте вместе на сервер",
+    "эй, кто хочет сыграть в футбол? пиши 'энди футбол 100'",
+    "не забывайте, на мирный режим нужна заявка через бота",
+    "айпи сервера: java 150.241.85.40:25565, bedrock 150.241.85.40:19132",
+]
+
+async def send_spontaneous_message(bot, chat_id: int):
+    """отправляет спонтанное сообщение раз в 30-60 минут"""
+    while True:
+        await asyncio.sleep(random.randint(1800, 3600))
+        msg = random.choice(spontaneous_messages)
+        await bot.send_message(chat_id, f"{E_CAT_DANCE} {msg} {E_HEART}", parse_mode="HTML")
+
 # ========== ОСНОВНАЯ ФУНКЦИЯ ==========
 async def get_enderia_response(user_message: str, username: str, is_reply: bool = False, user_bio: str = "", game_result: str = None) -> str:
     global current_online, current_max
@@ -151,7 +167,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         await save_andy_dialog(username, user_message, response)
         return response
     
-    # ии ответ с 1000 токенов
+    # ии ответ
     if OPENROUTER_API_KEY:
         try:
             system_prompt = f"""ты энди, девушка-эндермен
