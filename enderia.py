@@ -1,12 +1,62 @@
-import os
-import random
-import re
-import aiohttp
 import asyncio
+import os
+import socket
+import struct
 import json
+import re
 from datetime import datetime
-from collections import defaultdict, deque
+from threading import Thread
+import random
+
+from aiogram import Bot, Dispatcher, types
+from aiogram.filters import CommandStart, Command
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+from aiogram.fsm.storage.memory import MemoryStorage
 from dotenv import load_dotenv
+from flask import Flask, send_from_directory
+
+from enderia import (
+    get_enderia_response,
+    should_respond,
+    set_server_online,
+    save_to_log,
+    send_spontaneous_message,
+    E_CAT_DANCE,
+    E_CAT_OK,
+    E_CAT_UP,
+    E_CAT_SURPRISED,
+    E_RABBIT,
+    E_ANIME,
+    E_HEART,
+    E_CROWN,
+    E_HOUSE,
+    E_NOTE,
+    E_MAGIC,
+    E_JOYSTICK,
+)
+
+from database import (
+    get_xp,
+    update_xp,
+    get_stats,
+    update_stats,
+    get_farms,
+    buy_farm,
+    upgrade_farm,
+    claim_income,
+    calculate_income,
+    get_leaderboard,
+    can_claim_daily_bonus,
+    claim_daily_bonus,
+    create_player,
+    init_db,
+)
+
+from games import (
+    game_dice_bet,
+    game_football_bet,
+    add_spit,
+)
 
 load_dotenv()
 
