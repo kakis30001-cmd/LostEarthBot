@@ -714,4 +714,60 @@ async def handle_callback(callback: CallbackQuery):
         username = callback.from_user.username or callback.from_user.first_name
         is_subscribed, has_bot_in_bio, status = await check_all_requirements(user_id, username)
         
-        text = f"""📋 <b>ПРОВЕРКА УСЛОВИЙ
+        text = f"""📋 <b>ПРОВЕРКА УСЛОВИЙ</b>
+
+1️⃣ <b>Подписка на канал</b> @LostEarthSMP:
+{'✅ ПОДПИСАН' if is_subscribed else '❌ НЕ ПОДПИСАН'}
+
+2️⃣ <b>Описание профиля</b> (@lostearth_bot):
+{'✅ НАЙДЕН' if has_bot_in_bio else '❌ НЕ НАЙДЕН'}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+<b>СТАТУС:</b> {status}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+{'🎉 Все условия выполнены! Фарма и бонусы работают 💜' if is_subscribed and has_bot_in_bio else '⚠️ Выполни все условия выше и нажми /check снова'}"""
+        
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=await get_requirements_keyboard())
+        await callback.answer()
+    
+    elif data == "how_to_add_bio":
+        text = f"""📖 <b>КАК ДОБАВИТЬ @lostearth_bot В ОПИСАНИЕ ПРОФИЛЯ</b>
+
+<b>ШАГ 1:</b> Открой настройки Telegram
+
+<b>ШАГ 2:</b> Нажми на свою фотографию / имя
+
+<b>ШАГ 3:</b> Найди поле "Описание" (Bio)
+
+<b>ШАГ 4:</b> Впиши туда:
+<code>@lostearth_bot</code>
+
+<b>ШАГ 5:</b> Нажми "Сохранить"
+
+<b>ШАГ 6:</b> Вернись в бот и нажми "ПРОВЕРИТЬ"
+
+⚠️ <b>ВАЖНО:</b> Если добавил, но бот не видит - подожди 1-2 минуты и проверь снова
+
+{E_HEART} После выполнения всех условий фарма и бонусы заработают!"""
+        
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=await get_requirements_keyboard())
+        await callback.answer()
+
+# ========== ЗАПУСК ==========
+async def main():
+    await connect_db()
+    
+    flask_thread = Thread(target=run_flask, daemon=True)
+    flask_thread.start()
+    
+    bot_info = await bot.get_me()
+    print("=" * 50)
+    print("бот lostearth запущен")
+    print(f"бот: @{bot_info.username}")
+    print("=" * 50)
+    
+    await dp.start_polling(bot)
+
+if __name__ == "__main__":
+    asyncio.run(main())
