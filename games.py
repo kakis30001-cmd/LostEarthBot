@@ -1,8 +1,24 @@
-import os
-import json
-import re
 import asyncio
-from datetime import datetime, date
+import random
+import re
+from datetime import datetime
+
+from database import (
+    get_xp,
+    update_xp,
+    get_stats,
+    update_stats,
+    get_farms,
+    buy_farm,
+    upgrade_farm,
+    claim_income,
+    calculate_income,
+    get_leaderboard,
+    can_claim_daily_bonus,
+    claim_daily_bonus,
+    create_player,
+    init_db,
+)
 
 # ========== ФАЙЛОВОЕ ХРАНИЛИЩЕ ==========
 PLAYERS_FILE = "players.json"
