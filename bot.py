@@ -341,6 +341,29 @@ async def handle_message(message: Message):
     # Если ответ на сообщение другого человека - плюемся
     if message.reply_to_message and replied_username:
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+        
+        # Верхняя часть: кто плюнул на кого
+        spit_text = f"{E_CAT_SURPRISED} <b>{username}</b> плюнул(а) на <b>{replied_username}</b>! {E_CAT_SURPRISED}"
+        
+        # Генерируем ответ Эндерии (без подписи внизу)
+        enderia_response = await get_enderia_response(f"плюнул на {replied_username}", username, is_reply=False, user_bio="")
+        
+        # Отправляем одним сообщением: сначала плюсок, потом ответ Эндерии
+        await message.reply(f"{spit_text}\n\n{E_HEART} {enderia_response}", parse_mode="HTML")
+        return
+    
+    # Обычное сообщение с упоминанием Эндерии
+    if should_respond(user_message):
+        await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+        user_bio = await get_user_bio(user_id)
+        response = await get_enderia_response(user_message, username, is_reply=False, user_bio=user_bio)
+        if response:
+            sent_msg = await message.reply(response, parse_mode="HTML")
+            last_bot_message_id[user_id] = sent_msg.message_id
+    
+    # Если ответ на сообщение другого человека - плюемся
+    if message.reply_to_message and replied_username:
+        await bot.send_chat_action(chat_id=message.chat.id, action="typing")
         response = f"{E_CAT_SURPRISED} <b>{username}</b> плюнул(а) в <b>{replied_username}</b>! {E_CAT_SURPRISED}\n\n{E_HEART} Эндерия: Ой-ой, кто тут ссорится? {E_CAT_DANCE}"
         await message.reply(response, parse_mode="HTML")
         return
