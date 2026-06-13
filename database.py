@@ -82,6 +82,35 @@ async def connect_db():
 async def init_db():
     return await connect_db()
 
+# Добавьте эту функцию в database.py
+
+async def check_user_subscribed(username: str, bot, channel_username: str) -> bool:
+    """Проверяет, подписан ли пользователь на канал"""
+    try:
+        # Получаем ID пользователя по username
+        # Нам нужно где-то хранить mapping username -> user_id
+        # Временно сделаем через таблицу
+        async with pool.acquire() as conn:
+            # Пытаемся получить user_id из таблицы
+            row = await conn.fetchrow("SELECT user_id FROM players WHERE username = $1", username)
+            if not row or not row["user_id"]:
+                return False
+            
+            user_id = row["user_id"]
+            member = await bot.get_chat_member(chat_id=f"@{channel_username}", user_id=user_id)
+            return member.status in ["member", "administrator", "creator"]
+    except Exception as e:
+        print(f"Ошибка проверки подписки: {e}")
+        return False
+
+async def save_user_id(username: str, user_id: int):
+    """Сохраняет связь username -> user_id"""
+    async with pool.acquire() as conn:
+        await conn.execute("""
+            UPDATE players SET user_id = $1 
+            WHERE username = $2 AND (user_id IS NULL OR user_id != $1)
+        """, user_id, username)
+
 async def get_pool():
     return pool
 
