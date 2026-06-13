@@ -2,7 +2,6 @@ import asyncpg
 import os
 from datetime import datetime, date
 
-# БЕРЁМ ИЗ ПЕРЕМЕННЫХ RAILWAY
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
 pool = None
@@ -41,6 +40,9 @@ async def connect_db():
 
 async def init_db():
     return await connect_db()
+
+async def get_pool():
+    return pool
 
 async def get_xp(username: str) -> int:
     async with pool.acquire() as conn:
