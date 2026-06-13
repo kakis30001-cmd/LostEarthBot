@@ -4,7 +4,7 @@ import re
 import aiohttp
 import asyncio
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from collections import defaultdict, deque
 from dotenv import load_dotenv
 
@@ -55,33 +55,43 @@ E_MAGIC = emoji(ENDERIA_EMOJI["magic"], "✨")
 E_JOYSTICK = emoji(ENDERIA_EMOJI["joystick"], "🎮")
 
 # ========== ПАМЯТЬ ==========
-user_memory = defaultdict(lambda: deque(maxlen=50))
-user_greeted = {}
+user_memory = defaultdict(lambda: deque(maxlen=90))  # 90 сообщений
+user_greeted = {}  # время последнего приветствия
+user_last_message_time = defaultdict(lambda: datetime.now())
 last_active = {}
 
 def add_to_memory(username: str, user_message: str, bot_response: str):
+    """добавляет сообщение в память"""
     user_memory[username].append(f"user: {user_message}")
-    user_memory[username].append(f"andy: {bot_response}")
+    user_memory[username].append(f"bot: {bot_response}")
 
 def get_user_context(username: str) -> str:
+    """возвращает последние сообщения диалога для контекста"""
     if username not in user_memory or len(user_memory[username]) == 0:
         return ""
-    return "\n".join(list(user_memory[username])[-20:])
+    return "\n".join(list(user_memory[username])[-90:])  # последние 90 сообщений
 
 def clear_user_memory(username: str):
     if username in user_memory:
         user_memory[username].clear()
     if username in user_greeted:
-        user_greeted[username] = False
+        user_greeted[username] = None
 
-def has_already_greeted(username: str) -> bool:
-    return user_greeted.get(username, False)
+def can_greet(username: str) -> bool:
+    """проверяет, можно ли поздороваться (не прошло ли 2 часа)"""
+    if username not in user_greeted or user_greeted[username] is None:
+        return True
+    last_greet = user_greeted[username]
+    if isinstance(last_greet, str):
+        last_greet = datetime.fromisoformat(last_greet)
+    return datetime.now() - last_greet > timedelta(hours=2)
 
 def mark_greeted(username: str):
-    user_greeted[username] = True
+    """отмечает время приветствия"""
+    user_greeted[username] = datetime.now().isoformat()
 
 def is_greeting(text: str) -> bool:
-    greetings = ["привет", "здравствуй", "хай", "hello", "приветик", "здарова", "ку"]
+    greetings = ["привет", "здравствуй", "хай", "hello", "приветик", "здарова", "ку", "доброе утро", "добрый день", "добрый вечер"]
     return any(g in text.lower() for g in greetings)
 
 def is_just_name(text: str) -> bool:
@@ -109,7 +119,7 @@ def set_server_online(online: int, max_players: int):
 def save_to_log(username: str, message: str, is_bot: bool = False):
     try:
         timestamp = datetime.now().strftime("%H:%M:%S")
-        who = "энди" if is_bot else username
+        who = "бот" if is_bot else username
         with open("chat.log", "a", encoding="utf-8") as f:
             f.write(f"[{timestamp}] {who}: {message}\n")
     except:
@@ -129,8 +139,6 @@ spontaneous_messages_list = [
 spontaneous_enabled = True
 
 async def send_spontaneous_message(bot, chat_id: int):
-    """отправляет спонтанное сообщение раз в 30-60 минут"""
-    global spontaneous_enabled
     while True:
         await asyncio.sleep(random.randint(1800, 3600))
         if spontaneous_enabled:
@@ -143,12 +151,13 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     
     save_to_log(username, user_message, is_bot=False)
     last_active[username] = datetime.now()
+    user_last_message_time[username] = datetime.now()
     
     await save_chat_message(username, user_message, is_bot=False)
     
-    already_greeted = has_already_greeted(username)
     is_greeting_msg = is_greeting(user_message)
     is_name_call = is_just_name(user_message)
+    can_say_greeting = can_greet(username)
     
     context = get_user_context(username)
     
@@ -158,20 +167,26 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     # просто позвали по имени
     if is_name_call and not is_reply:
         response = f"{E_CAT_OK} слушаю, {username} {E_HEART}"
-        if not already_greeted:
-            mark_greeted(username)
         add_to_memory(username, user_message, response)
         await save_chat_message(username, response, is_bot=True)
         await save_andy_dialog(username, user_message, response)
         return response
     
-    # уже здоровались
-    if already_greeted and is_greeting_msg and not is_reply:
-        response = f"{E_CAT_DANCE} {username}, я тут {E_HEART}"
-        add_to_memory(username, user_message, response)
-        await save_chat_message(username, response, is_bot=True)
-        await save_andy_dialog(username, user_message, response)
-        return response
+    # приветствие только если прошло 2 часа и это не ответ на сообщение
+    if is_greeting_msg and not is_reply:
+        if can_say_greeting:
+            mark_greeted(username)
+            response = f"{E_CAT_DANCE} привет, {username} {E_HEART}"
+            add_to_memory(username, user_message, response)
+            await save_chat_message(username, response, is_bot=True)
+            await save_andy_dialog(username, user_message, response)
+            return response
+        else:
+            response = f"{E_CAT_OK} {username} {E_HEART}"
+            add_to_memory(username, user_message, response)
+            await save_chat_message(username, response, is_bot=True)
+            await save_andy_dialog(username, user_message, response)
+            return response
     
     # ии ответ
     if OPENROUTER_API_KEY:
@@ -182,13 +197,15 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
 {context}
 
 важные правила:
-1. отвечай развёрнуто, но по делу
-2. если игрок пишет "почему" - посмотри в историю и объясни причину
-3. если игрок спрашивает про онлайн - скажи что сейчас {current_online}/{current_max}
-4. если спрашивают про сервер - дай айпи и про режимы
-5. не пиши про сервер если не спрашивают
-6. пиши с маленькой буквы
-7. используй эмодзи {E_CAT_DANCE} {E_HEART} {E_MAGIC}
+1. не подписывай сообщения как "энди" - это и так понятно
+2. не пиши "привет" если уже здоровались недавно
+3. отвечай развёрнуто, но по делу
+4. если игрок пишет "почему" - посмотри в историю и объясни причину
+5. если игрок спрашивает про онлайн - скажи что сейчас {current_online}/{current_max}
+6. если спрашивают про сервер - дай айпи и про режимы
+7. пиши с маленькой буквы
+8. используй эмодзи {E_CAT_DANCE} {E_HEART} {E_MAGIC}
+9. не ставь подпись в конце
 
 информация о сервере lostearth (если спросят):
 - режимы: мирный (нужна заявка через бота) и smp (без заявки)
@@ -201,7 +218,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
 
 текущее сообщение от {username}: {user_message}
 
-ответь как энди (с маленькой буквы, с эмодзи):"""
+ответь как энди (с маленькой буквы, с эмодзи, без подписи):"""
             
             for model in MODELS_CHAIN:
                 try:
@@ -221,8 +238,6 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
                                 data = await response.json()
                                 result = data["choices"][0]["message"]["content"].strip()
                                 result = re.sub(r'<[^>]+>', '', result)
-                                if not already_greeted and not is_reply:
-                                    mark_greeted(username)
                                 add_to_memory(username, user_message, result)
                                 save_to_log(username, result, is_bot=True)
                                 await save_chat_message(username, result, is_bot=True)
@@ -236,14 +251,11 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     
     # fallback
     fallbacks = [
-        f"{E_CAT_DANCE} {username}, я тут {E_HEART}",
+        f"{E_CAT_DANCE} {username} {E_HEART}",
         f"{E_CAT_OK} слушаю, {username} {E_HEART}",
     ]
     
     response = random.choice(fallbacks)
-    if not already_greeted and not is_reply:
-        mark_greeted(username)
-    
     add_to_memory(username, user_message, response)
     save_to_log(username, response, is_bot=True)
     await save_chat_message(username, response, is_bot=True)
