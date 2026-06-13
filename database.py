@@ -2,13 +2,20 @@ import asyncpg
 import os
 from datetime import datetime, date
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:GVvGhOwThbxIWOruuQkDsZVYPuzrMgdt@postgres.railway.internal:5432/railway")
+# БЕРЁМ ИЗ ПЕРЕМЕННЫХ RAILWAY
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
 pool = None
 
 async def connect_db():
     global pool
+    if not DATABASE_URL:
+        print("❌ НЕТ ПЕРЕМЕННОЙ DATABASE_URL")
+        print("📌 Добавь PostgreSQL плагин в Railway!")
+        return False
+    
     try:
+        print(f"🔌 Подключение к БД...")
         pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=5)
         
         async with pool.acquire() as conn:
@@ -26,20 +33,10 @@ async def connect_db():
             )
             """)
             
-            # Добавляем колонки если их нет (для совместимости)
-            try:
-                await conn.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS farm_level INTEGER DEFAULT 1")
-            except:
-                pass
-            try:
-                await conn.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS last_farm TIMESTAMP DEFAULT NULL")
-            except:
-                pass
-            
-        print("✅ PostgreSQL подключена")
+        print("✅ PostgreSQL подключена!")
         return True
     except Exception as e:
-        print(f"❌ Ошибка БД: {e}")
+        print(f"❌ Ошибка: {e}")
         return False
 
 async def init_db():
@@ -50,9 +47,8 @@ async def get_xp(username: str) -> int:
         row = await conn.fetchrow("SELECT xp FROM players WHERE username = $1", username)
         if row:
             return row["xp"]
-        else:
-            await create_player(username)
-            return 1000
+        await create_player(username)
+        return 1000
 
 async def create_player(username: str):
     async with pool.acquire() as conn:
@@ -91,9 +87,7 @@ async def get_stats(username: str) -> dict:
 async def get_farm_level(username: str) -> int:
     async with pool.acquire() as conn:
         row = await conn.fetchrow("SELECT farm_level FROM players WHERE username = $1", username)
-        if row:
-            return row["farm_level"]
-        return 1
+        return row["farm_level"] if row else 1
 
 async def update_farm_level(username: str, new_level: int):
     async with pool.acquire() as conn:
@@ -102,9 +96,7 @@ async def update_farm_level(username: str, new_level: int):
 async def get_last_farm(username: str):
     async with pool.acquire() as conn:
         row = await conn.fetchrow("SELECT last_farm FROM players WHERE username = $1", username)
-        if row and row["last_farm"]:
-            return row["last_farm"]
-        return None
+        return row["last_farm"] if row else None
 
 async def update_last_farm(username: str):
     async with pool.acquire() as conn:
