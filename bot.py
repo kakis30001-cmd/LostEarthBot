@@ -1,8 +1,5 @@
 import asyncio
 import os
-import socket
-import struct
-import json
 import re
 from datetime import datetime
 from threading import Thread
@@ -14,6 +11,7 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKe
 from aiogram.fsm.storage.memory import MemoryStorage
 from dotenv import load_dotenv
 from flask import Flask, send_from_directory
+from mcstatus import JavaServer
 
 from enderia import (
     get_enderia_response,
@@ -126,47 +124,41 @@ last_update = {}
 CHAT_ID = None
 
 # ========== MINECRAFT API ==========
-async def get_java_status(ip: str, port: int = 25565):
+async def get_java_status(ip: str, port: int = 25565) -> tuple:
+    """Проверяет статус Minecraft сервера через mcstatus"""
     try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(5)
-        sock.connect((ip, port))
+        print(f"🔍 Подключаюсь к {ip}:{port}...")
         
-        handshake = bytearray()
-        handshake.append(0x00)
-        handshake.extend(struct.pack('>i', 0))
-        handshake.append(len(ip))
-        handshake.extend(ip.encode())
-        handshake.extend(struct.pack('>H', port))
-        handshake.append(0x01)
+        server = JavaServer.lookup(f"{ip}:{port}")
+        status = await server.async_status()
         
-        sock.send(struct.pack('>i', len(handshake)))
-        sock.send(handshake)
-        sock.send(b'\x00\x00')
+        online = status.players.online
+        max_players = status.players.max
         
-        data = sock.recv(1024)
-        sock.close()
+        print(f"✅ Сервер онлайн: {online}/{max_players}")
+        return online, max_players
         
-        data_str = data.decode('utf-8', errors='ignore')
-        json_start = data_str.find('{')
-        if json_start != -1:
-            json_end = data_str.rfind('}') + 1
-            json_data = json.loads(data_str[json_start:json_end])
-            players = json_data.get("players", {})
-            return players.get("online", 0), players.get("max", 0)
-        return 0, 0
-    except:
+    except Exception as e:
+        print(f"❌ Ошибка: {e}")
         return 0, 0
 
 async def get_server_online():
+    """Возвращает онлайн сервера с кешированием"""
+    global online_cache, last_update
+    
     now = datetime.now().timestamp()
+    
     if "online" in last_update and now - last_update["online"] < 30:
         return online_cache.get("online", 0), online_cache.get("max", 0)
+    
     online, max_players = await get_java_status(SERVER["java_ip"], SERVER["java_port"])
+    
     online_cache["online"] = online
     online_cache["max"] = max_players
     last_update["online"] = now
+    
     set_server_online(online, max_players)
+    
     return online, max_players
 
 async def get_user_bio(user_id: int) -> str:
