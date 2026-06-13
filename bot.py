@@ -194,33 +194,23 @@ async def start_cmd(message: Message):
     
     text = f"""{E_MAGIC} <b>Добро пожаловать на {SERVER['name']}</b> {E_MAGIC}
 
-{E_HOUSE} <b>Мирный режим по заявкам!</b>
+{E_HOUSE} <b>{SERVER['mode']}</b>
 
 {E_CAT_DANCE} <b>Я Энди - твой живой помощник!</b>
 
 {E_CROWN} <b>Текущий онлайн:</b> {online}/{max_players}
 
-{E_JOYSTICK} <b>ИГРЫ:</b>
-🎲 /bet [сумма] - игра в кости (x2)
-⚽ /football [сумма] - футбол (гол = x2)
-/balance - баланс опыта
-/profile - твой профиль
-/daily - бонус 500 XP
-
-{E_HOUSE} <b>ФЕРМЫ ОПЫТА:</b>
-/farms - твои фермы
-/buy_farm - купить ферму
-/upgrade_farm - улучшить ферму
-/claim - собрать опыт
-/leaderboard - топ игроков
-
 {E_CROWN} <b>Стартовый баланс: 1000 XP</b>
-{E_JOYSTICK} <b>Минимальная ставка: 50 XP</b>
-
 {E_HEART} <b>Как получить бонус?</b>
 Добавь @lostearth_bot в описание профиля!
 
-{E_RABBIT} {E_ANIME} {E_CAT_DANCE}"""
+{E_RABBIT} {E_ANIME} {E_CAT_DANCE}
+
+📝 <b>Доступные команды:</b>
+/games - список всех игр и ферм
+/balance - баланс опыта
+/profile - твой профиль
+/daily - бонус 500 XP"""
     await message.answer(text, parse_mode="HTML", reply_markup=get_main_keyboard())
 
 @dp.message(Command("online"))
@@ -306,10 +296,9 @@ async def bet_cmd(message: Message):
 
 @dp.message(Command("football"))
 @dp.message(Command("foot"))
-@dp.message(Command("футбол"))
 async def football_cmd(message: Message):
     username = message.from_user.username or message.from_user.first_name
-    match = re.match(r"^/(?:football|foot|футбол)\s+(\d+)$", message.text)
+    match = re.match(r"^/(?:football|foot)\s+(\d+)$", message.text)
     if not match:
         await message.answer(f"⚽ Используй: /football [сумма]\n{E_CROWN} Минимальная ставка: 50 XP\nПример: /football 100", parse_mode="HTML")
         return
@@ -436,7 +425,7 @@ async def leaderboard_cmd(message: Message):
 
 @dp.message(Command("games"))
 async def games_cmd(message: Message):
-    text = f"""{E_JOYSTICK} <b>ДОСТУПНЫЕ ИГРЫ</b> {E_JOYSTICK}
+    text = f"""{E_JOYSTICK} <b>ДОСТУПНЫЕ ИГРЫ И ФЕРМЫ</b> {E_JOYSTICK}
 
 {E_CROWN} <b>БАЛАНС:</b>
 /balance - баланс опыта
@@ -444,7 +433,7 @@ async def games_cmd(message: Message):
 /daily - бонус 500 XP
 
 {E_JOYSTICK} <b>ИГРЫ:</b>
-🎲 /bet [сумма] - игра в кости (x2)
+🎲 /bet [сумма] - игра в кости (выигрыш x2)
 ⚽ /football [сумма] - футбол (гол = x2)
 
 {E_HOUSE} <b>ФЕРМЫ:</b>
@@ -504,10 +493,16 @@ async def handle_message(message: Message):
     if user_message.startswith("/"):
         return
     
-    if should_respond(user_message):
+    # Проверяем, является ли это ответом на сообщение бота
+    is_reply_to_bot = False
+    if message.reply_to_message:
+        if message.reply_to_message.from_user.id == bot.id:
+            is_reply_to_bot = True
+    
+    if should_respond(user_message) or is_reply_to_bot:
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
         user_bio = await get_user_bio(message.from_user.id)
-        response = await get_enderia_response(user_message, username, is_reply=False, user_bio=user_bio)
+        response = await get_enderia_response(user_message, username, is_reply=is_reply_to_bot, user_bio=user_bio)
         if response:
             await message.reply(response, parse_mode="HTML")
 
@@ -518,7 +513,7 @@ async def handle_callback(callback: CallbackQuery):
     
     if data == "menu_main":
         online, max_players = await get_server_online()
-        text = f"{E_HEART} <b>Главное меню</b>\n\n{E_CROWN} Онлайн: {online}/{max_players}\n\n{E_CAT_DANCE} /games - игры, /farms - фермы"
+        text = f"{E_HEART} <b>Главное меню</b>\n\n{E_CROWN} Онлайн: {online}/{max_players}\n\n{E_CAT_DANCE} /games - все команды"
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_main_keyboard())
         await callback.answer()
     
@@ -542,7 +537,7 @@ async def handle_callback(callback: CallbackQuery):
         await callback.answer()
     
     elif data == "menu_enderia":
-        text = f"{E_HEART} <b>Энди - твой живой помощник</b> {E_HEART}\n\n{E_CAT_DANCE} <b>Кто я?</b>\nЯ девушка-эндермен, хранительница Края.\n\n{E_NOTE} <b>Как ко мне обратиться:</b>\nНапиши: Энди\n\n{E_JOYSTICK} <b>Игры:</b>\n/bet, /football, /balance, /profile, /daily\n\n{E_HOUSE} <b>Фермы:</b>\n/farms, /buy_farm, /upgrade_farm, /claim\n\n{E_MAGIC} <b>Ежедневный бонус 500 XP</b>\nДобавь @lostearth_bot в описание профиля!"
+        text = f"{E_HEART} <b>Энди - твой живой помощник</b> {E_HEART}\n\n{E_CAT_DANCE} <b>Кто я?</b>\nЯ девушка-эндермен, хранительница Края.\n\n{E_NOTE} <b>Как ко мне обратиться:</b>\nНапиши: Энди\n\n{E_JOYSTICK} <b>Игры и фермы:</b>\n/games - список всех команд\n\n{E_MAGIC} <b>Ежедневный бонус 500 XP</b>\nДобавь @lostearth_bot в описание профиля!"
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_back_keyboard())
         await callback.answer()
     
