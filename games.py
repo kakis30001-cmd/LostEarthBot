@@ -211,12 +211,12 @@ async def play_football(bot, chat_id: int):
     msg = await bot.send_dice(chat_id, emoji="⚽")
     return msg.dice.value
 
-async def game_dice_bet(username: str, bet_amount: int, bot, chat_id: int) -> str:
+async def game_dice_bet(username: str, bet_amount: int, bot, chat_id: int) -> tuple[str, str]:
     xp = get_xp(username)
     if xp < bet_amount:
-        return f"💰 {username}, у тебя всего {xp} XP! Не хватает на ставку {bet_amount}"
+        return f"💰 {username}, у тебя всего {xp} XP! Не хватает на ставку {bet_amount}", None
     if bet_amount < 50:
-        return f"🎲 {username}, минимальная ставка 50 XP!"
+        return f"🎲 {username}, минимальная ставка 50 XP!", None
     
     await bot.send_message(chat_id, f"🎲 {username} бросает кубик...")
     player_value = await roll_dice(bot, chat_id)
@@ -230,21 +230,24 @@ async def game_dice_bet(username: str, bet_amount: int, bot, chat_id: int) -> st
         update_xp(username, win_amount)
         update_stats(username, is_win=True)
         new_xp = get_xp(username)
-        return f"🎉 ПОБЕДА! 🎉\n\nТвой кубик: {player_value}\nМой кубик: {bot_value}\n\n✨ Ты выиграл {win_amount} XP!\n💰 Баланс: {new_xp} XP"
+        result_text = f"🎉 ПОБЕДА! 🎉\n\nТвой кубик: {player_value}\nМой кубик: {bot_value}\n\n✨ Ты выиграл {win_amount} XP!\n💰 Баланс: {new_xp} XP"
+        return result_text, f"Выиграл {win_amount} XP в кости!"
     elif player_value < bot_value:
         update_xp(username, -bet_amount)
         update_stats(username, is_win=False)
         new_xp = get_xp(username)
-        return f"😔 ПРОИГРЫШ...\n\nТвой кубик: {player_value}\nМой кубик: {bot_value}\n\n💔 Ты проиграл {bet_amount} XP!\n💰 Баланс: {new_xp} XP"
+        result_text = f"😔 ПРОИГРЫШ...\n\nТвой кубик: {player_value}\nМой кубик: {bot_value}\n\n💔 Ты проиграл {bet_amount} XP!\n💰 Баланс: {new_xp} XP"
+        return result_text, f"Проиграл {bet_amount} XP в кости!"
     else:
-        return f"🤝 НИЧЬЯ!\n\nОба выбросили {player_value}\n\n💰 Ставка возвращена!\n💰 Баланс: {xp} XP"
+        result_text = f"🤝 НИЧЬЯ!\n\nОба выбросили {player_value}\n\n💰 Ставка возвращена!\n💰 Баланс: {xp} XP"
+        return result_text, f"Ничья в кости! Ставка {bet_amount} XP возвращена"
 
-async def game_football_bet(username: str, bet_amount: int, bot, chat_id: int) -> str:
+async def game_football_bet(username: str, bet_amount: int, bot, chat_id: int) -> tuple[str, str]:
     xp = get_xp(username)
     if xp < bet_amount:
-        return f"💰 {username}, у тебя всего {xp} XP! Не хватает на ставку {bet_amount}"
+        return f"💰 {username}, у тебя всего {xp} XP! Не хватает на ставку {bet_amount}", None
     if bet_amount < 50:
-        return f"⚽ {username}, минимальная ставка 50 XP!"
+        return f"⚽ {username}, минимальная ставка 50 XP!", None
     
     await bot.send_message(chat_id, f"⚽ {username} бьёт по воротам...")
     player_value = await play_football(bot, chat_id)
@@ -253,21 +256,22 @@ async def game_football_bet(username: str, bet_amount: int, bot, chat_id: int) -
     await bot.send_message(chat_id, f"🐱 Энди защищает ворота...")
     bot_value = await play_football(bot, chat_id)
     
-    # В футболе: 1-2-3 это промах/сэйв, 4-5-6 это гол
     player_goal = player_value >= 4
     bot_save = bot_value >= 4
     
     if player_goal and not bot_save:
-        win_amount = bet_amount * 2  # x2 за гол
+        win_amount = bet_amount * 2
         update_xp(username, win_amount)
         update_stats(username, is_win=True)
         new_xp = get_xp(username)
-        return f"⚽ ГОЛ! ПОБЕДА! ⚽\n\nТвой удар: {player_value}\nСэйв Энди: {bot_value}\n\n✨ Ты забил гол и выиграл {win_amount} XP!\n💰 Баланс: {new_xp} XP"
+        result_text = f"⚽ ГОЛ! ПОБЕДА! ⚽\n\nТвой удар: {player_value}\nСэйв Энди: {bot_value}\n\n✨ Ты забил гол и выиграл {win_amount} XP!\n💰 Баланс: {new_xp} XP"
+        return result_text, f"Забил гол и выиграл {win_amount} XP в футболе!"
     elif not player_goal and bot_save:
         update_xp(username, -bet_amount)
         update_stats(username, is_win=False)
         new_xp = get_xp(username)
-        return f"😔 ПРОМАХ...\n\nТвой удар: {player_value}\nСэйв Энди: {bot_value}\n\n💔 Ты промахнулся и проиграл {bet_amount} XP!\n💰 Баланс: {new_xp} XP"
+        result_text = f"😔 ПРОМАХ...\n\nТвой удар: {player_value}\nСэйв Энди: {bot_value}\n\n💔 Ты промахнулся и проиграл {bet_amount} XP!\n💰 Баланс: {new_xp} XP"
+        return result_text, f"Промахнулся и проиграл {bet_amount} XP в футболе!"
     else:
-        # Ничья или вратарь пропустил но игрок не забил и т.д.
-        return f"🤝 НИЧЬЯ!\n\nТвой удар: {player_value}\nСэйв Энди: {bot_value}\n\n💰 Ставка возвращена!\n💰 Баланс: {xp} XP"
+        result_text = f"🤝 НИЧЬЯ!\n\nТвой удар: {player_value}\nСэйв Энди: {bot_value}\n\n💰 Ставка возвращена!\n💰 Баланс: {xp} XP"
+        return result_text, f"Ничья в футболе! Ставка {bet_amount} XP возвращена"
