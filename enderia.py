@@ -124,7 +124,7 @@ spontaneous_messages = [
 async def send_spontaneous_message(bot, chat_id: int):
     """Отправляет спонтанное сообщение в чат"""
     while True:
-        await asyncio.sleep(random.randint(1800, 3600))  # 30-60 минут
+        await asyncio.sleep(random.randint(1800, 3600))
         
         if current_online > 0:
             msg = random.choice(spontaneous_messages)
@@ -142,29 +142,24 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     is_greeting_msg = is_greeting(user_message)
     is_name_call = is_just_name(user_message)
     
-    # Если есть результат игры - отправляем в ИИ для реакции
     if game_result:
-        user_message = f"[РЕЗУЛЬТАТ ИГРЫ: {game_result}] {user_message}"
+        user_message = f"[{game_result}] {user_message}"
     
-    # Если это ответ на сообщение Энди - продолжаем диалог
     if is_reply:
         pass
     
-    # Если позвали по имени
     if is_name_call and not is_reply:
-        response = f"{E_CAT_OK} Слушаю, {username}! Что хотел узнать? Можем сыграть в кости или футбол! {E_HEART}"
+        response = f"{E_CAT_OK} Слушаю, {username}! Что хотел узнать? Можем сыграть в кости, футбол или плюнуть в кого-то! {E_HEART}"
         if not already_greeted:
             mark_greeted(username)
         add_to_memory(username, user_message, response)
         return response
     
-    # Если уже здоровались и это не ответ - не здороваемся
     if already_greeted and is_greeting_msg and not is_reply:
         response = f"{E_CAT_DANCE} {username}, мы уже общаемся! Хочешь сыграть? {E_JOYSTICK}"
         add_to_memory(username, user_message, response)
         return response
     
-    # Пытаемся получить ответ от ИИ
     if OPENROUTER_API_KEY:
         try:
             current_time = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
@@ -183,18 +178,15 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
 ИГРЫ В ТЕЛЕГРАМ БОТЕ:
 - "энди кубик [сумма]" - игра в кости (выигрыш x2)
 - "энди футбол [сумма]" - футбол (гол = x2)
+- "энди плюнуть" (ответ на сообщение игрока) - плюнуть в игрока за 30 XP
 - "фарма" - собрать опыт с ферм
-
-ФЕРМЫ ОПЫТА:
-- /farms - посмотреть фермы
-- /buy_farm - купить ферму
 
 ПРАВИЛА:
 1. Отвечай коротко (2-4 предложения)
 2. Будь милой, используй эмодзи 🐱 💜 ✨
-3. Если игрок написал "энди кубик 100" - объясни что это игра в кости
-4. Если игрок написал "энди футбол 100" - объясни что это футбол
-5. Если игрок написал "фарма" - объясни что это сбор опыта
+3. Если кто-то плюнул в другого игрока - можешь поржать или возмутиться
+4. Если игрок проиграл в игре - подбодри
+5. Если игрок выиграл - поздравь
 
 Ответь на сообщение игрока {username}: {user_message}"""
             
@@ -235,7 +227,6 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         except Exception as e:
             print(f"Ошибка ИИ: {e}")
     
-    # Fallback
     fallbacks = [
         f"{E_CAT_DANCE} {username}, я тут! Хочешь сыграть? Напиши 'энди кубик 100' или 'энди футбол 100' {E_HEART}",
         f"{E_MAGIC} {username}, телепортнулась к тебе! Поиграем? {E_JOYSTICK}",
