@@ -51,6 +51,9 @@ from games import (
     game_dice_bet,
     FARMS,
     UPGRADE_COSTS,
+    FARM_EMOJI,
+    FARM_BASE,
+    FARM_COST,
 )
 
 load_dotenv()
@@ -166,25 +169,25 @@ async def get_user_bio(user_id: int) -> str:
 # ========== КЛАВИАТУРЫ ==========
 def get_main_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="IP И ОНЛАЙН", callback_data="menu_ip", icon_custom_emoji_id=BUTTON_EMOJI_ID["door"])],
-        [InlineKeyboardButton(text="ПРАВИЛА", web_app=WebAppInfo(url=RULES_URL), icon_custom_emoji_id=BUTTON_EMOJI_ID["note"]),
-         InlineKeyboardButton(text="ЗАЯВКА", web_app=WebAppInfo(url=APPLY_URL), icon_custom_emoji_id=BUTTON_EMOJI_ID["rabbit_fly"])],
-        [InlineKeyboardButton(text="ПРЕМИУМ", callback_data="menu_premium", icon_custom_emoji_id=BUTTON_EMOJI_ID["crown"]),
-         InlineKeyboardButton(text="ЭНДЕРИЯ", callback_data="menu_enderia", icon_custom_emoji_id=BUTTON_EMOJI_ID["cat_ok"])],
-        [InlineKeyboardButton(text="🏭 ФЕРМЫ", callback_data="menu_farms", icon_custom_emoji_id=BUTTON_EMOJI_ID["house"]),
-         InlineKeyboardButton(text="🏆 ТОП", callback_data="menu_top", icon_custom_emoji_id=BUTTON_EMOJI_ID["crown"])],
-        [InlineKeyboardButton(text="🎮 ИГРЫ", callback_data="menu_games", icon_custom_emoji_id=BUTTON_EMOJI_ID["joystick"])]
+        [InlineKeyboardButton(text="🖥️ IP И ОНЛАЙН", callback_data="menu_ip")],
+        [InlineKeyboardButton(text="📜 ПРАВИЛА", web_app=WebAppInfo(url=RULES_URL)),
+         InlineKeyboardButton(text="📝 ЗАЯВКА", web_app=WebAppInfo(url=APPLY_URL))],
+        [InlineKeyboardButton(text="👑 ПРЕМИУМ", callback_data="menu_premium"),
+         InlineKeyboardButton(text="💜 ЭНДЕРИЯ", callback_data="menu_enderia")],
+        [InlineKeyboardButton(text="🏭 ФЕРМЫ", callback_data="menu_farms"),
+         InlineKeyboardButton(text="🎮 ИГРЫ", callback_data="menu_games")],
+        [InlineKeyboardButton(text="🏆 ТОП", callback_data="menu_top")]
     ])
 
 def get_farms_keyboard():
     """Клавиатура для управления фермами"""
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📋 МОИ ФЕРМЫ", callback_data="farms_my")],
-        [InlineKeyboardButton(text="🕷️ КУПИТЬ ПАУКОВ", callback_data="buy_farm_пауков"),
-         InlineKeyboardButton(text="🧟 КУПИТЬ ЗОМБИ", callback_data="buy_farm_зомби")],
-        [InlineKeyboardButton(text="💥 КУПИТЬ КРИПЕРОВ", callback_data="buy_farm_криперов"),
-         InlineKeyboardButton(text="🏹 КУПИТЬ СКЕЛЕТОВ", callback_data="buy_farm_скелетов")],
-        [InlineKeyboardButton(text="👾 КУПИТЬ ЭНДЕРМЕНОВ", callback_data="buy_farm_эндерменов")],
+        [InlineKeyboardButton(text="🕷️ КУПИТЬ ПАУКОВ (500 XP)", callback_data="buy_farm_пауков"),
+         InlineKeyboardButton(text="🧟 КУПИТЬ ЗОМБИ (800 XP)", callback_data="buy_farm_зомби")],
+        [InlineKeyboardButton(text="💥 КУПИТЬ КРИПЕРОВ (1500 XP)", callback_data="buy_farm_криперов"),
+         InlineKeyboardButton(text="🏹 КУПИТЬ СКЕЛЕТОВ (400 XP)", callback_data="buy_farm_скелетов")],
+        [InlineKeyboardButton(text="👾 КУПИТЬ ЭНДЕРМЕНОВ (2500 XP)", callback_data="buy_farm_эндерменов")],
         [InlineKeyboardButton(text="⬆️ УЛУЧШИТЬ ФЕРМУ", callback_data="farms_upgrade")],
         [InlineKeyboardButton(text="💰 СОБРАТЬ ОПЫТ", callback_data="farms_claim")],
         [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="menu_main")]
@@ -198,11 +201,34 @@ def get_upgrade_keyboard(username: str):
         level = data.get("level", 1)
         if level < 5:
             cost = UPGRADE_COSTS[level + 1]
-            farm_emoji = {"пауков": "🕷️", "зомби": "🧟", "криперов": "💥", "скелетов": "🏹", "эндерменов": "👾"}
-            emoji_farm = farm_emoji.get(name, "🏭")
+            emoji_farm = FARM_EMOJI.get(name, "🏭")
             keyboard.append([InlineKeyboardButton(text=f"{emoji_farm} {name} (ур.{level} -> {level+1}) - {cost} XP", callback_data=f"upgrade_{name}")])
+    if not keyboard:
+        keyboard.append([InlineKeyboardButton(text="❌ НЕТ ФЕРМ ДЛЯ УЛУЧШЕНИЯ", callback_data="farms_none")])
     keyboard.append([InlineKeyboardButton(text="◀️ НАЗАД", callback_data="menu_farms")])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+def get_games_keyboard():
+    """Клавиатура для игр"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🎲 ИГРА В КОСТИ", callback_data="games_bet")],
+        [InlineKeyboardButton(text="💰 МОЙ БАЛАНС", callback_data="games_balance")],
+        [InlineKeyboardButton(text="👤 МОЙ ПРОФИЛЬ", callback_data="games_profile")],
+        [InlineKeyboardButton(text="🎁 ДНЕВНОЙ БОНУС", callback_data="games_daily")],
+        [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="menu_main")]
+    ])
+
+def get_bet_keyboard():
+    """Клавиатура для ставок в кости"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="50 XP", callback_data="bet_50"),
+         InlineKeyboardButton(text="100 XP", callback_data="bet_100"),
+         InlineKeyboardButton(text="200 XP", callback_data="bet_200")],
+        [InlineKeyboardButton(text="500 XP", callback_data="bet_500"),
+         InlineKeyboardButton(text="1000 XP", callback_data="bet_1000"),
+         InlineKeyboardButton(text="5000 XP", callback_data="bet_5000")],
+        [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="menu_games")]
+    ])
 
 def get_ip_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -222,9 +248,6 @@ async def start_cmd(message: Message):
     init_player(username)
     online, max_players = await get_server_online()
     xp = get_xp(username)
-    farms = get_farms(username)
-    farm_count = len(farms)
-    total_income = calculate_income(farms)
     
     text = f"""{E_MAGIC} <b>Добро пожаловать на {SERVER['name']}</b> {E_MAGIC}
 
@@ -232,295 +255,19 @@ async def start_cmd(message: Message):
 
 {E_CAT_DANCE} <b>Я Эндерия - твой живой помощник!</b>
 
-{E_CROWN} <b>Твой профиль:</b>
-├─ Опыт: {xp} XP
-├─ Ферм: {farm_count}
-└─ Доход в час: {total_income} XP
+{E_CROWN} <b>Текущий онлайн:</b> {online}/{max_players}
+{E_CROWN} <b>Твой опыт:</b> {xp} XP
 
-{E_JOYSTICK} <b>ИГРЫ:</b>
-/bet (сумма) - игра в кости (x2)
-
-{E_HOUSE} <b>ФЕРМЫ ОПЫТА:</b>
-🕷️ Пауки - 1000 XP (50/час)
-🧟 Зомби - 1000 XP (75/час)
-💥 Криперы - 1000 XP (100/час)
-🏹 Скелеты - 1000 XP (60/час)
-👾 Эндермены - 1500 XP (150/час)
-
-{E_MAGIC} <b>Улучшение ферм:</b>
-2 ур. - 500 XP (x2 доход)
-3 ур. - 1000 XP (x3 доход)
-4 ур. - 2000 XP (x4 доход)
-5 ур. - 5000 XP (x5 доход)
-
-{E_HEART} <b>Как получить бонус?</b>
+{E_HEART} <b>Дневной бонус:</b>
 Добавь @lostearth_bot в описание профиля!
-/daily - бонус 500 XP
 
-{E_RABBIT} {E_ANIME} {E_CAT_DANCE}"""
+🐰💜🐱"""
     await message.answer(text, parse_mode="HTML", reply_markup=get_main_keyboard())
 
 @dp.message(Command("online"))
 async def cmd_online(message: Message):
     online, max_players = await get_server_online()
     await message.answer(f"{E_CROWN} <b>Онлайн: {online}/{max_players}</b> {E_CAT_DANCE}", parse_mode="HTML")
-
-@dp.message(Command("balance"))
-@dp.message(Command("bal"))
-async def balance_cmd(message: Message):
-    username = message.from_user.username or message.from_user.first_name
-    xp = get_xp(username)
-    await message.answer(f"{E_CROWN} {username}, твой баланс: {xp} XP! {E_JOYSTICK}", parse_mode="HTML")
-
-@dp.message(Command("profile"))
-async def profile_cmd(message: Message):
-    username = message.from_user.username or message.from_user.first_name
-    xp = get_xp(username)
-    stats = get_stats(username)
-    farms = get_farms(username)
-    farm_count = len(farms)
-    total_income = calculate_income(farms)
-    
-    text = f"""{E_CROWN} <b>ПРОФИЛЬ ИГРОКА</b> {E_CROWN}
-
-{E_HOUSE} Имя: {username}
-{E_CROWN} Опыт: {xp} XP
-{E_JOYSTICK} Побед: {stats['wins']}
-{E_HEART} Поражений: {stats['losses']}
-{E_NOTE} Ферм: {farm_count}
-{E_MAGIC} Доход в час: {total_income} XP
-
-{E_MAGIC} <b>Ежедневный бонус: +500 XP</b>
-{E_NOTE} Добавь в описание: @lostearth_bot
-
-{E_CAT_OK} /daily - получить бонус! {E_HEART}"""
-    await message.answer(text, parse_mode="HTML")
-
-@dp.message(Command("daily"))
-async def daily_cmd(message: Message):
-    username = message.from_user.username or message.from_user.first_name
-    user_bio = await get_user_bio(message.from_user.id)
-    has_bot_in_bio = "@lostearth_bot" in user_bio.lower() if user_bio else False
-    
-    if not has_bot_in_bio:
-        text = f"""{E_CAT_SURPRISED} <b>НЕТ БОНУСА!</b> {E_CAT_SURPRISED}
-
-Чтобы получать ежедневный бонус 500 XP, добавь в описание своего профиля:
-
-<b>@lostearth_bot</b>
-
-{E_NOTE} <b>Как это сделать:</b>
-1. Зайди в настройки Telegram
-2. Нажми на свою фотографию
-3. Выбери "Редактировать профиль"
-4. В разделе "Описание" добавь: @lostearth_bot
-5. Сохрани и возвращайся!
-
-{E_HEART} После добавления напиши /daily снова! {E_CAT_OK}"""
-        await message.answer(text, parse_mode="HTML")
-        return
-    
-    if can_claim_daily_bonus(username):
-        amount = claim_daily_bonus(username)
-        xp = get_xp(username)
-        text = f"{E_MAGIC} <b>ЕЖЕДНЕВНЫЙ БОНУС!</b> {E_MAGIC}\n\n{E_CROWN} +{amount} XP!\n{E_HOUSE} Баланс: {xp} XP\n\n{E_RABBIT} Заходи завтра снова! {E_HEART}"
-        await message.answer(text, parse_mode="HTML")
-    else:
-        text = f"{E_HEART} {username}, ты уже получал бонус сегодня! Возвращайся завтра! {E_CAT_OK}"
-        await message.answer(text, parse_mode="HTML")
-
-@dp.message(Command("bet"))
-async def bet_cmd(message: Message):
-    username = message.from_user.username or message.from_user.first_name
-    match = re.match(r"^/bet\s+(\d+)$", message.text)
-    if not match:
-        await message.answer(f"{E_JOYSTICK} Используй: /bet (сумма)\n{E_CROWN} Минимальная ставка: 50 XP\nПример: /bet 100", parse_mode="HTML")
-        return
-    
-    bet_amount = int(match.group(1))
-    if bet_amount < 50:
-        await message.answer(f"{E_JOYSTICK} Минимальная ставка 50 XP!", parse_mode="HTML")
-        return
-    
-    response = await game_dice_bet(username, bet_amount, bot, message.chat.id)
-    await message.answer(response, parse_mode="HTML")
-
-@dp.message(Command("farms"))
-async def farms_cmd(message: Message):
-    username = message.from_user.username or message.from_user.first_name
-    farms = get_farms(username)
-    
-    if not farms:
-        text = f"""{E_HOUSE} <b>У тебя пока нет ферм!</b> {E_HOUSE}
-
-Доступные фермы:
-🕷️ <b>Пауки</b> - 1000 XP (50/час)
-🧟 <b>Зомби</b> - 1000 XP (75/час)
-💥 <b>Криперы</b> - 1000 XP (100/час)
-🏹 <b>Скелеты</b> - 1000 XP (60/час)
-👾 <b>Эндермены</b> - 1500 XP (150/час)
-
-{E_NOTE} /buy_farm (название) - купить ферму
-{E_MAGIC} /claim - собрать опыт
-
-Пример: /buy_farm криперов"""
-        await message.answer(text, parse_mode="HTML")
-        return
-    
-    text = f"{E_HOUSE} <b>ТВОИ ФЕРМЫ</b> {E_HOUSE}\n\n"
-    total_income = 0
-    farm_emoji = {"пауков": "🕷️", "зомби": "🧟", "криперов": "💥", "скелетов": "🏹", "эндерменов": "👾"}
-    farm_base = {"пауков": 50, "зомби": 75, "криперов": 100, "скелетов": 60, "эндерменов": 150}
-    
-    for name, data in farms.items():
-        emoji_farm = farm_emoji.get(name, "🏭")
-        base = farm_base.get(name, 50)
-        level = data.get("level", 1)
-        income = base * level
-        total_income += income
-        text += f"{emoji_farm} <b>{name}</b>: ур. {level} ({income} XP/час)\n"
-    
-    text += f"\n{E_CROWN} <b>Общий доход:</b> {total_income} XP/час"
-    text += f"\n{E_MAGIC} /claim - собрать опыт"
-    text += f"\n{E_CAT_UP} /upgrade_farm (название) - улучшить ферму"
-    await message.answer(text, parse_mode="HTML")
-
-@dp.message(Command("buy_farm"))
-async def buy_farm_cmd(message: Message):
-    username = message.from_user.username or message.from_user.first_name
-    parts = message.text.split(maxsplit=1)
-    if len(parts) < 2:
-        await message.answer(f"{E_NOTE} Используй: /buy_farm (название)\n\nДоступны: пауков, зомби, криперов, скелетов, эндерменов", parse_mode="HTML")
-        return
-    
-    farm_name = parts[1].lower()
-    farm_map = {
-        "пауков": "пауков", "паук": "пауков",
-        "зомби": "зомби", "зомб": "зомби",
-        "криперов": "криперов", "крипер": "криперов",
-        "скелетов": "скелетов", "скелет": "скелетов",
-        "эндерменов": "эндерменов", "эндермен": "эндерменов"
-    }
-    
-    if farm_name not in farm_map:
-        await message.answer(f"{E_CAT_SURPRISED} Ферма не найдена! Доступны: пауков, зомби, криперов, скелетов, эндерменов", parse_mode="HTML")
-        return
-    
-    success, msg = buy_farm(username, farm_map[farm_name])
-    await message.answer(msg, parse_mode="HTML")
-
-@dp.message(Command("upgrade_farm"))
-async def upgrade_farm_cmd(message: Message):
-    username = message.from_user.username or message.from_user.first_name
-    parts = message.text.split(maxsplit=1)
-    if len(parts) < 2:
-        farms = get_farms(username)
-        if not farms:
-            await message.answer(f"{E_NOTE} У тебя нет ферм! Купи сначала: /buy_farm пауков", parse_mode="HTML")
-            return
-        farm_list = ", ".join(farms.keys())
-        await message.answer(f"{E_NOTE} Используй: /upgrade_farm (название)\n\nТвои фермы: {farm_list}\n\nПример: /upgrade_farm криперов", parse_mode="HTML")
-        return
-    
-    farm_name = parts[1].lower()
-    farm_map = {
-        "пауков": "пауков", "паук": "пауков",
-        "зомби": "зомби", "зомб": "зомби",
-        "криперов": "криперов", "крипер": "криперов",
-        "скелетов": "скелетов", "скелет": "скелетов",
-        "эндерменов": "эндерменов", "эндермен": "эндерменов"
-    }
-    
-    if farm_name not in farm_map:
-        await message.answer(f"{E_CAT_SURPRISED} Ферма не найдена!", parse_mode="HTML")
-        return
-    
-    success, msg = upgrade_farm(username, farm_map[farm_name])
-    await message.answer(msg, parse_mode="HTML")
-
-@dp.message(Command("claim"))
-async def claim_cmd(message: Message):
-    username = message.from_user.username or message.from_user.first_name
-    income = claim_income(username)
-    if income > 0:
-        xp = get_xp(username)
-        await message.answer(f"{E_MAGIC} <b>Собрано {income} XP</b> с ферм! {E_MAGIC}\n\n{E_CROWN} Твой опыт: {xp} XP {E_CAT_DANCE}", parse_mode="HTML")
-    else:
-        farms = get_farms(username)
-        if not farms:
-            await message.answer(f"{E_HOUSE} У тебя нет ферм! Купи первую: /buy_farm пауков {E_RABBIT}", parse_mode="HTML")
-        else:
-            await message.answer(f"{E_NOTE} Пока не накопилось опыта. Подожди немного или улучшай фермы! {E_CAT_UP}", parse_mode="HTML")
-
-@dp.message(Command("leaderboard"))
-@dp.message(Command("top"))
-async def leaderboard_cmd(message: Message):
-    leaders = get_leaderboard(10)
-    if not leaders:
-        await message.answer(f"{E_CROWN} Пока нет игроков в топе! Будь первым! {E_MAGIC}", parse_mode="HTML")
-        return
-    
-    text = f"{E_CROWN} <b>ТОП ИГРОКОВ ПО ОПЫТУ</b> {E_CROWN}\n\n"
-    for i, p in enumerate(leaders, 1):
-        medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else "📌"
-        text += f"{medal} <b>{p['username']}</b> - {p['xp']} XP (ферм: {p['farms_count']})\n"
-    await message.answer(text, parse_mode="HTML")
-
-@dp.message(Command("games"))
-async def games_cmd(message: Message):
-    text = f"""{E_JOYSTICK} <b>ДОСТУПНЫЕ КОМАНДЫ</b> {E_JOYSTICK}
-
-{E_CROWN} <b>БАЛАНС:</b>
-/balance - баланс опыта
-/profile - профиль игрока
-/daily - бонус 500 XP
-
-{E_JOYSTICK} <b>ИГРЫ:</b>
-/bet (сумма) - игра в кости (x2)
-
-{E_HOUSE} <b>ФЕРМЫ:</b>
-/farms - мои фермы
-/buy_farm (название) - купить ферму
-/upgrade_farm (название) - улучшить ферму
-/claim - собрать опыт
-/leaderboard - топ игроков
-
-{E_CROWN} <b>Стартовый баланс: 1000 XP</b>
-{E_JOYSTICK} <b>Минимальная ставка: 50 XP</b>
-
-{E_HEART} <b>Ежедневный бонус:</b>
-Добавь @lostearth_bot в описание профиля!"""
-    await message.answer(text, parse_mode="HTML")
-
-@dp.message(Command("help"))
-async def help_cmd(message: Message):
-    text = f"""{E_HEART} <b>Помощь по боту LostEarth</b> {E_HEART}
-
-{E_HOUSE} <b>Команды сервера:</b>
-/start - Главное меню
-/online - Показать онлайн
-
-{E_CROWN} <b>БАЛАНС:</b>
-/balance - баланс опыта
-/profile - профиль игрока
-/daily - бонус 500 XP
-
-{E_JOYSTICK} <b>ИГРЫ:</b>
-/bet (сумма) - игра в кости (x2)
-
-{E_HOUSE} <b>ФЕРМЫ:</b>
-/farms - мои фермы
-/buy_farm (название) - купить ферму
-/upgrade_farm (название) - улучшить ферму
-/claim - собрать опыт
-/leaderboard - топ игроков
-
-{E_CROWN} <b>Стартовый баланс: 1000 XP</b>
-{E_JOYSTICK} <b>Минимальная ставка: 50 XP</b>
-{E_MAGIC} <b>Ежедневный бонус: 500 XP</b>
-
-{E_CAT_DANCE} <i>Удачи в игре и фарме!</i> {E_HEART}"""
-    await message.answer(text, parse_mode="HTML")
 
 # ========== ОБРАБОТЧИК ==========
 @dp.message()
@@ -547,13 +294,11 @@ async def handle_callback(callback: CallbackQuery):
     data = callback.data
     username = callback.from_user.username or callback.from_user.first_name
     
+    # ========== ГЛАВНОЕ МЕНЮ ==========
     if data == "menu_main":
         online, max_players = await get_server_online()
         xp = get_xp(username)
-        farms = get_farms(username)
-        farm_count = len(farms)
-        total_income = calculate_income(farms)
-        text = f"{E_HEART} <b>Главное меню</b>\n\n{E_CROWN} Онлайн: {online}/{max_players}\n{E_CROWN} Твой опыт: {xp} XP\n{E_HOUSE} Ферм: {farm_count} (доход: {total_income} XP/час)\n\n{E_CAT_DANCE} Выбери раздел!"
+        text = f"{E_HEART} <b>Главное меню</b>\n\n{E_CROWN} Онлайн: {online}/{max_players}\n{E_CROWN} Твой опыт: {xp} XP\n\n{E_CAT_DANCE} Выбери раздел!"
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_main_keyboard())
         await callback.answer()
     
@@ -581,36 +326,67 @@ async def handle_callback(callback: CallbackQuery):
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_back_keyboard())
         await callback.answer()
     
+    # ========== ИГРЫ ==========
+    elif data == "menu_games":
+        xp = get_xp(username)
+        text = f"{E_JOYSTICK} <b>ИГРЫ</b> {E_JOYSTICK}\n\n{E_CROWN} Твой баланс: {xp} XP\n\nВыбери действие:"
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_games_keyboard())
+        await callback.answer()
+    
+    elif data == "games_balance":
+        xp = get_xp(username)
+        await callback.answer(f"Твой баланс: {xp} XP", show_alert=True)
+    
+    elif data == "games_profile":
+        stats = get_stats(username)
+        xp = get_xp(username)
+        farms = get_farms(username)
+        farm_count = len(farms)
+        total_income = calculate_income(farms)
+        text = f"{E_CROWN} <b>ПРОФИЛЬ ИГРОКА</b> {E_CROWN}\n\n{E_HOUSE} Имя: {username}\n{E_CROWN} Опыт: {xp} XP\n{E_JOYSTICK} Побед: {stats['wins']}\n{E_HEART} Поражений: {stats['losses']}\n{E_NOTE} Ферм: {farm_count}\n{E_MAGIC} Доход в час: {total_income} XP"
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_back_keyboard())
+        await callback.answer()
+    
+    elif data == "games_daily":
+        user_bio = await get_user_bio(callback.from_user.id)
+        has_bot_in_bio = "@lostearth_bot" in user_bio.lower() if user_bio else False
+        
+        if not has_bot_in_bio:
+            await callback.answer("Добавь @lostearth_bot в описание профиля!", show_alert=True)
+        elif can_claim_daily_bonus(username):
+            amount = claim_daily_bonus(username)
+            xp = get_xp(username)
+            await callback.answer(f"+{amount} XP! Твой баланс: {xp} XP", show_alert=True)
+        else:
+            await callback.answer("Ты уже получал бонус сегодня! Возвращайся завтра!", show_alert=True)
+    
+    elif data == "games_bet":
+        await callback.message.edit_text(f"{E_JOYSTICK} <b>ИГРА В КОСТИ</b> {E_JOYSTICK}\n\n{E_CROWN} Твой баланс: {get_xp(username)} XP\n\nВыбери ставку:", parse_mode="HTML", reply_markup=get_bet_keyboard())
+        await callback.answer()
+    
+    # Ставки
+    elif data.startswith("bet_"):
+        bet_amount = int(data.replace("bet_", ""))
+        xp = get_xp(username)
+        
+        if bet_amount < 50:
+            await callback.answer("Минимальная ставка 50 XP!", show_alert=True)
+        elif xp < bet_amount:
+            await callback.answer(f"Не хватает XP! У тебя {xp} XP", show_alert=True)
+        else:
+            await callback.answer(f"Ставка {bet_amount} XP! Играем...", show_alert=False)
+            response = await game_dice_bet(username, bet_amount, bot, callback.message.chat.id)
+            await callback.message.answer(response, parse_mode="HTML")
+            # Обновляем меню игр
+            xp_new = get_xp(username)
+            text = f"{E_JOYSTICK} <b>ИГРЫ</b> {E_JOYSTICK}\n\n{E_CROWN} Твой баланс: {xp_new} XP\n\nВыбери действие:"
+            await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_games_keyboard())
+    
+    # ========== ФЕРМЫ ==========
     elif data == "menu_farms":
         await callback.message.edit_text(f"{E_HOUSE} <b>УПРАВЛЕНИЕ ФЕРМАМИ</b> {E_HOUSE}\n\nВыбери действие:", parse_mode="HTML", reply_markup=get_farms_keyboard())
         await callback.answer()
     
-    elif data == "menu_games":
-        text = f"""{E_JOYSTICK} <b>ИГРЫ</b> {E_JOYSTICK}
-
-{E_CROWN} /balance - баланс опыта
-{E_CROWN} /profile - твой профиль
-{E_MAGIC} /daily - бонус 500 XP
-{E_JOYSTICK} /bet (сумма) - игра в кости (x2)
-
-{E_HEART} Минимальная ставка: 50 XP
-{E_HEART} Стартовый баланс: 1000 XP"""
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_back_keyboard())
-        await callback.answer()
-    
-    elif data == "menu_top":
-        leaders = get_leaderboard(10)
-        if not leaders:
-            text = f"{E_CROWN} Пока нет игроков в топе! Будь первым!"
-        else:
-            text = f"{E_CROWN} <b>ТОП 10 ИГРОКОВ</b> {E_CROWN}\n\n"
-            for i, p in enumerate(leaders, 1):
-                medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else "📌"
-                text += f"{medal} {p['username']} - {p['xp']} XP (ферм: {p['farms_count']})\n"
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_back_keyboard())
-        await callback.answer()
-    
-    # ========== ФЕРМЫ КОЛБЭКИ ==========
     elif data == "farms_my":
         farms = get_farms(username)
         if not farms:
@@ -618,11 +394,9 @@ async def handle_callback(callback: CallbackQuery):
         else:
             text = f"{E_HOUSE} <b>ТВОИ ФЕРМЫ</b> {E_HOUSE}\n\n"
             total_income = 0
-            farm_emoji = {"пауков": "🕷️", "зомби": "🧟", "криперов": "💥", "скелетов": "🏹", "эндерменов": "👾"}
-            farm_base = {"пауков": 50, "зомби": 75, "криперов": 100, "скелетов": 60, "эндерменов": 150}
             for name, farm_data in farms.items():
-                emoji_farm = farm_emoji.get(name, "🏭")
-                base = farm_base.get(name, 50)
+                emoji_farm = FARM_EMOJI.get(name, "🏭")
+                base = FARM_BASE.get(name, 50)
                 level = farm_data.get("level", 1)
                 income = base * level
                 total_income += income
@@ -640,10 +414,20 @@ async def handle_callback(callback: CallbackQuery):
         await callback.answer()
     
     elif data == "farms_claim":
-        income = claim_income(username)
+        result = claim_income(username)
+        if isinstance(result, tuple):
+            income, details = result
+        else:
+            income = result
+            details = []
+        
         if income > 0:
             xp = get_xp(username)
-            await callback.message.edit_text(f"{E_MAGIC} <b>Собрано {income} XP</b> с ферм! {E_MAGIC}\n\n{E_CROWN} Твой опыт: {xp} XP", parse_mode="HTML", reply_markup=get_farms_keyboard())
+            text = f"{E_MAGIC} <b>Собрано {income} XP</b> с ферм! {E_MAGIC}\n\n"
+            if details:
+                text += "\n".join(details) + "\n\n"
+            text += f"{E_CROWN} Твой опыт: {xp} XP"
+            await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_farms_keyboard())
         else:
             farms = get_farms(username)
             if not farms:
@@ -662,7 +446,7 @@ async def handle_callback(callback: CallbackQuery):
             success, msg = buy_farm(username, farm_map_display[farm_key])
             await callback.answer(msg, show_alert=True)
             # Обновляем меню ферм
-            await callback.message.edit_text(f"{E_HOUSE} <b>УПРАВЛЕНИЕ ФЕРМАМИ</b> {E_HOUSE}\n\n{msg}", parse_mode="HTML", reply_markup=get_farms_keyboard())
+            await callback.message.edit_text(f"{E_HOUSE} <b>УПРАВЛЕНИЕ ФЕРМАМИ</b> {E_HOUSE}\n\nВыбери действие:", parse_mode="HTML", reply_markup=get_farms_keyboard())
     
     # Улучшение ферм через кнопки
     elif data.startswith("upgrade_"):
@@ -675,6 +459,22 @@ async def handle_callback(callback: CallbackQuery):
             await callback.message.edit_text(f"{E_CAT_UP} <b>ВЫБЕРИ ФЕРМУ ДЛЯ УЛУЧШЕНИЯ</b> {E_CAT_UP}", parse_mode="HTML", reply_markup=get_upgrade_keyboard(username))
         else:
             await callback.message.edit_text(f"{E_HOUSE} <b>УПРАВЛЕНИЕ ФЕРМАМИ</b> {E_HOUSE}", parse_mode="HTML", reply_markup=get_farms_keyboard())
+    
+    elif data == "farms_none":
+        await callback.answer("У тебя нет ферм для улучшения! Купи сначала ферму.", show_alert=True)
+    
+    # ========== ТОП ==========
+    elif data == "menu_top":
+        leaders = get_leaderboard(10)
+        if not leaders:
+            text = f"{E_CROWN} Пока нет игроков в топе! Будь первым!"
+        else:
+            text = f"{E_CROWN} <b>ТОП 10 ИГРОКОВ</b> {E_CROWN}\n\n"
+            for i, p in enumerate(leaders, 1):
+                medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else "📌"
+                text += f"{medal} {p['username']} - {p['xp']} XP (ферм: {p['farms_count']})\n"
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_back_keyboard())
+        await callback.answer()
 
 # ========== ЗАПУСК ==========
 async def main():
