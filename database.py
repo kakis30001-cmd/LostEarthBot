@@ -2,25 +2,18 @@ import asyncpg
 import os
 from datetime import datetime, date
 
-# Используем публичный URL для подключения
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:hgSCmLMXOyemvPATDDMerzJWtMBxFamM@postgres.railway.internal:5432/railway")
+DB_URL = os.getenv("DATABASE_URL", "postgresql://postgres:hgSCmLMXOyemvPATDDMerzJWtMBxFamM@thomas.proxy.rlwy.net:41663/railway")
 
-# Также пробуем PUBLIC_URL если внутренний не работает
-if not DATABASE_URL:
-    DATABASE_URL = os.getenv("DATABASE_PUBLIC_URL")
+pool = None
 
-# Кэш
-xp_cache = {}
-stats_cache = {}
-
-async def init_db():
-    """Создаёт таблицы если их нет"""
+async def connect_db():
+    global pool
     try:
-        # Пробуем подключиться с таймаутом
-        conn = await asyncpg.connect(DATABASE_URL, timeout=10)
+        pool = await asyncpg.create_pool(DB_URL, min_size=1, max_size=5, timeout=10)
         
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS players (
+        async with pool.acquire() as conn:
+            await conn.execute("""
+            CREATE TABLE IF NOT EXISTS players(
                 username TEXT PRIMARY KEY,
                 xp INTEGER DEFAULT 1000,
                 last_bonus DATE,
@@ -31,160 +24,98 @@ async def init_db():
                 created_at TIMESTAMP DEFAULT NOW(),
                 updated_at TIMESTAMP DEFAULT NOW()
             )
-        """)
-        
-        await conn.close()
-        print("✅ PostgreSQL инициализирована")
+            """)
+            
+            # Добавляем колонки если их нет (для старых таблиц)
+            try:
+                await conn.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS farm_level INTEGER DEFAULT 1")
+            except:
+                pass
+            try:
+                await conn.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS last_farm TIMESTAMP DEFAULT NULL")
+            except:
+                pass
+            
+        print("✅ PostgreSQL подключена и инициализирована")
         return True
     except Exception as e:
         print(f"❌ Ошибка БД: {e}")
         return False
 
-async def get_connection():
-    """Получает соединение с БД с повторными попытками"""
-    try:
-        return await asyncpg.connect(DATABASE_URL, timeout=10)
-    except Exception as e:
-        print(f"Ошибка подключения к БД: {e}")
-        raise
+async def init_db():
+    return await connect_db()
 
 async def get_xp(username: str) -> int:
-    if username in xp_cache:
-        return xp_cache[username]
-    try:
-        conn = await get_connection()
+    async with pool.acquire() as conn:
         row = await conn.fetchrow("SELECT xp FROM players WHERE username = $1", username)
-        await conn.close()
         if row:
-            xp_cache[username] = row[0]
-            return row[0]
+            return row["xp"]
         else:
             await create_player(username)
             return 1000
-    except Exception as e:
-        print(f"Ошибка get_xp: {e}")
-        return xp_cache.get(username, 1000)
 
 async def create_player(username: str):
-    try:
-        conn = await get_connection()
+    async with pool.acquire() as conn:
         await conn.execute("INSERT INTO players (username, xp) VALUES ($1, 1000)", username)
-        await conn.close()
-        xp_cache[username] = 1000
-        print(f"✅ Создан игрок {username}")
-    except Exception as e:
-        print(f"Ошибка создания игрока: {e}")
 
 async def update_xp(username: str, delta: int):
-    try:
-        conn = await get_connection()
+    async with pool.acquire() as conn:
         await conn.execute("UPDATE players SET xp = xp + $1, updated_at = NOW() WHERE username = $2", delta, username)
-        await conn.close()
-        if username in xp_cache:
-            xp_cache[username] += delta
-        else:
-            xp_cache[username] = 1000 + delta
-    except Exception as e:
-        print(f"Ошибка обновления XP: {e}")
 
 async def can_claim_daily_bonus(username: str) -> bool:
-    try:
-        conn = await get_connection()
+    async with pool.acquire() as conn:
         row = await conn.fetchrow("SELECT last_bonus FROM players WHERE username = $1", username)
-        await conn.close()
-        if not row or row[0] is None:
+        if not row or row["last_bonus"] is None:
             return True
-        return row[0] < date.today()
-    except:
-        return True
+        return row["last_bonus"] < date.today()
 
 async def claim_daily_bonus(username: str) -> int:
-    try:
-        conn = await get_connection()
+    async with pool.acquire() as conn:
         await conn.execute("UPDATE players SET xp = xp + 500, last_bonus = $1, updated_at = NOW() WHERE username = $2", date.today(), username)
-        await conn.close()
-        if username in xp_cache:
-            xp_cache[username] += 500
-        else:
-            xp_cache[username] = 1500
         return 500
-    except:
-        return 0
 
 async def update_stats(username: str, is_win: bool):
-    try:
-        conn = await get_connection()
+    async with pool.acquire() as conn:
         if is_win:
             await conn.execute("UPDATE players SET wins = wins + 1, updated_at = NOW() WHERE username = $1", username)
         else:
             await conn.execute("UPDATE players SET losses = losses + 1, updated_at = NOW() WHERE username = $1", username)
-        await conn.close()
-    except Exception as e:
-        print(f"Ошибка статистики: {e}")
 
 async def get_stats(username: str) -> dict:
-    if username in stats_cache:
-        return stats_cache[username]
-    try:
-        conn = await get_connection()
+    async with pool.acquire() as conn:
         row = await conn.fetchrow("SELECT wins, losses FROM players WHERE username = $1", username)
-        await conn.close()
         if row:
-            stats = {"wins": row[0], "losses": row[1]}
-            stats_cache[username] = stats
-            return stats
-        return {"wins": 0, "losses": 0}
-    except:
+            return {"wins": row["wins"], "losses": row["losses"]}
         return {"wins": 0, "losses": 0}
 
 async def get_farm_level(username: str) -> int:
-    try:
-        conn = await get_connection()
+    async with pool.acquire() as conn:
         row = await conn.fetchrow("SELECT farm_level FROM players WHERE username = $1", username)
-        await conn.close()
         if row:
-            return row[0]
-        return 1
-    except:
+            return row["farm_level"]
         return 1
 
 async def update_farm_level(username: str, new_level: int):
-    try:
-        conn = await get_connection()
+    async with pool.acquire() as conn:
         await conn.execute("UPDATE players SET farm_level = $1, updated_at = NOW() WHERE username = $2", new_level, username)
-        await conn.close()
-    except Exception as e:
-        print(f"Ошибка обновления уровня фармы: {e}")
 
 async def get_last_farm(username: str):
-    try:
-        conn = await get_connection()
+    async with pool.acquire() as conn:
         row = await conn.fetchrow("SELECT last_farm FROM players WHERE username = $1", username)
-        await conn.close()
-        if row and row[0]:
-            return row[0]
-        return None
-    except:
+        if row and row["last_farm"]:
+            return row["last_farm"]
         return None
 
 async def update_last_farm(username: str):
-    try:
-        conn = await get_connection()
+    async with pool.acquire() as conn:
         await conn.execute("UPDATE players SET last_farm = NOW() WHERE username = $1", username)
-        await conn.close()
-    except Exception as e:
-        print(f"Ошибка обновления времени фармы: {e}")
 
 async def get_leaderboard(limit: int = 10) -> list:
-    try:
-        conn = await get_connection()
+    async with pool.acquire() as conn:
         rows = await conn.fetch("""
             SELECT username, xp, wins, losses, farm_level
             FROM players
             ORDER BY xp DESC
             LIMIT $1
         """, limit)
-        await conn.close()
         return [dict(row) for row in rows]
-    except:
-        return []
