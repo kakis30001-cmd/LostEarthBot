@@ -2,139 +2,35 @@ import asyncpg
 import os
 from datetime import datetime, date
 
-# Берём переменные ТОЛЬКО из окружения Railway
-DB_PUBLIC_URL = os.getenv("DATABASE_PUBLIC_URL", "")
 DB_URL = os.getenv("DATABASE_URL", "")
-
-# Альтернативно, собираем из отдельных переменных
-PGHOST = os.getenv("PGHOST", "")
-PGPORT = os.getenv("PGPORT", "5432")
-PGUSER = os.getenv("PGUSER", "postgres")
-PGPASSWORD = os.getenv("PGPASSWORD", "")
-PGDATABASE = os.getenv("PGDATABASE", "railway")
-
-# Показываем параметры для отладки
-print(f"🔍 Параметры подключения:")
-print(f"   DATABASE_URL: {DB_URL[:50] if DB_URL else 'None'}...")
-print(f"   DATABASE_PUBLIC_URL: {DB_PUBLIC_URL[:50] if DB_PUBLIC_URL else 'None'}...")
-print(f"   PGHOST: {PGHOST}")
-print(f"   PGPASSWORD: {'***' if PGPASSWORD else 'None'}")
-print(f"   PGPORT: {PGPORT}")
 
 pool = None
 
 async def connect_db():
     global pool
-    print("🔌 Подключение к БД...")
-    
-    # Пробуем через DATABASE_URL (внутренний)
-    if DB_URL:
-        try:
-            print("   Пробую через DATABASE_URL...")
-            pool = await asyncpg.create_pool(DB_URL, min_size=1, max_size=5, timeout=15)
+    try:
+        pool = await asyncpg.create_pool(DB_URL, min_size=1, max_size=5)
+        
+        async with pool.acquire() as conn:
+            await conn.execute("""
+            CREATE TABLE IF NOT EXISTS players(
+                username TEXT PRIMARY KEY,
+                xp INTEGER DEFAULT 1000,
+                last_bonus DATE,
+                wins INTEGER DEFAULT 0,
+                losses INTEGER DEFAULT 0,
+                farm_level INTEGER DEFAULT 1,
+                last_farm TIMESTAMP DEFAULT NULL,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+            """)
             
-            async with pool.acquire() as conn:
-                await conn.execute("""
-                CREATE TABLE IF NOT EXISTS players(
-                    username TEXT PRIMARY KEY,
-                    xp INTEGER DEFAULT 1000,
-                    last_bonus DATE,
-                    wins INTEGER DEFAULT 0,
-                    losses INTEGER DEFAULT 0,
-                    farm_level INTEGER DEFAULT 1,
-                    last_farm TIMESTAMP DEFAULT NULL,
-                    created_at TIMESTAMP DEFAULT NOW(),
-                    updated_at TIMESTAMP DEFAULT NOW()
-                )
-                """)
-                
-                try:
-                    await conn.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS farm_level INTEGER DEFAULT 1")
-                except:
-                    pass
-                try:
-                    await conn.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS last_farm TIMESTAMP DEFAULT NULL")
-                except:
-                    pass
-                
-            print("✅ PostgreSQL подключена через DATABASE_URL")
-            return True
-        except Exception as e:
-            print(f"❌ Ошибка через DATABASE_URL: {e}")
-    
-    # Пробуем через DATABASE_PUBLIC_URL
-    if DB_PUBLIC_URL:
-        try:
-            print("   Пробую через DATABASE_PUBLIC_URL...")
-            pool = await asyncpg.create_pool(DB_PUBLIC_URL, min_size=1, max_size=5, timeout=15)
-            
-            async with pool.acquire() as conn:
-                await conn.execute("""
-                CREATE TABLE IF NOT EXISTS players(
-                    username TEXT PRIMARY KEY,
-                    xp INTEGER DEFAULT 1000,
-                    last_bonus DATE,
-                    wins INTEGER DEFAULT 0,
-                    losses INTEGER DEFAULT 0,
-                    farm_level INTEGER DEFAULT 1,
-                    last_farm TIMESTAMP DEFAULT NULL,
-                    created_at TIMESTAMP DEFAULT NOW(),
-                    updated_at TIMESTAMP DEFAULT NOW()
-                )
-                """)
-                
-                try:
-                    await conn.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS farm_level INTEGER DEFAULT 1")
-                except:
-                    pass
-                try:
-                    await conn.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS last_farm TIMESTAMP DEFAULT NULL")
-                except:
-                    pass
-                
-            print("✅ PostgreSQL подключена через DATABASE_PUBLIC_URL")
-            return True
-        except Exception as e:
-            print(f"❌ Ошибка через DATABASE_PUBLIC_URL: {e}")
-    
-    # Пробуем собрать URL из отдельных переменных
-    if PGHOST and PGPASSWORD:
-        try:
-            manual_url = f"postgresql://{PGUSER}:{PGPASSWORD}@{PGHOST}:{PGPORT}/{PGDATABASE}"
-            print(f"   Пробую ручной URL: postgresql://{PGUSER}:***@{PGHOST}:{PGPORT}/{PGDATABASE}")
-            pool = await asyncpg.create_pool(manual_url, min_size=1, max_size=5, timeout=15)
-            
-            async with pool.acquire() as conn:
-                await conn.execute("""
-                CREATE TABLE IF NOT EXISTS players(
-                    username TEXT PRIMARY KEY,
-                    xp INTEGER DEFAULT 1000,
-                    last_bonus DATE,
-                    wins INTEGER DEFAULT 0,
-                    losses INTEGER DEFAULT 0,
-                    farm_level INTEGER DEFAULT 1,
-                    last_farm TIMESTAMP DEFAULT NULL,
-                    created_at TIMESTAMP DEFAULT NOW(),
-                    updated_at TIMESTAMP DEFAULT NOW()
-                )
-                """)
-                
-                try:
-                    await conn.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS farm_level INTEGER DEFAULT 1")
-                except:
-                    pass
-                try:
-                    await conn.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS last_farm TIMESTAMP DEFAULT NULL")
-                except:
-                    pass
-                
-            print("✅ PostgreSQL подключена через ручной URL")
-            return True
-        except Exception as e:
-            print(f"❌ Ошибка через ручной URL: {e}")
-    
-    print("❌ Не удалось подключиться к БД ни одним способом")
-    return False
+        print("✅ PostgreSQL подключена")
+        return True
+    except Exception as e:
+        print(f"❌ Ошибка БД: {e}")
+        return False
 
 async def init_db():
     return await connect_db()
