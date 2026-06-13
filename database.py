@@ -2,13 +2,18 @@ import asyncpg
 import os
 from datetime import datetime, date
 
-DB_URL = os.getenv("DATABASE_URL", "postgresql://postgres:hgSCmLMXOyemvPATDDMerzJWtMBxFamM@thomas.proxy.rlwy.net:41663/railway")
+# Используем публичный URL для подключения (из твоего скриншота)
+DB_URL = os.getenv("DATABASE_URL", "postgresql://postgres:GvVgOhwThbxIWOruQkD5ZVYPuzrMgdt@postgres.railway.international:5432/railway")
+
+# Альтернативный публичный URL если нужно
+PUBLIC_DB_URL = os.getenv("DATABASE_PUBLIC_URL", "postgresql://postgres:GvVgOhwThbxIWOruQkD5ZVYPuzrMgdt@thomas.proxy.rlwy.net:37739/railway")
 
 pool = None
 
 async def connect_db():
     global pool
     try:
+        # Пробуем подключиться через внутренний URL
         pool = await asyncpg.create_pool(DB_URL, min_size=1, max_size=5, timeout=10)
         
         async with pool.acquire() as conn:
@@ -26,7 +31,7 @@ async def connect_db():
             )
             """)
             
-            # Добавляем колонки если их нет (для старых таблиц)
+            # Добавляем колонки если их нет
             try:
                 await conn.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS farm_level INTEGER DEFAULT 1")
             except:
@@ -39,8 +44,41 @@ async def connect_db():
         print("✅ PostgreSQL подключена и инициализирована")
         return True
     except Exception as e:
-        print(f"❌ Ошибка БД: {e}")
-        return False
+        print(f"❌ Ошибка БД через внутренний URL: {e}")
+        
+        # Пробуем через публичный URL
+        try:
+            pool = await asyncpg.create_pool(PUBLIC_DB_URL, min_size=1, max_size=5, timeout=10)
+            
+            async with pool.acquire() as conn:
+                await conn.execute("""
+                CREATE TABLE IF NOT EXISTS players(
+                    username TEXT PRIMARY KEY,
+                    xp INTEGER DEFAULT 1000,
+                    last_bonus DATE,
+                    wins INTEGER DEFAULT 0,
+                    losses INTEGER DEFAULT 0,
+                    farm_level INTEGER DEFAULT 1,
+                    last_farm TIMESTAMP DEFAULT NULL,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                )
+                """)
+                
+                try:
+                    await conn.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS farm_level INTEGER DEFAULT 1")
+                except:
+                    pass
+                try:
+                    await conn.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS last_farm TIMESTAMP DEFAULT NULL")
+                except:
+                    pass
+                
+            print("✅ PostgreSQL подключена через публичный URL")
+            return True
+        except Exception as e2:
+            print(f"❌ Ошибка БД через публичный URL: {e2}")
+            return False
 
 async def init_db():
     return await connect_db()
@@ -56,7 +94,7 @@ async def get_xp(username: str) -> int:
 
 async def create_player(username: str):
     async with pool.acquire() as conn:
-        await conn.execute("INSERT INTO players (username, xp) VALUES ($1, 1000)", username)
+        await conn.execute("INSERT INTO players (username, xp) VALUES ($1, 1000) ON CONFLICT (username) DO NOTHING", username)
 
 async def update_xp(username: str, delta: int):
     async with pool.acquire() as conn:
