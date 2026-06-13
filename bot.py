@@ -74,9 +74,8 @@ def run_flask():
 bot = Bot(token=TELEGRAM_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
-# ========== ПРЕМИУМ ЭМОДЗИ (ВСЕ НОВЫЕ СТИКЕРЫ) ==========
+# ========== ПРЕМИУМ ЭМОДЗИ ==========
 ENDERIA_EMOJI = {
-    # Основные
     "cat_dance": "5359444458930718519",
     "cat_ok": "5269476765369144234",
     "cat_up": "5269698007724499331",
@@ -89,21 +88,18 @@ ENDERIA_EMOJI = {
     "note": "5870930744116776638",
     "magic": "5474144592817318927",
     "joystick": "5870717606364713020",
-    
-    # Новые стикеры для ферм и опыта
-    "xp": "5258371229777165300",           # опыт
-    "spider": "5440875569984052896",        # паук
-    "ender": "5440858845381402630",         # Эндермен
-    "skeleton": "5440858579093430128",      # скелет
-    "zombie": "5440655942536405315",        # зомби
-    "creeper": "5440875569984052896",       # крипер
-    "cat_rose": "5269347667242162562",      # котик цветы дарит
+    "xp": "5258371229777165300",
+    "spider": "5440875569984052896",
+    "ender": "5440858845381402630",
+    "skeleton": "5440858579093430128",
+    "zombie": "5440655942536405315",
+    "creeper": "5440875569984052896",
+    "cat_rose": "5269347667242162562",
 }
 
 def emoji(emoji_id: str, fallback: str = "") -> str:
     return f'<tg-emoji emoji-id="{emoji_id}">{fallback}</tg-emoji>'
 
-# Премиум эмодзи для текста
 E_CAT_DANCE = emoji(ENDERIA_EMOJI["cat_dance"], "🐱")
 E_CAT_OK = emoji(ENDERIA_EMOJI["cat_ok"], "👍")
 E_CAT_UP = emoji(ENDERIA_EMOJI["cat_up"], "👍")
@@ -118,8 +114,6 @@ E_NOTE = emoji(ENDERIA_EMOJI["note"], "📝")
 E_MAGIC = emoji(ENDERIA_EMOJI["magic"], "✨")
 E_JOYSTICK = emoji(ENDERIA_EMOJI["joystick"], "🎮")
 E_XP = emoji(ENDERIA_EMOJI["xp"], "⭐")
-
-# Эмодзи для ферм (премиум)
 E_SPIDER = emoji(ENDERIA_EMOJI["spider"], "🕷️")
 E_ENDER = emoji(ENDERIA_EMOJI["ender"], "👾")
 E_SKELETON = emoji(ENDERIA_EMOJI["skeleton"], "🏹")
@@ -161,6 +155,9 @@ APPLY_URL = f"{BASE_URL}/apply.html"
 
 online_cache = {}
 last_update = {}
+
+# Хранилище для ответов на сообщения
+last_bot_message_id = {}
 
 # ========== MINECRAFT API ==========
 async def get_java_status(ip: str, port: int = 25565):
@@ -216,27 +213,27 @@ async def get_user_bio(user_id: int) -> str:
 # ========== КЛАВИАТУРЫ ==========
 def get_main_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="IP И ОНЛАЙН", callback_data="menu_ip", icon_custom_emoji_id=BUTTON_EMOJI_ID["door"])],
-        [InlineKeyboardButton(text="ПРАВИЛА", web_app=WebAppInfo(url=RULES_URL), icon_custom_emoji_id=BUTTON_EMOJI_ID["note"]),
-         InlineKeyboardButton(text="ЗАЯВКА", web_app=WebAppInfo(url=APPLY_URL), icon_custom_emoji_id=BUTTON_EMOJI_ID["rabbit_fly"])],
-        [InlineKeyboardButton(text="ПРЕМИУМ", callback_data="menu_premium", icon_custom_emoji_id=BUTTON_EMOJI_ID["crown"]),
-         InlineKeyboardButton(text="ЭНДЕРИЯ", callback_data="menu_enderia", icon_custom_emoji_id=BUTTON_EMOJI_ID["cat_ok"])],
-        [InlineKeyboardButton(text="ФЕРМЫ", callback_data="menu_farms", icon_custom_emoji_id=BUTTON_EMOJI_ID["spider"]),
-         InlineKeyboardButton(text="ИГРЫ", callback_data="menu_games", icon_custom_emoji_id=BUTTON_EMOJI_ID["joystick"])],
-        [InlineKeyboardButton(text="ТОП", callback_data="menu_top", icon_custom_emoji_id=BUTTON_EMOJI_ID["crown"])]
+        [InlineKeyboardButton(text="🖥️ IP И ОНЛАЙН", callback_data="menu_ip")],
+        [InlineKeyboardButton(text="📜 ПРАВИЛА", web_app=WebAppInfo(url=RULES_URL)),
+         InlineKeyboardButton(text="📝 ЗАЯВКА", web_app=WebAppInfo(url=APPLY_URL))],
+        [InlineKeyboardButton(text="👑 ПРЕМИУМ", callback_data="menu_premium"),
+         InlineKeyboardButton(text="💜 ЭНДЕРИЯ", callback_data="menu_enderia")],
+        [InlineKeyboardButton(text="🏭 ФЕРМЫ", callback_data="menu_farms"),
+         InlineKeyboardButton(text="🎮 ИГРЫ", callback_data="menu_games")],
+        [InlineKeyboardButton(text="🏆 ТОП", callback_data="menu_top")]
     ])
 
 def get_farms_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="МОИ ФЕРМЫ", callback_data="farms_my", icon_custom_emoji_id=BUTTON_EMOJI_ID["house"])],
-        [InlineKeyboardButton(text="КУПИТЬ ПАУКОВ (500 XP)", callback_data="buy_farm_пауков", icon_custom_emoji_id=BUTTON_EMOJI_ID["spider"]),
-         InlineKeyboardButton(text="КУПИТЬ ЗОМБИ (800 XP)", callback_data="buy_farm_зомби", icon_custom_emoji_id=BUTTON_EMOJI_ID["zombie"])],
-        [InlineKeyboardButton(text="КУПИТЬ КРИПЕРОВ (1500 XP)", callback_data="buy_farm_криперов", icon_custom_emoji_id=BUTTON_EMOJI_ID["spider"]),
-         InlineKeyboardButton(text="КУПИТЬ СКЕЛЕТОВ (400 XP)", callback_data="buy_farm_скелетов", icon_custom_emoji_id=BUTTON_EMOJI_ID["skeleton"])],
-        [InlineKeyboardButton(text="КУПИТЬ ЭНДЕРМЕНОВ (2500 XP)", callback_data="buy_farm_эндерменов", icon_custom_emoji_id=BUTTON_EMOJI_ID["ender"])],
-        [InlineKeyboardButton(text="УЛУЧШИТЬ ФЕРМУ", callback_data="farms_upgrade", icon_custom_emoji_id=BUTTON_EMOJI_ID["cat_up"])],
-        [InlineKeyboardButton(text="СОБРАТЬ ОПЫТ", callback_data="farms_claim", icon_custom_emoji_id=BUTTON_EMOJI_ID["xp"])],
-        [InlineKeyboardButton(text="НАЗАД", callback_data="menu_main", icon_custom_emoji_id=BUTTON_EMOJI_ID["back"])]
+        [InlineKeyboardButton(text="📋 МОИ ФЕРМЫ", callback_data="farms_my")],
+        [InlineKeyboardButton(text="🕷️ ПАУКИ (500 XP)", callback_data="buy_farm_пауков"),
+         InlineKeyboardButton(text="🧟 ЗОМБИ (800 XP)", callback_data="buy_farm_зомби")],
+        [InlineKeyboardButton(text="💥 КРИПЕРЫ (1500 XP)", callback_data="buy_farm_криперов"),
+         InlineKeyboardButton(text="🏹 СКЕЛЕТЫ (400 XP)", callback_data="buy_farm_скелетов")],
+        [InlineKeyboardButton(text="👾 ЭНДЕРМЕНЫ (2500 XP)", callback_data="buy_farm_эндерменов")],
+        [InlineKeyboardButton(text="⬆️ УЛУЧШИТЬ ФЕРМУ", callback_data="farms_upgrade")],
+        [InlineKeyboardButton(text="💰 СОБРАТЬ ОПЫТ", callback_data="farms_claim")],
+        [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="menu_main")]
     ])
 
 def get_upgrade_keyboard(username: str):
@@ -246,42 +243,43 @@ def get_upgrade_keyboard(username: str):
         level = data.get("level", 1)
         if level < 5:
             cost = UPGRADE_COSTS[level + 1]
-            emoji_id = BUTTON_EMOJI_ID.get(name, BUTTON_EMOJI_ID["spider"])
-            keyboard.append([InlineKeyboardButton(text=f"{name} (ур.{level} -> {level+1}) - {cost} XP", callback_data=f"upgrade_{name}", icon_custom_emoji_id=emoji_id)])
+            emoji_map = {"пауков": "🕷️", "зомби": "🧟", "криперов": "💥", "скелетов": "🏹", "эндерменов": "👾"}
+            emoji_farm = emoji_map.get(name, "🏭")
+            keyboard.append([InlineKeyboardButton(text=f"{emoji_farm} {name} (ур.{level} -> {level+1}) - {cost} XP", callback_data=f"upgrade_{name}")])
     if not keyboard:
-        keyboard.append([InlineKeyboardButton(text="НЕТ ФЕРМ ДЛЯ УЛУЧШЕНИЯ", callback_data="farms_none")])
-    keyboard.append([InlineKeyboardButton(text="НАЗАД", callback_data="menu_farms", icon_custom_emoji_id=BUTTON_EMOJI_ID["back"])])
+        keyboard.append([InlineKeyboardButton(text="❌ НЕТ ФЕРМ ДЛЯ УЛУЧШЕНИЯ", callback_data="farms_none")])
+    keyboard.append([InlineKeyboardButton(text="◀️ НАЗАД", callback_data="menu_farms")])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 def get_games_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="ИГРА В КОСТИ", callback_data="games_bet", icon_custom_emoji_id=BUTTON_EMOJI_ID["joystick"])],
-        [InlineKeyboardButton(text="МОЙ БАЛАНС", callback_data="games_balance", icon_custom_emoji_id=BUTTON_EMOJI_ID["xp"])],
-        [InlineKeyboardButton(text="МОЙ ПРОФИЛЬ", callback_data="games_profile", icon_custom_emoji_id=BUTTON_EMOJI_ID["crown"])],
-        [InlineKeyboardButton(text="ДНЕВНОЙ БОНУС", callback_data="games_daily", icon_custom_emoji_id=BUTTON_EMOJI_ID["magic"])],
-        [InlineKeyboardButton(text="НАЗАД", callback_data="menu_main", icon_custom_emoji_id=BUTTON_EMOJI_ID["back"])]
+        [InlineKeyboardButton(text="🎲 ИГРА В КОСТИ", callback_data="games_bet")],
+        [InlineKeyboardButton(text="💰 МОЙ БАЛАНС", callback_data="games_balance")],
+        [InlineKeyboardButton(text="👤 МОЙ ПРОФИЛЬ", callback_data="games_profile")],
+        [InlineKeyboardButton(text="🎁 ДНЕВНОЙ БОНУС", callback_data="games_daily")],
+        [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="menu_main")]
     ])
 
 def get_bet_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="50 XP", callback_data="bet_50", icon_custom_emoji_id=BUTTON_EMOJI_ID["xp"]),
-         InlineKeyboardButton(text="100 XP", callback_data="bet_100", icon_custom_emoji_id=BUTTON_EMOJI_ID["xp"]),
-         InlineKeyboardButton(text="200 XP", callback_data="bet_200", icon_custom_emoji_id=BUTTON_EMOJI_ID["xp"])],
-        [InlineKeyboardButton(text="500 XP", callback_data="bet_500", icon_custom_emoji_id=BUTTON_EMOJI_ID["xp"]),
-         InlineKeyboardButton(text="1000 XP", callback_data="bet_1000", icon_custom_emoji_id=BUTTON_EMOJI_ID["xp"]),
-         InlineKeyboardButton(text="5000 XP", callback_data="bet_5000", icon_custom_emoji_id=BUTTON_EMOJI_ID["xp"])],
-        [InlineKeyboardButton(text="НАЗАД", callback_data="menu_games", icon_custom_emoji_id=BUTTON_EMOJI_ID["back"])]
+        [InlineKeyboardButton(text="50 XP", callback_data="bet_50"),
+         InlineKeyboardButton(text="100 XP", callback_data="bet_100"),
+         InlineKeyboardButton(text="200 XP", callback_data="bet_200")],
+        [InlineKeyboardButton(text="500 XP", callback_data="bet_500"),
+         InlineKeyboardButton(text="1000 XP", callback_data="bet_1000"),
+         InlineKeyboardButton(text="5000 XP", callback_data="bet_5000")],
+        [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="menu_games")]
     ])
 
 def get_ip_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="ОБНОВИТЬ", callback_data="refresh_online", icon_custom_emoji_id=BUTTON_EMOJI_ID["check"])],
-        [InlineKeyboardButton(text="НАЗАД", callback_data="menu_main", icon_custom_emoji_id=BUTTON_EMOJI_ID["back"])]
+        [InlineKeyboardButton(text="🔄 ОБНОВИТЬ", callback_data="refresh_online")],
+        [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="menu_main")]
     ])
 
 def get_back_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="НАЗАД", callback_data="menu_main", icon_custom_emoji_id=BUTTON_EMOJI_ID["back"])]
+        [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="menu_main")]
     ])
 
 # ========== КОМАНДЫ ==========
@@ -306,7 +304,12 @@ async def start_cmd(message: Message):
 {E_CAT_DANCE} {E_RABBIT} {E_ANIME}"""
     await message.answer(text, parse_mode="HTML", reply_markup=get_main_keyboard())
 
-# ========== ОБРАБОТЧИК ==========
+@dp.message(Command("online"))
+async def cmd_online(message: Message):
+    online, max_players = await get_server_online()
+    await message.answer(f"{E_CROWN} <b>Онлайн: {online}/{max_players}</b> {E_CAT_DANCE}", parse_mode="HTML")
+
+# ========== ОБРАБОТЧИК СООБЩЕНИЙ ==========
 @dp.message()
 async def handle_message(message: Message):
     if not message.text:
@@ -314,16 +317,42 @@ async def handle_message(message: Message):
     
     username = message.from_user.username or message.from_user.first_name
     user_message = message.text
+    user_id = message.from_user.id
     
-    if user_message.startswith("/"):
-        return
+    # Проверка на ответ на сообщение Эндерии
+    is_reply_to_bot = False
+    replied_username = None
     
-    if should_respond(user_message):
+    if message.reply_to_message:
+        replied_user = message.reply_to_message.from_user
+        if replied_user and replied_user.id == bot.id:
+            is_reply_to_bot = True
+        elif replied_user:
+            replied_username = replied_user.first_name or replied_user.username
+    
+    # Если ответ на сообщение бота - Эндерия отвечает
+    if is_reply_to_bot:
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
-        user_bio = await get_user_bio(message.from_user.id)
-        response = await get_enderia_response(user_message, username, is_reply=False, user_bio=user_bio)
+        response = await get_enderia_response(user_message, username, is_reply=True, user_bio="")
         if response:
             await message.reply(response, parse_mode="HTML")
+        return
+    
+    # Если ответ на сообщение другого человека - плюемся
+    if message.reply_to_message and replied_username:
+        await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+        response = f"{E_CAT_SURPRISED} <b>{username}</b> плюнул(а) в <b>{replied_username}</b>! {E_CAT_SURPRISED}\n\n{E_HEART} Эндерия: Ой-ой, кто тут ссорится? {E_CAT_DANCE}"
+        await message.reply(response, parse_mode="HTML")
+        return
+    
+    # Обычное сообщение с упоминанием Эндерии
+    if should_respond(user_message):
+        await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+        user_bio = await get_user_bio(user_id)
+        response = await get_enderia_response(user_message, username, is_reply=False, user_bio=user_bio)
+        if response:
+            sent_msg = await message.reply(response, parse_mode="HTML")
+            last_bot_message_id[user_id] = sent_msg.message_id
 
 # ========== КОЛБЭКИ ==========
 @dp.callback_query()
@@ -431,23 +460,11 @@ async def handle_callback(callback: CallbackQuery):
             text = f"{E_HOUSE} <b>ТВОИ ФЕРМЫ</b> {E_HOUSE}\n\n"
             total_income = 0
             for name, farm_data in farms.items():
-                if name == "пауков":
-                    icon = E_SPIDER
-                elif name == "зомби":
-                    icon = E_ZOMBIE
-                elif name == "криперов":
-                    icon = E_CREEPER
-                elif name == "скелетов":
-                    icon = E_SKELETON
-                elif name == "эндерменов":
-                    icon = E_ENDER
-                else:
-                    icon = E_HOUSE
                 base = FARM_BASE.get(name, 50)
                 level = farm_data.get("level", 1)
                 income = base * level
                 total_income += income
-                text += f"{icon} {name}: ур. {level} ({income} XP/час)\n"
+                text += f"{FARM_EMOJI.get(name, '🏭')} {name}: ур. {level} ({income} XP/час)\n"
             text += f"\n{E_CROWN} Общий доход: {total_income} XP/час"
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_farms_keyboard())
         await callback.answer()
@@ -483,18 +500,19 @@ async def handle_callback(callback: CallbackQuery):
                 await callback.message.edit_text(f"{E_NOTE} Пока не накопилось опыта. Подожди немного или улучшай фермы! {E_CAT_UP}", parse_mode="HTML", reply_markup=get_farms_keyboard())
         await callback.answer()
     
-    # Покупка ферм через кнопки
+    # Покупка ферм
     elif data.startswith("buy_farm_"):
         farm_key = data.replace("buy_farm_", "")
-        farm_map_display = {
-            "пауков": "пауков", "зомби": "зомби", "криперов": "криперов", "скелетов": "скелетов", "эндерменов": "эндерменов"
+        farm_map = {
+            "пауков": "пауков", "зомби": "зомби", "криперов": "криперов", 
+            "скелетов": "скелетов", "эндерменов": "эндерменов"
         }
-        if farm_key in farm_map_display:
-            success, msg = buy_farm(username, farm_map_display[farm_key])
+        if farm_key in farm_map:
+            success, msg = buy_farm(username, farm_map[farm_key])
             await callback.answer(msg, show_alert=True)
             await callback.message.edit_text(f"{E_HOUSE} <b>УПРАВЛЕНИЕ ФЕРМАМИ</b> {E_HOUSE}\n\nВыбери действие:", parse_mode="HTML", reply_markup=get_farms_keyboard())
     
-    # Улучшение ферм через кнопки
+    # Улучшение ферм
     elif data.startswith("upgrade_"):
         farm_key = data.replace("upgrade_", "")
         success, msg = upgrade_farm(username, farm_key)
