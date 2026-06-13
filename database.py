@@ -2,19 +2,35 @@ import asyncpg
 import os
 from datetime import datetime, date
 
-# Используем публичный URL для подключения (из твоего скриншота)
-DB_URL = os.getenv("DATABASE_URL", "postgresql://postgres:GvVgOhwThbxIWOruQkD5ZVYPuzrMgdt@postgres.railway.international:5432/railway")
+# Берем переменные из окружения Railway (из твоего скриншота)
+DB_HOST = os.getenv("PGHOST", "postgres.railway.internal")
+DB_PORT = os.getenv("PGPORT", "5432")
+DB_USER = os.getenv("PGUSER", "postgres")
+DB_PASSWORD = os.getenv("PGPASSWORD", "GvVgH0wThbxIW0ruuQkDsZVVYpuzrMgdt")  # Берем из скриншота
+DB_NAME = os.getenv("PGDATABASE", "railway")
 
-# Альтернативный публичный URL если нужно
-PUBLIC_DB_URL = os.getenv("DATABASE_PUBLIC_URL", "postgresql://postgres:GvVgOhwThbxIWOruQkD5ZVYPuzrMgdt@thomas.proxy.rlwy.net:37739/railway")
+# Собираем URL из переменных
+DB_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+
+# Публичный URL для внешнего подключения
+PUBLIC_HOST = "thomas.proxy.rlwy.net"
+PUBLIC_PORT = "37739"
+PUBLIC_DB_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{PUBLIC_HOST}:{PUBLIC_PORT}/{DB_NAME}"
+
+print(f"🔍 Параметры БД:")
+print(f"   Хост: {DB_HOST}")
+print(f"   Порт: {DB_PORT}")
+print(f"   Пользователь: {DB_USER}")
+print(f"   База: {DB_NAME}")
+print(f"   URL: {DB_URL.replace(DB_PASSWORD, '***')}")
 
 pool = None
 
 async def connect_db():
     global pool
     try:
-        # Пробуем подключиться через внутренний URL
-        pool = await asyncpg.create_pool(DB_URL, min_size=1, max_size=5, timeout=10)
+        print("🔌 Подключение через внутренний URL...")
+        pool = await asyncpg.create_pool(DB_URL, min_size=1, max_size=5, timeout=15)
         
         async with pool.acquire() as conn:
             await conn.execute("""
@@ -34,21 +50,22 @@ async def connect_db():
             # Добавляем колонки если их нет
             try:
                 await conn.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS farm_level INTEGER DEFAULT 1")
-            except:
-                pass
+            except Exception as e:
+                print(f"   Колонка farm_level уже есть или ошибка: {e}")
             try:
                 await conn.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS last_farm TIMESTAMP DEFAULT NULL")
-            except:
-                pass
+            except Exception as e:
+                print(f"   Колонка last_farm уже есть или ошибка: {e}")
             
-        print("✅ PostgreSQL подключена и инициализирована")
+        print("✅ PostgreSQL подключена через внутренний URL")
         return True
     except Exception as e:
-        print(f"❌ Ошибка БД через внутренний URL: {e}")
+        print(f"❌ Ошибка через внутренний URL: {e}")
         
         # Пробуем через публичный URL
         try:
-            pool = await asyncpg.create_pool(PUBLIC_DB_URL, min_size=1, max_size=5, timeout=10)
+            print("🔌 Подключение через публичный URL...")
+            pool = await asyncpg.create_pool(PUBLIC_DB_URL, min_size=1, max_size=5, timeout=15)
             
             async with pool.acquire() as conn:
                 await conn.execute("""
@@ -77,7 +94,7 @@ async def connect_db():
             print("✅ PostgreSQL подключена через публичный URL")
             return True
         except Exception as e2:
-            print(f"❌ Ошибка БД через публичный URL: {e2}")
+            print(f"❌ Ошибка через публичный URL: {e2}")
             return False
 
 async def init_db():
@@ -95,6 +112,7 @@ async def get_xp(username: str) -> int:
 async def create_player(username: str):
     async with pool.acquire() as conn:
         await conn.execute("INSERT INTO players (username, xp) VALUES ($1, 1000) ON CONFLICT (username) DO NOTHING", username)
+        print(f"✅ Создан игрок {username}")
 
 async def update_xp(username: str, delta: int):
     async with pool.acquire() as conn:
