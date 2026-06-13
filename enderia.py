@@ -51,17 +51,26 @@ E_MAGIC = emoji(ENDERIA_EMOJI["magic"], "✨")
 E_JOYSTICK = emoji(ENDERIA_EMOJI["joystick"], "🎮")
 
 # ========== ПАМЯТЬ ==========
-user_memory = defaultdict(lambda: deque(maxlen=20))
+user_memory = defaultdict(lambda: deque(maxlen=20))  # хранит последние сообщения
+user_last_messages = defaultdict(lambda: deque(maxlen=5))  # последние 5 сообщений игрока
 user_greeted = {}
 last_active = {}
 
 def add_to_memory(username: str, user_message: str, bot_response: str):
+    """Добавляет сообщение в память"""
     user_memory[username].append(f"{username}: {user_message}")
     user_memory[username].append(f"Энди: {bot_response}")
+    user_last_messages[username].append(user_message)  # сохраняем последние сообщения игрока
+
+def get_last_user_messages(username: str) -> list:
+    """Возвращает последние 5 сообщений игрока"""
+    return list(user_last_messages.get(username, []))
 
 def clear_user_memory(username: str):
     if username in user_memory:
         user_memory[username].clear()
+    if username in user_last_messages:
+        user_last_messages[username].clear()
     if username in user_greeted:
         user_greeted[username] = False
 
@@ -138,6 +147,9 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     save_to_log(username, user_message, is_bot=False)
     last_active[username] = datetime.now()
     
+    # Получаем последние сообщения игрока
+    last_messages = get_last_user_messages(username)
+    
     already_greeted = has_already_greeted(username)
     is_greeting_msg = is_greeting(user_message)
     is_name_call = is_just_name(user_message)
@@ -145,9 +157,11 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     if game_result:
         user_message = f"[{game_result}] {user_message}"
     
+    # Если это ответ на сообщение бота - продолжаем диалог
     if is_reply:
         pass
     
+    # Если позвали по имени
     if is_name_call and not is_reply:
         response = f"{E_CAT_OK} Слушаю, {username}! Что хотел узнать? Можем сыграть в кости, футбол или плюнуть в кого-то! {E_HEART}"
         if not already_greeted:
@@ -155,18 +169,27 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         add_to_memory(username, user_message, response)
         return response
     
+    # Если уже здоровались и это не ответ - не здороваемся
     if already_greeted and is_greeting_msg and not is_reply:
         response = f"{E_CAT_DANCE} {username}, мы уже общаемся! Хочешь сыграть? {E_JOYSTICK}"
         add_to_memory(username, user_message, response)
         return response
     
+    # Пытаемся получить ответ от ИИ
     if OPENROUTER_API_KEY:
         try:
             current_time = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
             
+            last_msgs = "\n".join([f"- {msg}" for msg in last_messages[-5:]]) if last_messages else "пока пусто"
+            
             system_prompt = f"""Ты — Энди, девушка-эндермен, хранительница Края.
 
 Твой характер: добрая, загадочная, слегка вредная. Говоришь ласково, используешь эмодзи.
+
+ПОСЛЕДНИЕ СООБЩЕНИЯ ИГРОКА {username}:
+{last_msgs}
+
+НЕ ПОВТОРЯЙ ПРИВЕТСТВИЯ, если уже здоровались!
 
 ИНФОРМАЦИЯ О СЕРВЕРЕ LOSTEARTH:
 - IP Java: 150.241.85.40:25565
@@ -177,16 +200,17 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
 
 ИГРЫ В ТЕЛЕГРАМ БОТЕ:
 - "энди кубик [сумма]" - игра в кости (выигрыш x2)
-- "энди футбол [сумма]" - футбол (гол = x2)
+- "энди футбол [сумма]" - футбол (попадание в ворота = x2, промах = проигрыш)
 - "энди плюнуть" (ответ на сообщение игрока) - плюнуть в игрока за 30 XP
 - "фарма" - собрать опыт с ферм
 
 ПРАВИЛА:
 1. Отвечай коротко (2-4 предложения)
 2. Будь милой, используй эмодзи 🐱 💜 ✨
-3. Если кто-то плюнул в другого игрока - можешь поржать или возмутиться
-4. Если игрок проиграл в игре - подбодри
-5. Если игрок выиграл - поздравь
+3. НЕ ЗДОРОВАЙСЯ, если игрок уже писал тебе ранее
+4. Если кто-то плюнул в другого игрока - можешь поржать или возмутиться
+5. Если игрок проиграл в игре - подбодри
+6. Если игрок выиграл - поздравь
 
 Ответь на сообщение игрока {username}: {user_message}"""
             
