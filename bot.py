@@ -316,6 +316,38 @@ async def start_cmd(message: Message):
 {E_RABBIT} {E_ANIME} {E_CAT_DANCE}"""
     await message.answer(text, parse_mode="HTML", reply_markup=get_main_keyboard())
 
+# Добавь эту команду в bot.py
+
+@dp.message(Command("checkbio"))
+async def check_bio(message: Message):
+    """проверить наличие @lostearth_bot в описании профиля"""
+    username = message.from_user.username or message.from_user.first_name
+    
+    try:
+        user = await bot.get_chat(message.from_user.id)
+        user_bio = user.bio if user.bio else ""
+        has_bot = "@lostearth_bot" in user_bio.lower() if user_bio else False
+        
+        if has_bot:
+            await message.answer(f"✅ {username}, в твоём описании найден @lostearth_bot!\n\nфарма и бонусы будут работать 💜", parse_mode="HTML")
+        else:
+            await message.answer(f"""❌ {username}, в твоём описании НЕТ @lostearth_bot!
+
+добавь в описание профиля: @lostearth_bot
+
+📝 как это сделать:
+1. зайди в настройки telegram
+2. нажми на свою фотографию
+3. выбери "редактировать профиль"
+4. в разделе "описание" добавь: @lostearth_bot
+5. сохрани и нажми /checkbio снова
+
+после добавления фарма и бонусы заработают 💜""", parse_mode="HTML")
+            
+            print(f"🔍 bio пользователя {username}: '{user_bio}'")
+    except Exception as e:
+        await message.answer(f"❌ ошибка при проверке: {e}", parse_mode="HTML")
+
 @dp.message(Command("balance"))
 async def balance_cmd(message: Message):
     username = message.from_user.username or message.from_user.first_name
