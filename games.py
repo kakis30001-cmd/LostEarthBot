@@ -96,7 +96,6 @@ def claim_daily_bonus(username: str) -> int:
 
 # ========== ПЛЕВОК ==========
 def add_spit(username: str, target: str) -> tuple[bool, str, int]:
-    """Плюнуть в игрока за 30 XP"""
     xp = get_xp(username)
     if xp < 30:
         return False, f"У тебя всего {xp} XP! Нужно 30 XP для плевка!", 0
@@ -264,25 +263,29 @@ async def game_football_bet(username: str, bet_amount: int, bot, chat_id: int) -
     player_value = await play_football(bot, chat_id)
     
     await asyncio.sleep(1.5)
-    await bot.send_message(chat_id, f"🐱 Энди защищает ворота...")
+    await bot.send_message(chat_id, f"🧤 Энди защищает ворота...")
     bot_value = await play_football(bot, chat_id)
     
+    # Футбол: 1-2-3 = промах (Энди поймала), 4-5-6 = гол (Энди не поймала)
     player_goal = player_value >= 4
-    bot_save = bot_value >= 4
+    bot_caught = bot_value >= 4
     
-    if player_goal and not bot_save:
+    if player_goal and not bot_caught:
+        # Гол! Энди не поймала - выигрыш x2
         win_amount = bet_amount * 2
         update_xp(username, win_amount)
         update_stats(username, is_win=True)
         new_xp = get_xp(username)
-        result_text = f"⚽ ГОЛ! ПОБЕДА! ⚽\n\nТвой удар: {player_value}\nСэйв Энди: {bot_value}\n\n✨ Ты забил гол и выиграл {win_amount} XP!\n💰 Баланс: {new_xp} XP"
+        result_text = f"⚽ ГОЛ! ПОБЕДА! ⚽\n\nТвой удар: {player_value}\nЭнди: {bot_value} (не поймала)\n\n✨ Ты забил гол и выиграл {win_amount} XP!\n💰 Баланс: {new_xp} XP"
         return result_text, f"Забил гол и выиграл {win_amount} XP в футболе!"
-    elif not player_goal and bot_save:
+    elif not player_goal and bot_caught:
+        # Промах, Энди поймала - проигрыш
         update_xp(username, -bet_amount)
         update_stats(username, is_win=False)
         new_xp = get_xp(username)
-        result_text = f"😔 ПРОМАХ...\n\nТвой удар: {player_value}\nСэйв Энди: {bot_value}\n\n💔 Ты промахнулся и проиграл {bet_amount} XP!\n💰 Баланс: {new_xp} XP"
+        result_text = f"😔 ПРОМАХ...\n\nТвой удар: {player_value}\nЭнди: {bot_value} (поймала мяч)\n\n💔 Ты промахнулся и проиграл {bet_amount} XP!\n💰 Баланс: {new_xp} XP"
         return result_text, f"Промахнулся и проиграл {bet_amount} XP в футболе!"
     else:
-        result_text = f"🤝 НИЧЬЯ!\n\nТвой удар: {player_value}\nСэйв Энди: {bot_value}\n\n💰 Ставка возвращена!\n💰 Баланс: {xp} XP"
+        # Ничья или вратарь не поймал но игрок не забил
+        result_text = f"🤝 НИЧЬЯ!\n\nТвой удар: {player_value}\nЭнди: {bot_value}\n\n💰 Ставка возвращена!\n💰 Баланс: {xp} XP"
         return result_text, f"Ничья в футболе! Ставка {bet_amount} XP возвращена"
