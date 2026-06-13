@@ -20,6 +20,7 @@ from enderia import (
     should_respond,
     set_server_online,
     save_to_log,
+    send_spontaneous_message,
     E_CAT_DANCE,
     E_CAT_OK,
     E_CAT_UP,
@@ -110,6 +111,7 @@ APPLY_URL = f"{BASE_URL}/apply.html"
 
 online_cache = {}
 last_update = {}
+CHAT_ID = None  # Будет установлен при первом сообщении
 
 # ========== MINECRAFT API ==========
 async def get_java_status(ip: str, port: int = 25565):
@@ -188,13 +190,18 @@ def get_back_keyboard():
 # ========== КОМАНДЫ ==========
 @dp.message(CommandStart())
 async def start_cmd(message: Message):
+    global CHAT_ID
+    CHAT_ID = message.chat.id
     username = message.from_user.username or message.from_user.first_name
     init_player(username)
     online, max_players = await get_server_online()
     
+    # Запускаем спонтанные сообщения
+    asyncio.create_task(send_spontaneous_message(bot, CHAT_ID))
+    
     text = f"""{E_MAGIC} <b>Добро пожаловать на {SERVER['name']}</b> {E_MAGIC}
 
-{E_HOUSE} <b>{SERVER['mode']}</b>
+{E_HOUSE} <b>Мирный режим по заявкам!</b>
 
 {E_CAT_DANCE} <b>Я Энди - твой живой помощник!</b>
 
@@ -206,13 +213,86 @@ async def start_cmd(message: Message):
 
 {E_RABBIT} {E_ANIME} {E_CAT_DANCE}
 
-📝 <b>Доступные команды:</b>
-/games - список всех игр и ферм
-/balance - баланс опыта
-/profile - твой профиль
-/daily - бонус 500 XP"""
+📝 <b>Как играть:</b>
+• <b>энди кубик 100</b> - игра в кости
+• <b>энди футбол 100</b> - футбол
+• <b>фарма</b> - собрать опыт с ферм
+• <b>/games</b> - все команды"""
     await message.answer(text, parse_mode="HTML", reply_markup=get_main_keyboard())
 
+# ========== РУССКИЕ КОМАНДЫ ==========
+@dp.message(lambda msg: msg.text and msg.text.lower().startswith("энди кубик"))
+async def dice_game(message: Message):
+    username = message.from_user.username or message.from_user.first_name
+    text = message.text.lower()
+    
+    # Парсим ставку
+    match = re.search(r"энди кубик\s+(\d+)", text)
+    if not match:
+        # Если нет ставки - предлагаем
+        response = f"{E_CAT_DANCE} {username}, напиши ставку! Например: энди кубик 100 {E_JOYSTICK}"
+        await message.reply(response, parse_mode="HTML")
+        return
+    
+    bet_amount = int(match.group(1))
+    result_text, game_result = await game_dice_bet(username, bet_amount, bot, message.chat.id)
+    
+    # Отправляем результат игры
+    await message.answer(result_text, parse_mode="HTML")
+    
+    # Получаем реакцию от ИИ
+    if game_result:
+        ai_response = await get_enderia_response(f"{username} {game_result}", username, is_reply=True, game_result=game_result)
+        if ai_response:
+            await message.answer(f"{E_CAT_DANCE} {ai_response}", parse_mode="HTML")
+
+@dp.message(lambda msg: msg.text and msg.text.lower().startswith("энди футбол"))
+async def football_game(message: Message):
+    username = message.from_user.username or message.from_user.first_name
+    text = message.text.lower()
+    
+    match = re.search(r"энди футбол\s+(\d+)", text)
+    if not match:
+        response = f"{E_CAT_DANCE} {username}, напиши ставку! Например: энди футбол 100 ⚽"
+        await message.reply(response, parse_mode="HTML")
+        return
+    
+    bet_amount = int(match.group(1))
+    result_text, game_result = await game_football_bet(username, bet_amount, bot, message.chat.id)
+    
+    await message.answer(result_text, parse_mode="HTML")
+    
+    if game_result:
+        ai_response = await get_enderia_response(f"{username} {game_result}", username, is_reply=True, game_result=game_result)
+        if ai_response:
+            await message.answer(f"{E_CAT_DANCE} {ai_response}", parse_mode="HTML")
+
+@dp.message(lambda msg: msg.text and msg.text.lower() in ["фарма", "ферма", "собрать опыт"])
+async def farm_collect(message: Message):
+    username = message.from_user.username or message.from_user.first_name
+    income = claim_income(username)
+    
+    if income > 0:
+        xp = get_xp(username)
+        result_text = f"{E_MAGIC} <b>Собрано {income} XP</b> с ферм! {E_MAGIC}\n\n{E_CROWN} Твой опыт: {xp} XP {E_CAT_DANCE}"
+        game_result = f"Собрал {income} XP с ферм"
+    else:
+        farms = get_farms(username)
+        if not farms:
+            result_text = f"{E_HOUSE} У тебя нет ферм! Купи первую: /buy_farm пауков {E_RABBIT}"
+            game_result = None
+        else:
+            result_text = f"{E_NOTE} Пока не накопилось опыта. Подожди немного или улучшай фермы! {E_CAT_UP}"
+            game_result = None
+    
+    await message.answer(result_text, parse_mode="HTML")
+    
+    if game_result:
+        ai_response = await get_enderia_response(f"{username} {game_result}", username, is_reply=True, game_result=game_result)
+        if ai_response:
+            await message.answer(f"{E_CAT_DANCE} {ai_response}", parse_mode="HTML")
+
+# ========== ОСТАЛЬНЫЕ КОМАНДЫ ==========
 @dp.message(Command("online"))
 async def cmd_online(message: Message):
     online, max_players = await get_server_online()
@@ -282,31 +362,6 @@ async def daily_cmd(message: Message):
         text = f"{E_HEART} {username}, ты уже получал бонус сегодня! Возвращайся завтра! {E_CAT_OK}"
         await message.answer(text, parse_mode="HTML")
 
-@dp.message(Command("bet"))
-async def bet_cmd(message: Message):
-    username = message.from_user.username or message.from_user.first_name
-    match = re.match(r"^/bet\s+(\d+)$", message.text)
-    if not match:
-        await message.answer(f"{E_JOYSTICK} Используй: /bet [сумма]\n{E_CROWN} Минимальная ставка: 50 XP\nПример: /bet 100", parse_mode="HTML")
-        return
-    
-    bet_amount = int(match.group(1))
-    response = await game_dice_bet(username, bet_amount, bot, message.chat.id)
-    await message.answer(response, parse_mode="HTML")
-
-@dp.message(Command("football"))
-@dp.message(Command("foot"))
-async def football_cmd(message: Message):
-    username = message.from_user.username or message.from_user.first_name
-    match = re.match(r"^/(?:football|foot)\s+(\d+)$", message.text)
-    if not match:
-        await message.answer(f"⚽ Используй: /football [сумма]\n{E_CROWN} Минимальная ставка: 50 XP\nПример: /football 100", parse_mode="HTML")
-        return
-    
-    bet_amount = int(match.group(1))
-    response = await game_football_bet(username, bet_amount, bot, message.chat.id)
-    await message.answer(response, parse_mode="HTML")
-
 @dp.message(Command("farms"))
 async def farms_cmd(message: Message):
     username = message.from_user.username or message.from_user.first_name
@@ -322,10 +377,7 @@ async def farms_cmd(message: Message):
 🏹 <b>Скелеты</b> - 1000 XP (60/час)
 👾 <b>Эндермены</b> - 1500 XP (150/час)
 
-{E_NOTE} /buy_farm <название> - купить ферму
-{E_MAGIC} /claim - собрать опыт
-
-Пример: /buy_farm криперов"""
+/buy_farm <название> - купить ферму"""
         await message.answer(text, parse_mode="HTML")
         return
     
@@ -343,7 +395,6 @@ async def farms_cmd(message: Message):
         text += f"{emoji_farm} <b>{name}</b>: ур. {level} ({income} XP/час)\n"
     
     text += f"\n{E_CROWN} <b>Общий доход:</b> {total_income} XP/час"
-    text += f"\n{E_MAGIC} /claim - собрать опыт"
     text += f"\n{E_CAT_UP} /upgrade_farm <название> - улучшить ферму"
     await message.answer(text, parse_mode="HTML")
 
@@ -395,20 +446,6 @@ async def upgrade_farm_cmd(message: Message):
     success, msg = upgrade_farm(username, farm_map[farm_name])
     await message.answer(msg, parse_mode="HTML")
 
-@dp.message(Command("claim"))
-async def claim_cmd(message: Message):
-    username = message.from_user.username or message.from_user.first_name
-    income = claim_income(username)
-    if income > 0:
-        xp = get_xp(username)
-        await message.answer(f"{E_MAGIC} <b>Собрано {income} XP</b> с ферм! {E_MAGIC}\n\n{E_CROWN} Твой опыт: {xp} XP {E_CAT_DANCE}", parse_mode="HTML")
-    else:
-        farms = get_farms(username)
-        if not farms:
-            await message.answer(f"{E_HOUSE} У тебя нет ферм! Купи первую: /buy_farm пауков {E_RABBIT}", parse_mode="HTML")
-        else:
-            await message.answer(f"{E_NOTE} Пока не накопилось опыта. Подожди немного или улучшай фермы! {E_CAT_UP}", parse_mode="HTML")
-
 @dp.message(Command("leaderboard"))
 @dp.message(Command("top"))
 async def leaderboard_cmd(message: Message):
@@ -425,65 +462,41 @@ async def leaderboard_cmd(message: Message):
 
 @dp.message(Command("games"))
 async def games_cmd(message: Message):
-    text = f"""{E_JOYSTICK} <b>ДОСТУПНЫЕ ИГРЫ И ФЕРМЫ</b> {E_JOYSTICK}
+    text = f"""{E_JOYSTICK} <b>ДОСТУПНЫЕ КОМАНДЫ</b> {E_JOYSTICK}
 
-{E_CROWN} <b>БАЛАНС:</b>
+🎮 <b>ИГРЫ (русские команды):</b>
+• <b>энди кубик 100</b> - игра в кости (x2)
+• <b>энди футбол 100</b> - футбол (гол = x2)
+• <b>фарма</b> - собрать опыт с ферм
+
+📊 <b>БАЛАНС:</b>
 /balance - баланс опыта
 /profile - профиль игрока
 /daily - бонус 500 XP
 
-{E_JOYSTICK} <b>ИГРЫ:</b>
-🎲 /bet [сумма] - игра в кости (выигрыш x2)
-⚽ /football [сумма] - футбол (гол = x2)
-
-{E_HOUSE} <b>ФЕРМЫ:</b>
+🏭 <b>ФЕРМЫ:</b>
 /farms - мои фермы
 /buy_farm <название> - купить ферму
 /upgrade_farm <название> - улучшить ферму
-/claim - собрать опыт
 /leaderboard - топ игроков
 
 {E_CROWN} <b>Стартовый баланс: 1000 XP</b>
 {E_JOYSTICK} <b>Минимальная ставка: 50 XP</b>
 
-{E_HEART} <b>Ежедневный бонус:</b>
-Добавь @lostearth_bot в описание профиля!"""
-    await message.answer(text, parse_mode="HTML")
-
-@dp.message(Command("help"))
-async def help_cmd(message: Message):
-    text = f"""{E_HEART} <b>Помощь по боту LostEarth</b> {E_HEART}
-
-{E_HOUSE} <b>Команды сервера:</b>
-/start - Главное меню
-/online - Показать онлайн
-
-{E_CROWN} <b>БАЛАНС:</b>
-/balance - баланс опыта
-/profile - профиль игрока
-/daily - бонус 500 XP
-
-{E_JOYSTICK} <b>ИГРЫ:</b>
-🎲 /bet [сумма] - игра в кости (x2)
-⚽ /football [сумма] - футбол (гол = x2)
-
-{E_HOUSE} <b>ФЕРМЫ:</b>
-/farms - мои фермы
-/buy_farm <название> - купить ферму
-/upgrade_farm <название> - улучшить ферму
-/claim - собрать опыт
-/leaderboard - топ игроков
-
-{E_CROWN} <b>Стартовый баланс: 1000 XP</b>
-{E_JOYSTICK} <b>Минимальная ставка: 50 XP</b>
-{E_MAGIC} <b>Ежедневный бонус: 500 XP</b>
-
-{E_CAT_DANCE} <i>Удачи в игре и фарме!</i> {E_HEART}"""
+💡 <b>Примеры:</b>
+• энди кубик 100
+• энди футбол 200
+• фарма"""
     await message.answer(text, parse_mode="HTML")
 
 # ========== ОБРАБОТЧИК ==========
 @dp.message()
 async def handle_message(message: Message):
+    global CHAT_ID
+    if CHAT_ID is None:
+        CHAT_ID = message.chat.id
+        asyncio.create_task(send_spontaneous_message(bot, CHAT_ID))
+    
     if not message.text:
         return
     
@@ -537,7 +550,7 @@ async def handle_callback(callback: CallbackQuery):
         await callback.answer()
     
     elif data == "menu_enderia":
-        text = f"{E_HEART} <b>Энди - твой живой помощник</b> {E_HEART}\n\n{E_CAT_DANCE} <b>Кто я?</b>\nЯ девушка-эндермен, хранительница Края.\n\n{E_NOTE} <b>Как ко мне обратиться:</b>\nНапиши: Энди\n\n{E_JOYSTICK} <b>Игры и фермы:</b>\n/games - список всех команд\n\n{E_MAGIC} <b>Ежедневный бонус 500 XP</b>\nДобавь @lostearth_bot в описание профиля!"
+        text = f"{E_HEART} <b>Энди - твой живой помощник</b> {E_HEART}\n\n{E_CAT_DANCE} <b>Кто я?</b>\nЯ девушка-эндермен, хранительница Края.\n\n{E_NOTE} <b>Как играть:</b>\n• энди кубик 100\n• энди футбол 100\n• фарма\n\n{E_MAGIC} <b>Ежедневный бонус 500 XP</b>\nДобавь @lostearth_bot в описание профиля!"
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_back_keyboard())
         await callback.answer()
     
@@ -558,6 +571,7 @@ async def main():
     print("=" * 50)
     print("🚀 БОТ LOSTEARTH ЗАПУЩЕН")
     print(f"🤖 Бот: @{bot_info.username}")
+    print("🎮 Команды: энди кубик 100, энди футбол 100, фарма")
     print("=" * 50)
     
     await dp.start_polling(bot)
