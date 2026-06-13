@@ -3,6 +3,9 @@ from datetime import datetime
 
 from database import get_xp, update_xp, update_stats, get_farm_level, update_farm_level, get_last_farm, update_last_farm
 
+FARM_INCOME = {1: 50, 2: 100, 3: 200, 4: 350, 5: 550, 6: 800, 7: 1100, 8: 1500, 9: 2000, 10: 3000}
+UPGRADE_COST = {1: 0, 2: 500, 3: 1000, 4: 2000, 5: 3500, 6: 5500, 7: 8000, 8: 11000, 9: 15000, 10: 20000}
+
 # ========== ПЛЕВОК ==========
 async def add_spit(username: str, target: str) -> tuple[bool, str, int]:
     xp = await get_xp(username)
@@ -14,26 +17,30 @@ async def add_spit(username: str, target: str) -> tuple[bool, str, int]:
     return True, f"💨 {username} плюнул в {target} эндер-жемчугом", new_xp
 
 # ========== ФАРМА ==========
-FARM_INCOME = {1: 50, 2: 100, 3: 200, 4: 350, 5: 550, 6: 800, 7: 1100, 8: 1500, 9: 2000, 10: 3000}
-UPGRADE_COST = {1: 0, 2: 500, 3: 1000, 4: 2000, 5: 3500, 6: 5500, 7: 8000, 8: 11000, 9: 15000, 10: 20000}
+async def farm_info(username: str, has_bot_in_bio: bool, is_subscribed: bool = False) -> str:
+    if not is_subscribed or not has_bot_in_bio:
+        return f"""❌ <b>ФАРМА НЕ ДОСТУПНА</b>
 
-async def farm_info(username: str, has_bot_in_bio: bool) -> str:
-    """показывает информацию о фарме"""
-    if not has_bot_in_bio:
-        return f"""❌ ФАРМА НЕ ДОСТУПНА
+<b>Требования для доступа к фарме:</b>
 
-Чтобы пользоваться фармой, добавь в описание своего профиля:
+1️⃣ {'✅' if is_subscribed else '❌'} <b>Подписка на канал:</b> @LostEarthSMP
+   {'✅ Вы подписаны' if is_subscribed else '❌ Вы НЕ подписаны'}
 
-<b>@lostearth_bot</b>
+2️⃣ {'✅' if has_bot_in_bio else '❌'} <b>Описание профиля:</b> @lostearth_bot
+   {'✅ Найдено в описании' if has_bot_in_bio else '❌ Не найдено'}
 
-📝 КАК ЭТО СДЕЛАТЬ:
-1. Зайди в настройки Telegram
-2. Нажми на свою фотографию
-3. Выбери "Редактировать профиль"
-4. В разделе "Описание" добавь: @lostearth_bot
-5. Сохрани и возвращайся
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+<b>📝 Как исправить:</b>
 
-После добавления бот проверит и фарма заработает 💜"""
+🔹 <b>Подписаться на канал:</b>
+👉 https://t.me/LostEarthSMP
+
+🔹 <b>Добавить в описание профиля:</b>
+• Настройки Telegram → Редактировать профиль
+• В поле "Описание" добавь: @lostearth_bot
+• Сохрани изменения
+
+После выполнения напиши /check для проверки ✅"""
     
     level = await get_farm_level(username)
     income = FARM_INCOME.get(level, 50)
@@ -71,23 +78,26 @@ async def farm_info(username: str, has_bot_in_bio: bool) -> str:
     
     return text
 
-async def collect_farm(username: str, has_bot_in_bio: bool) -> tuple[str, str]:
-    """собирает опыт с фармы - ТРЕБУЕТ ПРОВЕРКУ БОТА В ОПИСАНИИ"""
-    if not has_bot_in_bio:
-        return f"""❌ ФАРМА НЕ ДОСТУПНА
+async def collect_farm(username: str, has_bot_in_bio: bool, is_subscribed: bool = False) -> tuple[str, str]:
+    if not is_subscribed or not has_bot_in_bio:
+        missing = []
+        if not is_subscribed:
+            missing.append("• Подпишись на канал: https://t.me/LostEarthSMP")
+        if not has_bot_in_bio:
+            missing.append("• Добавь в описание профиля: @lostearth_bot")
+        
+        return f"""❌ <b>ФАРМА НЕ ДОСТУПНА</b>
 
-Чтобы собирать опыт с фармы, добавь в описание своего профиля:
+<b>Чтобы собирать опыт с фармы, нужно:</b>
 
-<b>@lostearth_bot</b>
+{chr(10).join(missing)}
 
-📝 КАК ЭТО СДЕЛАТЬ:
-1. Зайди в настройки Telegram
-2. Нажми на свою фотографию
-3. Выбери "Редактировать профиль"
-4. В разделе "Описание" добавь: @lostearth_bot
-5. Сохрани и возвращайся
+<b>📝 Как добавить в описание:</b>
+1. Настройки Telegram → Редактировать профиль
+2. В поле "Описание" добавь: @lostearth_bot
+3. Сохрани изменения
 
-После добавления бот проверит и фарма заработает 💜""", None
+После выполнения напиши /check для проверки ✅""", None
     
     last_farm = await get_last_farm(username)
     now = datetime.now()
@@ -110,16 +120,21 @@ async def collect_farm(username: str, has_bot_in_bio: bool) -> tuple[str, str]:
     
     return f"🏭 Ты собрал {income} XP с фармы!\n💰 Баланс: {new_xp} XP", f"собрал {income} XP с фармы"
 
-async def upgrade_farm_cmd(username: str, has_bot_in_bio: bool) -> tuple[str, str]:
-    """улучшает фарму - ТРЕБУЕТ ПРОВЕРКУ БОТА В ОПИСАНИИ"""
-    if not has_bot_in_bio:
-        return f"""❌ ФАРМА НЕ ДОСТУПНА
+async def upgrade_farm_cmd(username: str, has_bot_in_bio: bool, is_subscribed: bool = False) -> tuple[str, str]:
+    if not is_subscribed or not has_bot_in_bio:
+        missing = []
+        if not is_subscribed:
+            missing.append("• Подпишись на канал: https://t.me/LostEarthSMP")
+        if not has_bot_in_bio:
+            missing.append("• Добавь в описание профиля: @lostearth_bot")
+        
+        return f"""❌ <b>УЛУЧШЕНИЕ ФАРМЫ НЕ ДОСТУПНО</b>
 
-Чтобы улучшать фарму, добавь в описание своего профиля:
+<b>Чтобы улучшать фарму, нужно:</b>
 
-<b>@lostearth_bot</b>
+{chr(10).join(missing)}
 
-После добавления бот проверит и фарма заработает 💜""", None
+После выполнения напиши /check для проверки ✅""", None
     
     current_level = await get_farm_level(username)
     
@@ -147,10 +162,13 @@ async def roll_dice(bot, chat_id: int):
 
 async def game_dice_bet(username: str, bet_amount: int, bot, chat_id: int) -> tuple[str, str]:
     xp = await get_xp(username)
+    
     if xp < bet_amount:
         return f"💰 {username}, у тебя всего {xp} XP! Не хватает на ставку {bet_amount}", None
     if bet_amount < 50:
         return f"🎲 {username}, минимальная ставка 50 XP!", None
+    if bet_amount > 5000:
+        return f"🎲 {username}, максимальная ставка 5000 XP!", None
     
     await bot.send_message(chat_id, f"🎲 {username} бросает кубик...")
     player_value = await roll_dice(bot, chat_id)
@@ -182,10 +200,13 @@ async def play_football(bot, chat_id: int):
 
 async def game_football_bet(username: str, bet_amount: int, bot, chat_id: int) -> tuple[str, str]:
     xp = await get_xp(username)
+    
     if xp < bet_amount:
         return f"💰 {username}, у тебя всего {xp} XP! Не хватает на ставку {bet_amount}", None
     if bet_amount < 50:
         return f"⚽ {username}, минимальная ставка 50 XP!", None
+    if bet_amount > 5000:
+        return f"⚽ {username}, максимальная ставка 5000 XP!", None
     
     await bot.send_message(chat_id, f"⚽ {username} бьёт по воротам...")
     player_value = await play_football(bot, chat_id)
