@@ -2,27 +2,20 @@ import os
 import json
 import re
 import asyncio
-import random
-from datetime import datetime, date, timedelta
+from datetime import datetime, date
 
 # ========== ФАЙЛОВОЕ ХРАНИЛИЩЕ ==========
 PLAYERS_FILE = "players.json"
 
-# Новая система ферм - одна ферма которая прокачивается
-FARM_LEVELS = {
-    1: {"income": 50, "upgrade_cost": 500, "upgrade_hours": 2},
-    2: {"income": 100, "upgrade_cost": 1000, "upgrade_hours": 4},
-    3: {"income": 200, "upgrade_cost": 2000, "upgrade_hours": 8},
-    4: {"income": 400, "upgrade_cost": 4000, "upgrade_hours": 16},
-    5: {"income": 800, "upgrade_cost": 8000, "upgrade_hours": 24},
-    6: {"income": 1600, "upgrade_cost": 16000, "upgrade_hours": 48},
-    7: {"income": 3200, "upgrade_cost": 32000, "upgrade_hours": 72},
-    8: {"income": 6400, "upgrade_cost": 64000, "upgrade_hours": 96},
-    9: {"income": 12800, "upgrade_cost": 128000, "upgrade_hours": 120},
-    10: {"income": 25600, "upgrade_cost": 0, "upgrade_hours": 0},
+FARMS = {
+    "пауков": {"base_income": 50, "emoji": "🕷️", "cost": 1000},
+    "зомби": {"base_income": 75, "emoji": "🧟", "cost": 1000},
+    "криперов": {"base_income": 100, "emoji": "💥", "cost": 1000},
+    "скелетов": {"base_income": 60, "emoji": "🏹", "cost": 1000},
+    "эндерменов": {"base_income": 150, "emoji": "👾", "cost": 1500},
 }
 
-SPIT_COST = 10
+UPGRADE_COSTS = {1: 0, 2: 500, 3: 1000, 4: 2000, 5: 5000}
 
 def load_players():
     if not os.path.exists(PLAYERS_FILE):
@@ -48,9 +41,8 @@ def init_player(username: str):
             "last_bonus": None,
             "wins": 0,
             "losses": 0,
-            "farm_level": 1,
-            "farm_last_claim": datetime.now().timestamp(),
-            "farm_upgrade_start": None,
+            "farms": {},
+            "last_claim": datetime.now().timestamp()
         }
         save_players(data)
 
@@ -102,127 +94,100 @@ def claim_daily_bonus(username: str) -> int:
     save_players(data)
     return 500
 
-# ========== НОВАЯ СИСТЕМА ФЕРМ ==========
-def get_farm_level(username: str) -> int:
+# ========== ФЕРМЫ ==========
+def get_farms(username: str) -> dict:
     data = load_players()
     if username not in data:
         init_player(username)
-        return 1
-    return data[username].get("farm_level", 1)
+    return data[username].get("farms", {})
 
-def get_farm_info(username: str):
-    """Полная информация о ферме"""
-    data = load_players()
-    if username not in data:
-        init_player(username)
+def buy_farm(username: str, farm_name: str):
+    if farm_name not in FARMS:
+        return False, f"❌ Фермы '{farm_name}' нет! Доступны: пауков, зомби, криперов, скелетов, эндерменов"
     
-    level = data[username].get("farm_level", 1)
-    income = FARM_LEVELS[level]["income"]
-    upgrade_start = data[username].get("farm_upgrade_start")
+    farms = get_farms(username)
+    if farm_name in farms:
+        return False, f"❌ У тебя уже есть ферма {farm_name}!"
     
-    upgrading = False
-    upgrade_remaining = None
-    upgrade_complete_level = None
-    
-    if upgrade_start:
-        upgrade_start_time = datetime.fromtimestamp(upgrade_start)
-        if level < 10:
-            upgrade_hours = FARM_LEVELS[level]["upgrade_hours"]
-            finish_time = upgrade_start_time + timedelta(hours=upgrade_hours)
-            if datetime.now() >= finish_time:
-                # Завершаем улучшение
-                new_level = level + 1
-                data[username]["farm_level"] = new_level
-                data[username]["farm_upgrade_start"] = None
-                save_players(data)
-                level = new_level
-                income = FARM_LEVELS[level]["income"]
-            else:
-                upgrading = True
-                remaining = finish_time - datetime.now()
-                upgrade_remaining = remaining.total_seconds() / 3600
-                upgrade_complete_level = level + 1
-    
-    next_upgrade = None
-    if level < 10 and not upgrading:
-        next_upgrade = {
-            "level": level + 1,
-            "cost": FARM_LEVELS[level]["upgrade_cost"],
-            "hours": FARM_LEVELS[level]["upgrade_hours"],
-            "income": FARM_LEVELS[level + 1]["income"]
-        }
-    
-    return {
-        "level": level,
-        "income_per_hour": income,
-        "upgrading": upgrading,
-        "upgrade_remaining_hours": upgrade_remaining,
-        "upgrade_complete_level": upgrade_complete_level,
-        "next_upgrade": next_upgrade,
-        "is_max": level >= 10
-    }
-
-def start_farm_upgrade(username: str):
-    """Начинает улучшение фермы"""
-    data = load_players()
-    if username not in data:
-        init_player(username)
-    
-    current_level = data[username].get("farm_level", 1)
-    if current_level >= 10:
-        return False, "Ферма уже максимального 10 уровня! 🏆"
-    
-    if data[username].get("farm_upgrade_start"):
-        return False, "Улучшение уже запущено! Подожди... ⏳"
-    
-    cost = FARM_LEVELS[current_level]["upgrade_cost"]
-    xp = data[username].get("xp", 1000)
+    cost = FARMS[farm_name]["cost"]
+    xp = get_xp(username)
     
     if xp < cost:
-        return False, f"Не хватает XP! Нужно {cost} XP для улучшения до {current_level + 1} уровня 💔"
+        return False, f"❌ Не хватает опыта! Нужно {cost} XP, у тебя {xp} XP"
     
     update_xp(username, -cost)
-    data[username]["farm_upgrade_start"] = datetime.now().timestamp()
+    farms[farm_name] = {"level": 1, "last_claim": datetime.now().timestamp()}
+    
+    data = load_players()
+    data[username]["farms"] = farms
     save_players(data)
     
-    hours = FARM_LEVELS[current_level]["upgrade_hours"]
-    return True, f"Улучшение фермы до {current_level + 1} уровня началось! 🚀 Закончится через {hours} часов"
+    return True, f"✅ Ты купил ферму {farm_name} 1 уровня! Приносит {FARMS[farm_name]['base_income']} XP в час"
 
-def claim_farm_income(username: str):
-    """Собирает доход с фермы (раз в час максимум)"""
+def upgrade_farm(username: str, farm_name: str):
+    farms = get_farms(username)
+    if farm_name not in farms:
+        return False, f"❌ У тебя нет фермы {farm_name}!"
+    
+    current_level = farms[farm_name]["level"]
+    if current_level >= 5:
+        return False, f"⭐ Ферма {farm_name} уже максимального 5 уровня!"
+    
+    cost = UPGRADE_COSTS[current_level + 1]
+    xp = get_xp(username)
+    
+    if xp < cost:
+        return False, f"❌ Не хватает опыта! Нужно {cost} XP для улучшения до {current_level + 1} уровня"
+    
+    update_xp(username, -cost)
+    farms[farm_name]["level"] = current_level + 1
+    
     data = load_players()
-    if username not in data:
-        init_player(username)
-        return 0, 0, None
+    data[username]["farms"] = farms
+    save_players(data)
     
-    # Проверяем завершение улучшения (обновляем статус)
-    farm_info = get_farm_info(username)
+    new_income = FARMS[farm_name]["base_income"] * (current_level + 1)
+    return True, f"✅ Ферма {farm_name} улучшена до {current_level + 1} уровня! Теперь приносит {new_income} XP в час"
+
+def calculate_income(farms: dict) -> int:
+    total = 0
+    for farm_name, farm_data in farms.items():
+        if farm_name in FARMS:
+            base = FARMS[farm_name]["base_income"]
+            level = farm_data.get("level", 1)
+            total += base * level
+    return total
+
+def claim_income(username: str) -> int:
+    farms = get_farms(username)
+    if not farms:
+        return 0
     
-    last_claim = data[username].get("farm_last_claim", datetime.now().timestamp())
-    if isinstance(last_claim, str):
-        last_claim = float(last_claim)
-    last_claim_time = datetime.fromtimestamp(last_claim)
+    now = datetime.now()
+    total_income = 0
     
-    # Сколько часов прошло с последнего сбора
-    hours_passed = (datetime.now() - last_claim_time).total_seconds() / 3600
-    
-    # Можно собирать если прошёл хотя бы 1 час
-    if hours_passed < 1:
-        return 0, hours_passed, farm_info
-    
-    # Сколько часов забираем (максимум 24 чтобы не накапливалось слишком много)
-    hours_to_claim = min(hours_passed, 24)
-    
-    level = data[username].get("farm_level", 1)
-    income_per_hour = FARM_LEVELS[level]["income"]
-    total_income = int(income_per_hour * hours_to_claim)
+    data = load_players()
+    for farm_name, farm_data in farms.items():
+        last_claim = farm_data.get("last_claim")
+        if isinstance(last_claim, str):
+            last_claim = float(last_claim)
+        last_claim_time = datetime.fromtimestamp(last_claim)
+        hours_passed = (now - last_claim_time).total_seconds() / 3600
+        
+        if hours_passed > 0:
+            base = FARMS[farm_name]["base_income"]
+            level = farm_data.get("level", 1)
+            income = int(base * level * min(hours_passed, 24))
+            if income > 0:
+                total_income += income
+                farm_data["last_claim"] = now.timestamp()
     
     if total_income > 0:
-        data[username]["xp"] = data[username].get("xp", 1000) + total_income
-        data[username]["farm_last_claim"] = datetime.now().timestamp()
+        update_xp(username, total_income)
+        data[username]["farms"] = farms
         save_players(data)
     
-    return total_income, hours_passed, farm_info
+    return total_income
 
 def get_leaderboard(limit: int = 10) -> list:
     data = load_players()
@@ -232,66 +197,77 @@ def get_leaderboard(limit: int = 10) -> list:
             "username": username,
             "xp": info.get("xp", 0),
             "wins": info.get("wins", 0),
-            "farm_level": info.get("farm_level", 1)
+            "farms_count": len(info.get("farms", {}))
         })
     players.sort(key=lambda x: x["xp"], reverse=True)
     return players[:limit]
 
-# ========== ИГРА В КОСТИ ==========
-async def roll_dice_animated(bot, chat_id: int):
+# ========== ИГРЫ ==========
+async def roll_dice(bot, chat_id: int):
     msg = await bot.send_dice(chat_id, emoji="🎲")
     return msg.dice.value
 
-async def game_dice_bet(username: str, bot, chat_id: int, bet_amount: int = 50) -> str:
-    """Игра в кости с генерацией результата"""
+async def play_football(bot, chat_id: int):
+    msg = await bot.send_dice(chat_id, emoji="⚽")
+    return msg.dice.value
+
+async def game_dice_bet(username: str, bet_amount: int, bot, chat_id: int) -> str:
     xp = get_xp(username)
-    
-    if bet_amount < 10:
-        return f"🎲 Минимальная ставка 10 XP! 😲"
-    
     if xp < bet_amount:
-        return f"💔 У тебя всего {xp} XP! Не хватает на ставку {bet_amount} 😲"
+        return f"💰 {username}, у тебя всего {xp} XP! Не хватает на ставку {bet_amount}"
+    if bet_amount < 50:
+        return f"🎲 {username}, минимальная ставка 50 XP!"
     
-    # Анимация бросков
     await bot.send_message(chat_id, f"🎲 {username} бросает кубик...")
-    player_value = await roll_dice_animated(bot, chat_id)
+    player_value = await roll_dice(bot, chat_id)
     
     await asyncio.sleep(1.5)
-    await bot.send_message(chat_id, f"🐱 Эндерия бросает кубик...")
-    bot_value = await roll_dice_animated(bot, chat_id)
+    await bot.send_message(chat_id, f"🐱 Энди бросает кубик...")
+    bot_value = await roll_dice(bot, chat_id)
     
-    # Результат
     if player_value > bot_value:
         win_amount = bet_amount
         update_xp(username, win_amount)
         update_stats(username, is_win=True)
         new_xp = get_xp(username)
-        return f"""🎉 <b>ПОБЕДА!</b> 🎉
-
-🎲 Твой кубик: {player_value}
-🐱 Мой кубик: {bot_value}
-
-✨ Ты выиграл {win_amount} XP!
-💰 Баланс: {new_xp} XP 💜"""
-    
+        return f"🎉 ПОБЕДА! 🎉\n\nТвой кубик: {player_value}\nМой кубик: {bot_value}\n\n✨ Ты выиграл {win_amount} XP!\n💰 Баланс: {new_xp} XP"
     elif player_value < bot_value:
-        lose_amount = bet_amount
-        update_xp(username, -lose_amount)
+        update_xp(username, -bet_amount)
         update_stats(username, is_win=False)
         new_xp = get_xp(username)
-        return f"""😔 <b>ПРОИГРЫШ...</b> 😔
-
-🎲 Твой кубик: {player_value}
-🐱 Мой кубик: {bot_value}
-
-💔 Ты проиграл {lose_amount} XP!
-💰 Баланс: {new_xp} XP 😲"""
-    
+        return f"😔 ПРОИГРЫШ...\n\nТвой кубик: {player_value}\nМой кубик: {bot_value}\n\n💔 Ты проиграл {bet_amount} XP!\n💰 Баланс: {new_xp} XP"
     else:
-        return f"""🤝 <b>НИЧЬЯ!</b> 🤝
+        return f"🤝 НИЧЬЯ!\n\nОба выбросили {player_value}\n\n💰 Ставка возвращена!\n💰 Баланс: {xp} XP"
 
-🎲 Твой кубик: {player_value}
-🐱 Мой кубик: {bot_value}
-
-💰 Ставка возвращена!
-💰 Баланс: {xp} XP 🎮"""
+async def game_football_bet(username: str, bet_amount: int, bot, chat_id: int) -> str:
+    xp = get_xp(username)
+    if xp < bet_amount:
+        return f"💰 {username}, у тебя всего {xp} XP! Не хватает на ставку {bet_amount}"
+    if bet_amount < 50:
+        return f"⚽ {username}, минимальная ставка 50 XP!"
+    
+    await bot.send_message(chat_id, f"⚽ {username} бьёт по воротам...")
+    player_value = await play_football(bot, chat_id)
+    
+    await asyncio.sleep(1.5)
+    await bot.send_message(chat_id, f"🐱 Энди защищает ворота...")
+    bot_value = await play_football(bot, chat_id)
+    
+    # В футболе: 1-2-3 это промах/сэйв, 4-5-6 это гол
+    player_goal = player_value >= 4
+    bot_save = bot_value >= 4
+    
+    if player_goal and not bot_save:
+        win_amount = bet_amount * 2  # x2 за гол
+        update_xp(username, win_amount)
+        update_stats(username, is_win=True)
+        new_xp = get_xp(username)
+        return f"⚽ ГОЛ! ПОБЕДА! ⚽\n\nТвой удар: {player_value}\nСэйв Энди: {bot_value}\n\n✨ Ты забил гол и выиграл {win_amount} XP!\n💰 Баланс: {new_xp} XP"
+    elif not player_goal and bot_save:
+        update_xp(username, -bet_amount)
+        update_stats(username, is_win=False)
+        new_xp = get_xp(username)
+        return f"😔 ПРОМАХ...\n\nТвой удар: {player_value}\nСэйв Энди: {bot_value}\n\n💔 Ты промахнулся и проиграл {bet_amount} XP!\n💰 Баланс: {new_xp} XP"
+    else:
+        # Ничья или вратарь пропустил но игрок не забил и т.д.
+        return f"🤝 НИЧЬЯ!\n\nТвой удар: {player_value}\nСэйв Энди: {bot_value}\n\n💰 Ставка возвращена!\n💰 Баланс: {xp} XP"
