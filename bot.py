@@ -420,6 +420,21 @@ async def dice_game(message: Message):
     finally:
         active_players.discard(user_id)
 
+@dp.message(lambda msg: msg.text and msg.text.lower().startswith("энди слоты"))
+async def slots_command(message: Message):
+    # Достаем ставку из сообщения
+    try:
+        parts = message.text.split()
+        bet = int(parts[2])
+    except (IndexError, ValueError):
+        return await message.answer("❌ Напиши: <code>энди слоты <сумма></code>", parse_mode="HTML")
+    
+    username = message.from_user.username or message.from_user.first_name
+    
+    # Вызываем нашу новую функцию
+    result_text, log_msg = await game_slots_bet(username, bet, bot, message.chat.id)
+    await message.answer(result_text, parse_mode="HTML")
+
 @dp.message(lambda msg: msg.text and msg.text.lower().startswith("энди футбол"))
 async def football_game(message: Message):
     user_id = message.from_user.id
