@@ -131,7 +131,16 @@ RULES_URL = f"{BASE_URL}/rules.html"
 APPLY_URL = f"{BASE_URL}/apply.html"
 
 # ========== MINECRAFT API ==========
-# ========== MINECRAFT API ==========
+async def get_user_bio(user_id: int) -> str:
+    """Получает bio пользователя из Telegram"""
+    try:
+        # Получаем объект чата/пользователя
+        chat = await bot.get_chat(user_id)
+        return chat.bio if chat.bio else ""
+    except Exception as e:
+        print(f"❌ [DEBUG] Ошибка при получении bio: {e}")
+        return ""
+        
 async def get_java_status(ip: str, port: int = 25565) -> tuple:
     """Проверяет статус Minecraft сервера через mcstatus с диагностикой"""
     try:
