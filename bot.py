@@ -202,6 +202,46 @@ async def admin_say_to(message: Message):
     except Exception as e:
         await message.answer(f"❌ ошибка: {e}", parse_mode="HTML")
 
+@dp.message(Command("givexp"))
+async def admin_give_xp(message: Message):
+    # 1. Проверка на админа
+    if message.from_user.id not in ADMIN_IDS:
+        return await message.answer("❌ у тебя нет прав", parse_mode="HTML")
+    
+    # 2. Разделяем сообщение на части: ["/givexp", "ИмяИгрока", "Сумма"]
+    parts = message.text.split(maxsplit=2)
+    if len(parts) < 3:
+        return await message.answer(
+            "📝 <b>Использование:</b> <code>/givexp <имя_игрока> <сумма></code>\n"
+            "💡 <i>Пример: /givexp Steve 5000</i> (выдать 5000)\n"
+            "💡 <i>Пример: /givexp Steve -1000</i> (забрать 1000)", 
+            parse_mode="HTML"
+        )
+    
+    target_username = parts[1]
+    
+    # 3. Проверяем, что сумма — это число
+    try:
+        amount = int(parts[2])
+    except ValueError:
+        return await message.answer("❌ Сумма должна быть целым числом!", parse_mode="HTML")
+    
+    # 4. Начисляем (или списываем) опыт
+    await update_xp(target_username, amount)
+    
+    # 5. Получаем новый баланс для красивого ответа
+    new_xp = await get_xp(target_username)
+    
+    action = "Выдано" if amount > 0 else "Списано"
+    
+    await message.answer(
+        f"{E_MAGIC} <b>Успешно!</b>\n\n"
+        f"👤 <b>Игрок:</b> {target_username}\n"
+        f"💰 <b>{action}:</b> {abs(amount)} xp\n"
+        f"🏦 <b>Новый баланс:</b> {new_xp} xp", 
+        parse_mode="HTML"
+    )
+
 @dp.message(Command("spontaneous"))
 async def toggle_spontaneous(message: Message):
     if message.from_user.id not in ADMIN_IDS:
