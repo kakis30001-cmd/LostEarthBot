@@ -149,6 +149,236 @@ async def send_spontaneous_message(bot, chat_id: int):
             except Exception as e:
                 print(f"ошибка генерации спонтанного сообщения: {e}")
 
+# ========== ГЕНЕРАЦИЯ ИЗОБРАЖЕНИЙ (ТОЛЬКО ДЛЯ АДМИНА) ==========
+
+# Лучшие модели для генерации изображений через OpenRouter
+IMAGE_MODELS = {
+    "flux": "flux/flux-1-pro",           # Самая качественная
+    "midjourney": "flux/midjourney"       # Стиль Midjourney
+}
+
+# Счётчик генераций для админа
+admin_gen_counter = 0
+admin_last_gen_reset = datetime.now()
+
+async def generate_image_flux(prompt: str) -> BytesIO | None:
+    """
+    Генерация через Flux Pro - самая качественная модель
+    Использует OpenRouter API
+    """
+    global admin_gen_counter
+    
+    if not OPENROUTER_API_KEY:
+        print("❌ Нет OPENROUTER_API_KEY для генерации")
+        return None
+    
+    # Расширяем промпт для лучшего качества
+    enhanced_prompt = f"""{prompt}
+    
+Style: cinematic, ultra high quality, 8K, photorealistic, detailed, professional
+Negative prompt: blurry, low quality, distorted, ugly"""
+    
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    
+    payload = {
+        "model": IMAGE_MODELS["flux"],
+        "prompt": enhanced_prompt,
+        "width": 1024,
+        "height": 1024,
+        "steps": 30,
+        "guidance": 7.5,
+        "n": 1,
+        "response_format": "url"
+    }
+    
+    try:
+        print(f"🎨 Генерация Flux: {prompt[:50]}...")
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=120)
+            ) as response:
+                
+                if response.status == 200:
+                    data = await response.json()
+                    
+                    # Извлекаем URL изображения
+                    if "choices" in data and data["choices"]:
+                        content = data["choices"][0].get("message", {}).get("content", "")
+                        
+                        # Ищем URL изображения в ответе
+                        import re
+                        url_pattern = r'https?://[^\s]+\.(?:png|jpg|jpeg|webp|gif)'
+                        urls = re.findall(url_pattern, content)
+                        
+                        if urls:
+                            image_url = urls[0]
+                            print(f"✅ URL получен: {image_url[:100]}...")
+                            
+                            # Скачиваем изображение
+                            async with session.get(image_url) as img_resp:
+                                if img_resp.status == 200:
+                                    admin_gen_counter += 1
+                                    return BytesIO(await img_resp.read())
+                else:
+                    error_text = await response.text()
+                    print(f"❌ Ошибка Flux: {response.status} - {error_text[:200]}")
+                    return None
+                    
+    except Exception as e:
+        print(f"❌ Ошибка генерации Flux: {e}")
+        return None
+    
+    return None
+
+async def generate_image_midjourney(prompt: str) -> BytesIO | None:
+    """
+    Генерация через Midjourney стиль
+    Использует OpenRouter API
+    """
+    global admin_gen_counter
+    
+    if not OPENROUTER_API_KEY:
+        print("❌ Нет OPENROUTER_API_KEY для генерации")
+        return None
+    
+    # Промпт в стиле Midjourney
+    enhanced_prompt = f"""{prompt}
+--ar 1:1 --style raw --v 6 --stylize 250 --quality 2
+
+Style: cinematic, hyperdetailed, 8K, masterpiece, professional photography
+Lighting: soft natural lighting, volumetric light
+Colors: vibrant, rich"""
+    
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    
+    payload = {
+        "model": IMAGE_MODELS["midjourney"],
+        "prompt": enhanced_prompt,
+        "width": 1024,
+        "height": 1024,
+        "steps": 25,
+        "guidance": 7,
+        "n": 1,
+        "response_format": "url"
+    }
+    
+    try:
+        print(f"🎨 Генерация Midjourney: {prompt[:50]}...")
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=120)
+            ) as response:
+                
+                if response.status == 200:
+                    data = await response.json()
+                    
+                    if "choices" in data and data["choices"]:
+                        content = data["choices"][0].get("message", {}).get("content", "")
+                        
+                        import re
+                        url_pattern = r'https?://[^\s]+\.(?:png|jpg|jpeg|webp|gif)'
+                        urls = re.findall(url_pattern, content)
+                        
+                        if urls:
+                            image_url = urls[0]
+                            print(f"✅ URL получен: {image_url[:100]}...")
+                            
+                            async with session.get(image_url) as img_resp:
+                                if img_resp.status == 200:
+                                    admin_gen_counter += 1
+                                    return BytesIO(await img_resp.read())
+                else:
+                    error_text = await response.text()
+                    print(f"❌ Ошибка Midjourney: {response.status} - {error_text[:200]}")
+                    return None
+                    
+    except Exception as e:
+        print(f"❌ Ошибка генерации Midjourney: {e}")
+        return None
+    
+    return None
+
+async def generate_image_fallback_free(prompt: str) -> BytesIO | None:
+    """
+    Бесплатный fallback через Pollinations (без ключа, высокое качество)
+    Используется если OpenRouter не работает
+    """
+    import urllib.parse
+    
+    # Улучшенный промпт для лучшего качества
+    enhanced_prompt = urllib.parse.quote(
+        f"{prompt}, masterpiece, ultra high quality, photorealistic, 4K, detailed, cinematic lighting"
+    )
+    
+    # Используем улучшенные параметры
+    url = f"https://image.pollinations.ai/prompt/{enhanced_prompt}?width=1024&height=1024&nologo=true"
+    
+    try:
+        print(f"🎨 Fallback генерация: {prompt[:50]}...")
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=60)) as resp:
+                if resp.status == 200:
+                    print("✅ Fallback успешен")
+                    return BytesIO(await resp.read())
+    except Exception as e:
+        print(f"❌ Ошибка fallback: {e}")
+    
+    return None
+
+async def generate_best_image(prompt: str, use_midjourney: bool = False) -> BytesIO | None:
+    """
+    Главная функция генерации - использует лучшую доступную модель
+    Сначала пробует Flux Pro, потом Midjourney, потом бесплатный fallback
+    """
+    # Сначала пробуем Flux Pro (самое качественное)
+    result = await generate_image_flux(prompt)
+    if result:
+        return result
+    
+    # Если Flux не сработал, пробуем Midjourney
+    if use_midjourney:
+        result = await generate_image_midjourney(prompt)
+        if result:
+            return result
+    
+    # В последнюю очередь - бесплатный fallback
+    result = await generate_image_fallback_free(prompt)
+    if result:
+        return result
+    
+    return None
+
+def get_gen_stats() -> dict:
+    """Возвращает статистику генераций для админа"""
+    global admin_gen_counter, admin_last_gen_reset
+    
+    # Проверяем, не пора ли сбросить счётчик (раз в месяц)
+    now = datetime.now()
+    if (now - admin_last_gen_reset).days >= 30:
+        admin_gen_counter = 0
+        admin_last_gen_reset = now
+    
+    return {
+        "total_generations": admin_gen_counter,
+        "last_reset": admin_last_gen_reset.strftime("%Y-%m-%d"),
+        "models": list(IMAGE_MODELS.keys())
+    }
+
 # ========== ОСНОВНАЯ ФУНКЦИЯ ==========
 async def get_enderia_response(user_message: str, username: str, is_reply: bool = False, user_bio: str = "", game_result: str = None) -> str:
     global current_online, current_max
