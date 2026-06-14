@@ -5,7 +5,7 @@ from datetime import datetime
 from threading import Thread
 import random
 import aiohttp
-from io import BytesIO  # <--- ДОБАВЬ ЭТУ СТРОКУ
+from io import BytesIO
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import CommandStart, Command
@@ -183,7 +183,7 @@ async def get_user_bio(user_id: int) -> str:
         return ""
 
 # ========== ГЕНЕРАЦИЯ ИЗОБРАЖЕНИЙ (ТОЛЬКО ДЛЯ АДМИНА) ==========
-async def generate_image_flux(prompt: str) -> BytesIO | None:
+async def generate_image_flux(prompt: str):
     """Генерация через Flux Pro - самое качественное"""
     global admin_gen_counter
     
@@ -245,7 +245,7 @@ async def generate_image_flux(prompt: str) -> BytesIO | None:
     
     return None
 
-async def generate_image_fallback(prompt: str) -> BytesIO | None:
+async def generate_image_fallback(prompt: str):
     """Бесплатный fallback через Pollinations"""
     import urllib.parse
     
