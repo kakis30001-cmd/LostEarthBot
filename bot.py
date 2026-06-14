@@ -142,23 +142,20 @@ async def get_user_bio(user_id: int) -> str:
         return ""
         
 async def get_java_status(ip: str, port: int = 25565) -> tuple:
-    """Проверяет статус Minecraft сервера через mcstatus с диагностикой"""
+    """Проверяет статус Minecraft сервера через mcstatus"""
     try:
-        print(f"🔍 [DEBUG] Пытаюсь опросить {ip}:{port}...")
         server = JavaServer(ip, port)
-        
-        # Используем status() с таймаутом
-        status = await server.async_status(tries=3)
+        # Убираем аргумент tries, если возникает ошибка, используем стандартный запрос
+        status = await server.async_status()
         
         online = status.players.online
         max_players = status.players.max
         
-        print(f"✅ [DEBUG] Сервер ответил: {online}/{max_players} игроков")
+        # Обновляем кеш и данные
+        set_server_online(online, max_players)
         return online, max_players
-        
     except Exception as e:
-        print(f"❌ [DEBUG] Ошибка подключения: {e}")
-        # Если Java-статус не отвечает, можно попробовать сделать заглушку или вернуть 0
+        print(f"❌ Ошибка получения онлайна: {e}")
         return 0, 0
 
 # ========== КЛАВИАТУРЫ (если нужны) ==========
