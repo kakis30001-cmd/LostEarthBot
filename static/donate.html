@@ -9,7 +9,10 @@
         .container { max-width: 800px; margin: 0 auto; }
         h1 { text-align: center; background: linear-gradient(135deg, #c084fc, #a855f7); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 5px; }
         .sub { text-align: center; color: #94a3b8; margin-bottom: 30px; font-size: 14px; }
-        .section-title { font-size: 24px; text-align: center; margin: 30px 0 20px 0; padding-bottom: 10px; border-bottom: 2px solid #a855f7; }
+        .hosting-banner { text-align: center; margin: 20px 0; padding: 15px; background: linear-gradient(135deg, #2d1b4e, #1a1a2e); border-radius: 16px; border: 1px solid #a855f7; }
+        .hosting-text { color: #facc15; font-weight: bold; font-size: 16px; }
+        .warning { color: #f87171; font-size: 14px; text-align: center; margin-bottom: 20px; background: #1e293b; padding: 10px; border-radius: 12px; }
+        .section-title { font-size: 28px; text-align: center; margin: 40px 0 20px 0; padding-bottom: 10px; border-bottom: 2px solid #a855f7; }
         .card { background: #1e293b; border-radius: 24px; padding: 20px; margin-bottom: 20px; border-left: 6px solid; transition: transform 0.2s; }
         .card:hover { transform: translateX(5px); }
         .price { font-size: 24px; font-weight: bold; color: #facc15; }
@@ -17,11 +20,9 @@
         .desc { color: #cbd5e1; margin-bottom: 10px; }
         .cmd { background: #0f172a; padding: 4px 8px; border-radius: 8px; font-family: monospace; color: #a855f7; display: inline-block; margin: 2px; font-size: 12px; }
         .kit { background: #0f172a; padding: 4px 8px; border-radius: 8px; font-family: monospace; color: #22c55e; display: inline-block; margin: 2px; font-size: 12px; }
-        .contact { text-align: center; margin-top: 30px; padding: 20px; background: linear-gradient(135deg, #1e293b, #0f172a); border-radius: 20px; border: 1px solid #a855f7; }
+        .contact { text-align: center; margin-top: 40px; padding: 20px; background: linear-gradient(135deg, #1e293b, #0f172a); border-radius: 20px; border: 1px solid #a855f7; }
         .contact a { color: #a855f7; text-decoration: none; font-weight: bold; font-size: 18px; }
-        .hosting { text-align: center; margin: 20px 0; padding: 15px; background: #2d1b4e; border-radius: 16px; border: 1px solid #a855f7; }
-        .hosting-text { color: #facc15; font-weight: bold; font-size: 16px; }
-        .warning { color: #f87171; font-size: 14px; text-align: center; margin-bottom: 20px; }
+        .fly-card { border-left-color: #06b6d4; background: linear-gradient(135deg, #1e293b, #0f172a); }
     </style>
 </head>
 <body>
@@ -29,15 +30,21 @@
     <h1>✨ ДОНАТЫ LOSTEARTH ✨</h1>
     <div class="sub">Мирный режим / SMP</div>
     
-    <div class="hosting">
+    <div class="hosting-banner">
         <div class="hosting-text">💎 ВСЕ ДЕНЬГИ С ДОНАТОВ ИДУТ НА ХОСТИНГ! 💎</div>
-        <div style="margin-top: 8px;">💰 ПРИНИМАЮ ЛЮБОЙ ВАЛЮТОЙ (₴ / ₽ / $)</div>
+        <div style="margin-top: 8px;">💰 ПРИНИМАЮ ЛЮБОЙ ВАЛЮТОЙ (₴ / ₽ / $ / ⭐ ЗВЁЗДЫ)</div>
     </div>
     
     <div class="warning">⚠️ ВАЖНО: Каждый следующий донат включает в себя все возможности предыдущих!</div>
 
     <!-- ========== МИРНЫЙ РЕЖИМ ========== -->
     <div class="section-title">🕊️ МИРНЫЙ РЕЖИМ</div>
+    
+    <div class="card fly-card">
+        <div class="title">🕊️ FLY</div>
+        <div class="price">15 звёзд ⭐</div>
+        <div class="desc">Возможность летать <span class="cmd">/fly</span> на 30 минут.</div>
+    </div>
     
     <div class="card" style="border-left-color: #38ef7d;">
         <div class="title">🍃 ДРУИД</div>
@@ -109,7 +116,7 @@
     </div>
 
     <div class="contact">
-        💎 <b>Принимаю любую валютой!</b><br><br>
+        💎 <b>Принимаю любой валютой!</b><br><br>
         📩 <a href="https://t.me/pelmewki379">@pelmewki379</a><br>
         🛒 По вопросам доната и заявок — писать в ЛС
     </div>
