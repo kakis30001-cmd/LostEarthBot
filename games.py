@@ -108,7 +108,7 @@ async def game_dice_bet(username: str, bet_amount: int, bot, chat_id: int) -> tu
         return f"💰 {username}, у тебя всего {xp} XP! Не хватает на ставку {bet_amount}", None
     if bet_amount < 50:
         return f"🎲 {username}, минимальная ставка 50 XP!", None
-    if bet_amount > 5000:
+    if bet_amount > 500000:
         return f"🎲 {username}, максимальная ставка 5000 XP!", None
     
     await bot.send_message(chat_id, f"🎲 {username} бросает кубик...")
@@ -118,7 +118,7 @@ async def game_dice_bet(username: str, bet_amount: int, bot, chat_id: int) -> tu
     await bot.send_message(chat_id, f"🐱 Энди бросает кубик...")
     bot_value = await roll_dice(bot, chat_id)
     
-    if player_value > bot_value:
+    if player_value >= 5 and player_value > bot_value:
         win_amount = bet_amount
         await update_xp(username, win_amount)
         await update_stats(username, True)
@@ -146,7 +146,7 @@ async def game_football_bet(username: str, bet_amount: int, bot, chat_id: int) -
         return f"💰 {username}, у тебя всего {xp} XP! Не хватает на ставку {bet_amount}", None
     if bet_amount < 50:
         return f"⚽ {username}, минимальная ставка 50 XP!", None
-    if bet_amount > 5000:
+    if bet_amount > 500000:
         return f"⚽ {username}, максимальная ставка 5000 XP!", None
     
     await bot.send_message(chat_id, f"⚽ {username} бьёт по воротам...")
@@ -156,8 +156,8 @@ async def game_football_bet(username: str, bet_amount: int, bot, chat_id: int) -
     await bot.send_message(chat_id, f"🧤 Энди защищает ворота...")
     bot_value = await play_football(bot, chat_id)
     
-    player_goal = player_value >= 4
-    bot_caught = bot_value >= 4
+    player_goal = player_value == 5  # Игрок забивает только идеальный гол (5)
+    bot_caught = bot_value >= 3      # Энди отбивает мяч гораздо чаще (3, 4, 5)
     
     if player_goal and not bot_caught:
         win_amount = bet_amount * 2
