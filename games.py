@@ -109,7 +109,7 @@ async def game_dice_bet(username: str, bet_amount: int, bot, chat_id: int) -> tu
     if bet_amount < 50:
         return f"🎲 {username}, минимальная ставка 50 XP!", None
     if bet_amount > 500000:
-        return f"🎲 {username}, максимальная ставка 5000 XP!", None
+        return f"🎲 {username}, максимальная ставка 500000 XP!", None
     
     await bot.send_message(chat_id, f"🎲 {username} бросает кубик...")
     player_value = await roll_dice(bot, chat_id)
@@ -147,7 +147,7 @@ async def game_football_bet(username: str, bet_amount: int, bot, chat_id: int) -
     if bet_amount < 50:
         return f"⚽ {username}, минимальная ставка 50 XP!", None
     if bet_amount > 500000:
-        return f"⚽ {username}, максимальная ставка 5000 XP!", None
+        return f"⚽ {username}, максимальная ставка 500000 XP!", None
     
     await bot.send_message(chat_id, f"⚽ {username} бьёт по воротам...")
     player_value = await play_football(bot, chat_id)
