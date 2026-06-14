@@ -131,41 +131,26 @@ RULES_URL = f"{BASE_URL}/rules.html"
 APPLY_URL = f"{BASE_URL}/apply.html"
 
 # ========== MINECRAFT API ==========
+# ========== MINECRAFT API ==========
 async def get_java_status(ip: str, port: int = 25565) -> tuple:
-    """Проверяет статус Minecraft сервера через mcstatus"""
+    """Проверяет статус Minecraft сервера через mcstatus с диагностикой"""
     try:
-        print(f"🔍 Подключаюсь к {ip}:{port}...")
+        print(f"🔍 [DEBUG] Пытаюсь опросить {ip}:{port}...")
         server = JavaServer(ip, port)
-        status = await server.async_status()
+        
+        # Используем status() с таймаутом
+        status = await server.async_status(tries=3)
+        
         online = status.players.online
         max_players = status.players.max
-        print(f"✅ Сервер онлайн: {online}/{max_players}")
+        
+        print(f"✅ [DEBUG] Сервер ответил: {online}/{max_players} игроков")
         return online, max_players
+        
     except Exception as e:
-        print(f"❌ Ошибка подключения: {e}")
+        print(f"❌ [DEBUG] Ошибка подключения: {e}")
+        # Если Java-статус не отвечает, можно попробовать сделать заглушку или вернуть 0
         return 0, 0
-
-async def get_server_online():
-    """Возвращает онлайн сервера с кешированием"""
-    global online_cache, last_update
-    now = datetime.now().timestamp()
-    if "online" in last_update and now - last_update["online"] < 30:
-        return online_cache.get("online", 0), online_cache.get("max", 0)
-    
-    online, max_players = await get_java_status(SERVER["java_ip"], SERVER["java_port"])
-    online_cache["online"] = online
-    online_cache["max"] = max_players
-    last_update["online"] = now
-    set_server_online(online, max_players)
-    return online, max_players
-
-async def get_user_bio(user_id: int) -> str:
-    """Получает bio пользователя из Telegram"""
-    try:
-        user = await bot.get_chat(user_id)
-        return user.bio if user.bio else ""
-    except:
-        return ""
 
 # ========== КЛАВИАТУРЫ (если нужны) ==========
 def get_main_keyboard():
