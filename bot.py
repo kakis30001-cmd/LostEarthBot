@@ -7,7 +7,7 @@ import random
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import CommandStart, Command
-from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo, InputFile
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.exceptions import TelegramBadRequest
 from dotenv import load_dotenv
@@ -33,7 +33,6 @@ from enderia import (
     E_NOTE,
     E_MAGIC,
     E_JOYSTICK,
-    spontaneous_messages_list,
 )
 
 from database import (
@@ -114,6 +113,8 @@ BUTTON_EMOJI_ID = {
     "crown": "5807868868886009920",
     "house": "5873147866364514353",
     "joystick": "5870717606364713020",
+    "magic": "5474144592817318927",
+    "heart": "5199427253225667842",
 }
 
 SERVER = {
@@ -167,7 +168,7 @@ def get_main_keyboard():
         [InlineKeyboardButton(text="IP И ОНЛАЙН", callback_data="menu_ip", icon_custom_emoji_id=BUTTON_EMOJI_ID["door"])],
         [InlineKeyboardButton(text="ПРАВИЛА", web_app=WebAppInfo(url=RULES_URL), icon_custom_emoji_id=BUTTON_EMOJI_ID["note"]),
          InlineKeyboardButton(text="ЗАЯВКА", web_app=WebAppInfo(url=APPLY_URL), icon_custom_emoji_id=BUTTON_EMOJI_ID["rabbit_fly"])],
-        [InlineKeyboardButton(text="💎 ПРЕМИУМ", callback_data="menu_premium", icon_custom_emoji_id=BUTTON_EMOJI_ID["crown"]),
+        [InlineKeyboardButton(text="ДОНАТЫ", web_app=WebAppInfo(url=DONATE_URL), icon_custom_emoji_id=BUTTON_EMOJI_ID["crown"]),
          InlineKeyboardButton(text="ЭНДИ", callback_data="menu_enderia", icon_custom_emoji_id=BUTTON_EMOJI_ID["cat_ok"])],
         [InlineKeyboardButton(text="ФАРМА", callback_data="menu_farm", icon_custom_emoji_id=BUTTON_EMOJI_ID["house"]),
          InlineKeyboardButton(text="ТОП", callback_data="menu_top", icon_custom_emoji_id=BUTTON_EMOJI_ID["crown"])]
@@ -184,74 +185,40 @@ def get_back_keyboard():
         [InlineKeyboardButton(text="НАЗАД", callback_data="menu_main", icon_custom_emoji_id=BUTTON_EMOJI_ID["back"])]
     ])
 
-# ========== НОВАЯ КОМАНДА /DONATE ==========
-@dp.message(Command("donate"))
-async def donate_cmd(message: Message):
-    donate_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="💎 ПОСМОТРЕТЬ ДОНАТЫ", web_app=WebAppInfo(url=DONATE_URL))],
-        [InlineKeyboardButton(text="📩 КУПИТЬ ДОНАТ", url="https://t.me/pelmewki379")]
-    ])
-    
-    await message.answer(
-        f"{E_CROWN} <b>ПРЕМИУМ ДОСТУП</b> {E_CROWN}\n\n"
-        f"• <b>Друид</b> — 50₽\n"
-        f"• <b>Оракул</b> — 100₽\n"
-        f"• <b>Монарх</b> — 200₽\n"
-        f"• <b>Херувим</b> — 300₽ (полёт!)\n"
-        f"• <b>Архонт</b> — 400₽\n"
-        f"• <b>Серафим</b> — 600₽\n\n"
-        f"💎 Принимаю любую валюту\n"
-        f"📩 По вопросам доната — @pelmewki379",
-        parse_mode="HTML",
-        reply_markup=donate_keyboard
-    )
-
-# ========== НОВАЯ КОМАНДА /CHECK_BALANCE ==========
-@dp.message(Command("check_balance"))
-async def check_balance_cmd(message: Message):
-    args = message.text.split(maxsplit=1)
-    if len(args) < 2:
-        await message.answer(f"{E_NOTE} используй: /check_balance <ник>\nпример: /check_balance Steve", parse_mode="HTML")
-        return
-    
-    target_username = args[1]
-    xp = await get_xp(target_username)
-    await message.answer(f"{E_CROWN} баланс игрока {target_username}: {xp} xp {E_JOYSTICK}", parse_mode="HTML")
-
 # ========== АДМИН КОМАНДЫ ==========
 @dp.message(Command("say"))
 async def admin_say(message: Message):
     if message.from_user.id not in ADMIN_IDS:
-        return await message.answer("❌ у тебя нет прав", parse_mode="HTML")
+        return await message.answer(f"{E_CAT_SURPRISED} у тебя нет прав", parse_mode="HTML")
     text = message.text.replace("/say", "").strip()
     if not text:
-        return await message.answer("📝 /say <текст>\nпример: /say привет всем", parse_mode="HTML")
+        return await message.answer(f"{E_NOTE} /say <текст>\nпример: /say привет всем", parse_mode="HTML")
     await message.answer(f"{E_CAT_DANCE} {text} {E_HEART}", parse_mode="HTML")
 
 @dp.message(Command("sayto"))
 async def admin_say_to(message: Message):
     if message.from_user.id not in ADMIN_IDS:
-        return await message.answer("❌ у тебя нет прав", parse_mode="HTML")
+        return await message.answer(f"{E_CAT_SURPRISED} у тебя нет прав", parse_mode="HTML")
     parts = message.text.split(maxsplit=2)
     if len(parts) < 3:
-        return await message.answer("📝 /sayto <chat_id> <текст>", parse_mode="HTML")
+        return await message.answer(f"{E_NOTE} /sayto <chat_id> <текст>", parse_mode="HTML")
     try:
         await bot.send_message(int(parts[1]), f"{E_CAT_DANCE} {parts[2]} {E_HEART}", parse_mode="HTML")
-        await message.answer(f"✅ отправлено в {parts[1]}", parse_mode="HTML")
+        await message.answer(f"{E_CHECK} отправлено в {parts[1]}", parse_mode="HTML")
     except Exception as e:
-        await message.answer(f"❌ ошибка: {e}", parse_mode="HTML")
+        await message.answer(f"{E_CAT_SURPRISED} ошибка: {e}", parse_mode="HTML")
 
 @dp.message(Command("givexp"))
 async def admin_give_xp(message: Message):
     if message.from_user.id not in ADMIN_IDS:
-        return await message.answer("❌ у тебя нет прав", parse_mode="HTML")
+        return await message.answer(f"{E_CAT_SURPRISED} у тебя нет прав", parse_mode="HTML")
     
     parts = message.text.split(maxsplit=2)
     if len(parts) < 3:
         return await message.answer(
-            "📝 <b>Использование:</b> <code>/givexp <имя_игрока> <сумма></code>\n"
-            "💡 <i>Пример: /givexp Steve 5000</i> (выдать 5000)\n"
-            "💡 <i>Пример: /givexp Steve -1000</i> (забрать 1000)", 
+            f"{E_NOTE} <b>использование:</b> <code>/givexp <имя_игрока> <сумма></code>\n"
+            f"{E_MAGIC} <i>пример: /givexp Steve 5000</i> (выдать 5000)\n"
+            f"{E_MAGIC} <i>пример: /givexp Steve -1000</i> (забрать 1000)", 
             parse_mode="HTML"
         )
     
@@ -259,27 +226,28 @@ async def admin_give_xp(message: Message):
     try:
         amount = int(parts[2])
     except ValueError:
-        return await message.answer("❌ Сумма должна быть целым числом!", parse_mode="HTML")
+        return await message.answer(f"{E_CAT_SURPRISED} сумма должна быть целым числом", parse_mode="HTML")
     
     await update_xp(target_username, amount)
     new_xp = await get_xp(target_username)
-    action = "Выдано" if amount > 0 else "Списано"
+    action = "выдано" if amount > 0 else "списано"
     
     await message.answer(
-        f"{E_MAGIC} <b>Успешно!</b>\n\n"
-        f"👤 <b>Игрок:</b> {target_username}\n"
-        f"💰 <b>{action}:</b> {abs(amount)} xp\n"
-        f"🏦 <b>Новый баланс:</b> {new_xp} xp", 
+        f"{E_MAGIC} <b>успешно</b> {E_MAGIC}\n\n"
+        f"{E_HOUSE} <b>игрок:</b> {target_username}\n"
+        f"{E_CROWN} <b>{action}:</b> {abs(amount)} xp\n"
+        f"{E_JOYSTICK} <b>новый баланс:</b> {new_xp} xp", 
         parse_mode="HTML"
     )
 
 @dp.message(Command("spontaneous"))
 async def toggle_spontaneous(message: Message):
     if message.from_user.id not in ADMIN_IDS:
-        return await message.answer("❌ у тебя нет прав", parse_mode="HTML")
+        return await message.answer(f"{E_CAT_SURPRISED} у тебя нет прав", parse_mode="HTML")
     global spontaneous_enabled
     spontaneous_enabled = not spontaneous_enabled
-    await message.answer(f"✅ спонтанные сообщения {'включены' if spontaneous_enabled else 'выключены'}", parse_mode="HTML")
+    status = "включены" if spontaneous_enabled else "выключены"
+    await message.answer(f"{E_CHECK} спонтанные сообщения {status}", parse_mode="HTML")
 
 # ========== ОСНОВНЫЕ КОМАНДЫ ==========
 @dp.message(CommandStart())
@@ -298,15 +266,14 @@ async def start_cmd(message: Message):
 
 {E_CROWN} <b>стартовый баланс: 1000 xp</b>
 
-📝 <b>команды:</b>
+{E_NOTE} <b>команды:</b>
 • энди кубик 100 - игра в кости
 • энди футбол 100 - футбол
-• энди слоты 100 - игровые автоматы 🎰
-• энди плюнуть - плюнуть в игрока (30 xp)
+• энди слоты 100 - игровые автоматы
+• энди плюнуть - плюнуть в игрока
 • энди фарма - собрать опыт
 • энди фарма инфо - инфо о фарме
 • энди улучши фарму - улучшить фарму
-• /donate - посмотреть донаты
 
 {E_RABBIT} {E_ANIME} {E_CAT_DANCE}"""
     await message.answer(text, parse_mode="HTML", reply_markup=get_main_keyboard())
@@ -342,7 +309,7 @@ async def daily_cmd(message: Message):
     if await can_claim_daily_bonus(username):
         amount = await claim_daily_bonus(username)
         xp = await get_xp(username)
-        await message.answer(f"{E_MAGIC} <b>ежедневный бонус</b> {E_MAGIC}\n\n{E_CROWN} +{amount} xp\n💰 баланс: {xp} xp\n\n{E_RABBIT} заходи завтра снова {E_HEART}", parse_mode="HTML")
+        await message.answer(f"{E_MAGIC} <b>ежедневный бонус</b> {E_MAGIC}\n\n{E_CROWN} +{amount} xp\n{E_HOUSE} баланс: {xp} xp\n\n{E_RABBIT} заходи завтра снова {E_HEART}", parse_mode="HTML")
     else:
         await message.answer(f"{E_HEART} {username}, ты уже получал бонус сегодня возвращайся завтра {E_CAT_OK}", parse_mode="HTML")
 
@@ -367,46 +334,41 @@ async def cmd_online(message: Message):
 async def games_cmd(message: Message):
     text = f"""{E_JOYSTICK} <b>доступные команды</b> {E_JOYSTICK}
 
-🎮 <b>игры:</b>
-• энди кубик 100 - кости (x2)
-• энди футбол 100 - футбол (гол = x2)
-• энди слоты 100 - игровые автоматы 🎰
-• энди плюнуть - плюнуть в игрока (30 xp)
+{E_MAGIC} <b>игры:</b>
+• энди кубик 100 - кости
+• энди футбол 100 - футбол
+• энди слоты 100 - автоматы
+• энди плюнуть - плюнуть в игрока
 
-🏭 <b>фарма:</b>
+{E_HOUSE} <b>фарма:</b>
 • энди фарма - собрать опыт
 • энди фарма инфо - инфо о фарме
 • энди улучши фарму - улучшить фарму
 
-📊 <b>профиль:</b>
+{E_CROWN} <b>профиль:</b>
 /balance - баланс
 /profile - профиль
 /daily - бонус 500 xp
-/leaderboard - топ игроков
-/donate - посмотреть донаты"""
+/leaderboard - топ игроков"""
     await message.answer(text, parse_mode="HTML")
 
 # ========== НОВАЯ КОМАНДА ДЛЯ БАЛАНСА ИГРОКА В ТЕКСТЕ ==========
-# Обработчик сообщений для вопроса "баланс игрока"
 @dp.message()
 async def handle_balance_in_text(message: Message):
     if not message.text or message.text.startswith("/"):
         return
     
-    # Проверяем запрос баланса в тексте
     text_lower = message.text.lower()
     balance_pattern = r"(?:баланс|сколько опыта|сколько xp|баланс игрока)\s+(\S+)"
     match = re.search(balance_pattern, text_lower)
     
     if match:
         target = match.group(1)
-        # Убираем знаки препинания
         target = re.sub(r'[!?.,]', '', target)
         xp = await get_xp(target)
         await message.reply(f"{E_CROWN} баланс игрока {target}: {xp} xp {E_JOYSTICK}", parse_mode="HTML")
         return
     
-    # Если не баланс - передаём дальше в обычный обработчик
     await handle_normal_message(message)
 
 # ========== ОСНОВНОЙ ОБРАБОТЧИК ==========
@@ -442,11 +404,11 @@ async def spit_cmd(message: Message):
     else:
         await message.answer(f"{E_CAT_SURPRISED} {msg}", parse_mode="HTML")
 
-# ========== ИГРЫ ==========
+# ========== ПЕРЕВОД ==========
 @dp.message(lambda msg: msg.text and msg.text.lower().startswith("пай "))
 async def pay_cmd(message: Message):
     if not message.reply_to_message:
-        return await message.answer(f"{E_CAT_SURPRISED} ответь на сообщение игрока, которому хочешь перевести xp!", parse_mode="HTML")
+        return await message.answer(f"{E_CAT_SURPRISED} ответь на сообщение игрока, которому хочешь перевести xp", parse_mode="HTML")
     
     match = re.search(r"пай\s+(\d+)", message.text.lower())
     if not match:
@@ -454,28 +416,29 @@ async def pay_cmd(message: Message):
         
     amount = int(match.group(1))
     if amount <= 0 or amount > 5000:
-        return await message.answer(f"{E_CAT_SURPRISED} можно перевести от 1 до 5000 xp за раз!", parse_mode="HTML")
+        return await message.answer(f"{E_CAT_SURPRISED} можно перевести от 1 до 5000 xp за раз", parse_mode="HTML")
         
     sender = message.from_user.username or message.from_user.first_name
     target = message.reply_to_message.from_user.username or message.reply_to_message.from_user.first_name
     
     if sender == target:
-        return await message.answer(f"{E_CAT_SURPRISED} себе переводить нельзя!", parse_mode="HTML")
+        return await message.answer(f"{E_CAT_SURPRISED} себе переводить нельзя", parse_mode="HTML")
         
     sender_xp = await get_xp(sender)
     if sender_xp < amount:
-        return await message.answer(f"{E_CAT_SURPRISED} у тебя недостаточно xp! твой баланс: {sender_xp}", parse_mode="HTML")
+        return await message.answer(f"{E_CAT_SURPRISED} у тебя недостаточно xp твой баланс: {sender_xp}", parse_mode="HTML")
         
     await update_xp(sender, -amount)
     await update_xp(target, amount)
     
-    await message.answer(f"{E_MAGIC} <b>перевод успешен!</b>\n{sender} перевел {amount} xp игроку {target} {E_HEART}", parse_mode="HTML")
+    await message.answer(f"{E_MAGIC} <b>перевод успешен</b> {E_MAGIC}\n{sender} перевел {amount} xp игроку {target} {E_HEART}", parse_mode="HTML")
 
+# ========== КУБИК ==========
 @dp.message(lambda msg: msg.text and msg.text.lower().startswith("энди кубик"))
 async def dice_game(message: Message):
     user_id = message.from_user.id
     if user_id in active_players:
-        return await message.reply(f"{E_CAT_SURPRISED} подожди, пока закончится прошлая игра!", parse_mode="HTML")
+        return await message.reply(f"{E_CAT_SURPRISED} подожди, пока закончится прошлая игра", parse_mode="HTML")
     
     text = message.text.lower()
     match = re.search(r"энди кубик\s+(\d+)", text)
@@ -484,7 +447,7 @@ async def dice_game(message: Message):
     
     bet_amount = int(match.group(1))
     if bet_amount <= 0 or bet_amount > 500000:
-        return await message.reply(f"{E_CAT_SURPRISED} ставка должна быть от 1 до 500 000 xp!", parse_mode="HTML")
+        return await message.reply(f"{E_CAT_SURPRISED} ставка должна быть от 1 до 500 000 xp", parse_mode="HTML")
         
     active_players.add(user_id)
     try:
@@ -494,20 +457,21 @@ async def dice_game(message: Message):
     finally:
         active_players.discard(user_id)
 
+# ========== ФУТБОЛ ==========
 @dp.message(lambda msg: msg.text and msg.text.lower().startswith("энди футбол"))
 async def football_game(message: Message):
     user_id = message.from_user.id
     if user_id in active_players:
-        return await message.reply(f"{E_CAT_SURPRISED} подожди, пока закончится прошлая игра!", parse_mode="HTML")
+        return await message.reply(f"{E_CAT_SURPRISED} подожди, пока закончится прошлая игра", parse_mode="HTML")
     
     text = message.text.lower()
     match = re.search(r"энди футбол\s+(\d+)", text)
     if not match:
-        return await message.reply(f"{E_CAT_DANCE} напиши ставку например: энди футбол 100 ⚽", parse_mode="HTML")
+        return await message.reply(f"{E_CAT_DANCE} напиши ставку например: энди футбол 100 {E_JOYSTICK}", parse_mode="HTML")
     
     bet_amount = int(match.group(1))
     if bet_amount <= 0 or bet_amount > 500000:
-        return await message.reply(f"{E_CAT_SURPRISED} ставка должна быть от 1 до 500 000 xp!", parse_mode="HTML")
+        return await message.reply(f"{E_CAT_SURPRISED} ставка должна быть от 1 до 500 000 xp", parse_mode="HTML")
         
     active_players.add(user_id)
     try:
@@ -517,19 +481,20 @@ async def football_game(message: Message):
     finally:
         active_players.discard(user_id)
 
+# ========== СЛОТЫ ==========
 @dp.message(lambda msg: msg.text and msg.text.lower().startswith("энди слоты"))
 async def slots_game(message: Message):
     user_id = message.from_user.id
     if user_id in active_players:
-        return await message.reply(f"{E_CAT_SURPRISED} подожди, пока закончится прошлая игра!", parse_mode="HTML")
+        return await message.reply(f"{E_CAT_SURPRISED} подожди, пока закончится прошлая игра", parse_mode="HTML")
     
     match = re.search(r"энди слоты\s+(\d+)", message.text.lower())
     if not match:
-        return await message.reply(f"{E_CAT_DANCE} напиши ставку например: энди слоты 100 🎰", parse_mode="HTML")
+        return await message.reply(f"{E_CAT_DANCE} напиши ставку например: энди слоты 100 {E_JOYSTICK}", parse_mode="HTML")
     
     bet_amount = int(match.group(1))
     if bet_amount < 50 or bet_amount > 500000:
-        return await message.reply(f"{E_CAT_SURPRISED} ставка должна быть от 50 до 500 000 xp!", parse_mode="HTML")
+        return await message.reply(f"{E_CAT_SURPRISED} ставка должна быть от 50 до 500 000 xp", parse_mode="HTML")
         
     active_players.add(user_id)
     try:
@@ -585,28 +550,26 @@ async def handle_callback(callback: CallbackQuery):
             pass
         await callback.answer("онлайн обновлён")
     elif data == "menu_premium":
-        # Обновлённая кнопка ПРЕМИУМ с WebApp
         donate_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="💎 ПОСМОТРЕТЬ ДОНАТЫ", web_app=WebAppInfo(url=DONATE_URL))],
-            [InlineKeyboardButton(text="📩 КУПИТЬ ДОНАТ", url="https://t.me/pelmewki379")],
+            [InlineKeyboardButton(text="💎 ПОСМОТРЕТЬ ДОНАТЫ", web_app=WebAppInfo(url=DONATE_URL), icon_custom_emoji_id=BUTTON_EMOJI_ID["crown"])],
+            [InlineKeyboardButton(text="📩 КУПИТЬ ДОНАТ", url="https://t.me/pelmewki379", icon_custom_emoji_id=BUTTON_EMOJI_ID["heart"])],
             [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="menu_main", icon_custom_emoji_id=BUTTON_EMOJI_ID["back"])]
         ])
         await callback.message.edit_text(
-            f"{E_CROWN} <b>ПРЕМИУМ ДОСТУП</b> {E_CROWN}\n\n"
-            f"• <b>Друид</b> — 50₽\n"
-            f"• <b>Оракул</b> — 100₽\n"
-            f"• <b>Монарх</b> — 200₽\n"
-            f"• <b>Херувим</b> — 300₽ (полёт!)\n"
-            f"• <b>Архонт</b> — 400₽\n"
-            f"• <b>Серафим</b> — 600₽\n\n"
-            f"💎 Принимаю любую валюту\n"
-            f"📩 По вопросам — @pelmewki379",
+            f"{E_CROWN} <b>премиум доступ</b> {E_CROWN}\n\n"
+            f"{E_MAGIC} <b>друид</b> - 50₽\n"
+            f"{E_NOTE} <b>оракул</b> - 100₽\n"
+            f"{E_CROWN} <b>монарх</b> - 200₽\n"
+            f"{E_RABBIT} <b>херувим</b> - 300₽\n"
+            f"{E_HOUSE} <b>архонт</b> - 400₽\n"
+            f"{E_CAT_DANCE} <b>серафим</b> - 600₽\n\n"
+            f"{E_HEART} <b>по вопросам:</b> @pelmewki379",
             parse_mode="HTML",
             reply_markup=donate_keyboard
         )
         await callback.answer()
     elif data == "menu_enderia":
-        await callback.message.edit_text(f"{E_HEART} <b>энди - твой помощник</b> {E_HEART}\n\n{E_CAT_DANCE} напиши 'энди' и я отвечу\n\n📝 команды: /games", parse_mode="HTML", reply_markup=get_back_keyboard())
+        await callback.message.edit_text(f"{E_HEART} <b>энди - твой помощник</b> {E_HEART}\n\n{E_CAT_DANCE} напиши 'энди' и я отвечу\n\n{E_NOTE} команды: /games", parse_mode="HTML", reply_markup=get_back_keyboard())
         await callback.answer()
     elif data == "menu_farm":
         await callback.message.edit_text(f"{E_HOUSE} напиши 'энди фарма инфо' для информации о фарме", parse_mode="HTML", reply_markup=get_back_keyboard())
