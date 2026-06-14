@@ -16,6 +16,50 @@ async def add_spit(username: str, target: str) -> tuple[bool, str, int]:
     new_xp = await get_xp(username)
     return True, f"💨 {username} плюнул в {target} эндер-жемчугом", new_xp
 
+# Добавь в games.py
+async def play_slots(bot, chat_id: int):
+    msg = await bot.send_dice(chat_id, emoji="🎰")
+    return msg.dice.value
+
+async def game_slots_bet(username: str, bet_amount: int, bot, chat_id: int) -> tuple[str, str]:
+    xp = await get_xp(username)
+    
+    if xp < bet_amount:
+        return f"💰 {username}, у тебя всего {xp} XP! Не хватает на ставку {bet_amount}", None
+    if bet_amount < 50:
+        return f"🎰 {username}, минимальная ставка 50 XP!", None
+    if bet_amount > 500000:
+        return f"🎰 {username}, максимальная ставка 500 000 XP!", None
+
+    await update_xp(username, -bet_amount)
+    
+    # Отправляем сообщение, чтобы игрок видел, что Энди крутит слоты
+    await bot.send_message(chat_id, f"🎰 {username} делает ставку, Энди крутит слоты...")
+    value = await play_slots(bot, chat_id)
+    
+    # Ждем пока анимация прокрутится (около 2-3 секунд)
+    await asyncio.sleep(3)
+    
+    # Логика выигрыша (значения Telegram слотов):
+    # 64 — Джекпот (три семерки)
+    # 1, 22, 43 — Другие комбинации (две семерки или похожее)
+    
+    if value == 64:
+        win_amount = bet_amount * 4
+        await update_xp(username, win_amount)
+        await update_stats(username, True)
+        return f"🎰 <b>ДЖЕКПОТ!</b>\n\nТы выбил три семерки! Выигрыш: {win_amount} XP!", f"выиграл {win_amount} XP в слоты"
+    
+    elif value in [1, 22, 43]:
+        win_amount = bet_amount * 3
+        await update_xp(username, win_amount)
+        await update_stats(username, True)
+        return f"🎰 <b>УДАЧА!</b>\n\nДве семерки! Выигрыш: {win_amount} XP!", f"выиграл {win_amount} XP в слоты"
+    
+    else:
+        await update_stats(username, False)
+        return f"🎰 <b>Мимо...</b>\n\nНичего не совпало. Ставка {bet_amount} XP сгорела.", "проиграл в слоты"
+
 # ========== ФАРМА ==========
 async def farm_info(username: str) -> str:
     level = await get_farm_level(username)
