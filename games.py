@@ -33,32 +33,39 @@ async def game_slots_bet(username: str, bet_amount: int, bot, chat_id: int) -> t
 
     await update_xp(username, -bet_amount)
     
-    # Отправляем сообщение, чтобы игрок видел, что Энди крутит слоты
     await bot.send_message(chat_id, f"🎰 {username} делает ставку, Энди крутит слоты...")
-    value = await play_slots(bot, chat_id)
+    msg = await bot.send_dice(chat_id, emoji="🎰")
+    value = msg.dice.value
     
-    # Ждем пока анимация прокрутится (около 2-3 секунд)
     await asyncio.sleep(3)
     
-    # Логика выигрыша (значения Telegram слотов):
-    # 64 — Джекпот (три семерки)
-    # 1, 22, 43 — Другие комбинации (две семерки или похожее)
+    # Известные значения Telegram 🎰:
+    # 64 = 🍒🍒🍒 (три семерки) - ДЖЕКПОТ
+    # 43 = 🍒🍒⭐ (две семерки + что-то)
+    # 22 = 🍒🍒🍒 (альтернативный джекпот)
+    # 1  = 🍒🍒🍒 (альтернативный джекпот)
+    # Остальные значения - проигрыш или мелкие призы
     
-    if value == 64:
-        win_amount = bet_amount * 4
+    if value == 64 or value == 22 or value == 1:  # ТРИ СЕМЕРКИ
+        win_amount = int(bet_amount * 5)  # x5
         await update_xp(username, win_amount)
         await update_stats(username, True)
-        return f"🎰 <b>ДЖЕКПОТ!</b>\n\nТы выбил три семерки! Выигрыш: {win_amount} XP!", f"выиграл {win_amount} XP в слоты"
+        new_xp = await get_xp(username)
+        return f"🎰 <b>🍒🍒🍒 ДЖЕКПОТ! ТРИ СЕМЕРКИ! 🍒🍒🍒</b>\n\n✨ Выигрыш: {win_amount} XP! (x5)\n💰 Баланс: {new_xp} XP", f"выиграл {win_amount} XP в слоты (джекпот!)"
     
-    elif value in [1, 22, 43]:
-        win_amount = bet_amount * 3
+    elif value == 43:  # ДВЕ СЕМЕРКИ
+        win_amount = int(bet_amount * 2.3)  # x2.3
         await update_xp(username, win_amount)
         await update_stats(username, True)
-        return f"🎰 <b>УДАЧА!</b>\n\nДве семерки! Выигрыш: {win_amount} XP!", f"выиграл {win_amount} XP в слоты"
+        new_xp = await get_xp(username)
+        return f"🎰 <b>⭐🍒🍒 ДВЕ СЕМЕРКИ!</b>\n\n✨ Выигрыш: {win_amount} XP! (x2.3)\n💰 Баланс: {new_xp} XP", f"выиграл {win_amount} XP в слоты (две семерки)"
     
+    # Для остальных комбинаций - проигрыш
+    # (Telegram не дает нам точных данных о том, что выпало, кроме семерок)
     else:
         await update_stats(username, False)
-        return f"🎰 <b>Мимо...</b>\n\nНичего не совпало. Ставка {bet_amount} XP сгорела.", "проиграл в слоты"
+        new_xp = await get_xp(username)
+        return f"🎰 <b>МИМО...</b>\n\nНичего не выиграл. Ставка {bet_amount} XP сгорела.\n💰 Баланс: {new_xp} XP", f"проиграл {bet_amount} XP в слоты"
 
 # ========== ФАРМА ==========
 async def farm_info(username: str) -> str:
