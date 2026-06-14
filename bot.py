@@ -5,7 +5,7 @@ from datetime import datetime
 from threading import Thread
 import random
 import aiohttp
-from io import BytesIO
+from io import BytesIO  # <--- ДОБАВЬ ЭТУ СТРОКУ
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import CommandStart, Command
