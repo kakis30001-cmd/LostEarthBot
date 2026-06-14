@@ -141,21 +141,22 @@ async def get_user_bio(user_id: int) -> str:
         print(f"❌ [DEBUG] Ошибка при получении bio: {e}")
         return ""
         
+# Замените вашу текущую функцию get_java_status на эту:
 async def get_java_status(ip: str, port: int = 25565) -> tuple:
-    """Проверяет статус Minecraft сервера через mcstatus"""
+    """Универсальная проверка через lookup, как в рабочем скрипте"""
     try:
-        server = JavaServer(ip, port)
-        # Убираем аргумент tries, если возникает ошибка, используем стандартный запрос
+        print(f"🔍 [DEBUG] Ищу сервер {ip}:{port}...")
+        # Используем метод lookup, который универсален
+        server = await MinecraftServer.async_lookup(f"{ip}:{port}")
         status = await server.async_status()
         
         online = status.players.online
         max_players = status.players.max
         
-        # Обновляем кеш и данные
-        set_server_online(online, max_players)
+        print(f"✅ [DEBUG] Успешно! Онлайн: {online}/{max_players}")
         return online, max_players
     except Exception as e:
-        print(f"❌ Ошибка получения онлайна: {e}")
+        print(f"❌ [DEBUG] Ошибка при использовании lookup: {e}")
         return 0, 0
 
 # ========== КЛАВИАТУРЫ (если нужны) ==========
