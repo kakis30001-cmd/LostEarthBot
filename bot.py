@@ -4,6 +4,8 @@ import re
 from datetime import datetime
 from threading import Thread
 import random
+import aiohttp
+from io import BytesIO
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import CommandStart, Command
@@ -68,6 +70,7 @@ from games import (
 
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv("BOT_TOKEN")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 GROUP_CHAT_ID = -1003891930776
 
 ADMIN_IDS = [8493522297]
@@ -77,6 +80,10 @@ online_cache = {}
 last_update = {}
 CHAT_ID = None
 active_players = set()
+
+# ========== СЧЁТЧИК ГЕНЕРАЦИЙ ==========
+admin_gen_counter = 0
+admin_last_gen_reset = datetime.now()
 
 # ========== FLASK ==========
 app = Flask(__name__, static_folder='static')
@@ -130,7 +137,7 @@ BASE_URL = os.getenv("BASE_URL", "https://lostearthbot-production.up.railway.app
 RULES_URL = f"{BASE_URL}/rules.html"
 APPLY_URL = f"{BASE_URL}/apply.html"
 
-# ========== MINECRAFT API (РАБОЧАЯ ВЕРСИЯ ИЗ bot(4).py) ==========
+# ========== MINECRAFT API ==========
 async def get_java_status(ip: str, port: int = 25565) -> tuple:
     """Проверяет статус Minecraft сервера через mcstatus"""
     try:
@@ -174,6 +181,89 @@ async def get_user_bio(user_id: int) -> str:
         return user.bio if user.bio else ""
     except:
         return ""
+
+# ========== ГЕНЕРАЦИЯ ИЗОБРАЖЕНИЙ (ТОЛЬКО ДЛЯ АДМИНА) ==========
+async def generate_image_flux(prompt: str) -> BytesIO | None:
+    """Генерация через Flux Pro - самое качественное"""
+    global admin_gen_counter
+    
+    if not OPENROUTER_API_KEY:
+        print("❌ Нет OPENROUTER_API_KEY")
+        return None
+    
+    enhanced_prompt = f"{prompt}, masterpiece, ultra high quality, 8K, photorealistic, detailed, cinematic lighting"
+    
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    
+    payload = {
+        "model": "flux/flux-1-pro",
+        "prompt": enhanced_prompt,
+        "width": 1024,
+        "height": 1024,
+        "steps": 30,
+        "guidance": 7.5,
+        "n": 1,
+    }
+    
+    try:
+        print(f"🎨 Генерация Flux: {prompt[:50]}...")
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=120)
+            ) as response:
+                
+                if response.status == 200:
+                    data = await response.json()
+                    
+                    if "choices" in data and data["choices"]:
+                        content = data["choices"][0].get("message", {}).get("content", "")
+                        
+                        import re
+                        url_pattern = r'https?://[^\s]+\.(?:png|jpg|jpeg|webp|gif)'
+                        urls = re.findall(url_pattern, content)
+                        
+                        if urls:
+                            async with session.get(urls[0]) as img_resp:
+                                if img_resp.status == 200:
+                                    admin_gen_counter += 1
+                                    return BytesIO(await img_resp.read())
+                else:
+                    error_text = await response.text()
+                    print(f"❌ Ошибка Flux: {response.status}")
+                    return None
+                    
+    except Exception as e:
+        print(f"❌ Ошибка: {e}")
+        return None
+    
+    return None
+
+async def generate_image_fallback(prompt: str) -> BytesIO | None:
+    """Бесплатный fallback через Pollinations"""
+    import urllib.parse
+    
+    enhanced_prompt = urllib.parse.quote(
+        f"{prompt}, masterpiece, ultra high quality, 4K, detailed"
+    )
+    
+    url = f"https://image.pollinations.ai/prompt/{enhanced_prompt}?width=1024&height=1024&nologo=true"
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=60)) as resp:
+                if resp.status == 200:
+                    return BytesIO(await resp.read())
+    except Exception as e:
+        print(f"❌ Fallback ошибка: {e}")
+    
+    return None
 
 # ========== КЛАВИАТУРЫ ==========
 def get_main_keyboard():
@@ -254,6 +344,113 @@ async def toggle_spontaneous(message: Message):
     spontaneous_enabled = not spontaneous_enabled
     await message.answer(f"✅ спонтанные сообщения {'включены' if spontaneous_enabled else 'выключены'}", parse_mode="HTML")
 
+# ========== НОВЫЕ КОМАНДЫ ГЕНЕРАЦИИ ИЗОБРАЖЕНИЙ (ТОЛЬКО АДМИН) ==========
+@dp.message(Command("draw"))
+async def draw_image(message: Message):
+    """Генерация изображения через Flux Pro"""
+    if message.from_user.id not in ADMIN_IDS:
+        return await message.answer(
+            f"{E_CAT_SURPRISED} <b>Функция в разработке</b>\n\n"
+            f"Скоро будет доступна всем игрокам! {E_HEART}",
+            parse_mode="HTML"
+        )
+    
+    prompt = message.text.replace("/draw", "").strip()
+    if not prompt:
+        return await message.answer(
+            f"{E_MAGIC} <b>Генерация изображений AI</b> {E_MAGIC}\n\n"
+            f"📝 <b>Использование:</b>\n"
+            f"<code>/draw кот в космосе, киберпанк</code>\n\n"
+            f"💡 <b>Совет:</b> пиши на английском для лучшего результата\n"
+            f"⏳ Время: 10-30 секунд\n\n"
+            f"🎨 <b>Также доступно:</b>\n"
+            f"<code>/flux промпт</code> - быстро\n"
+            f"<code>/gen_stats</code> - статистика",
+            parse_mode="HTML"
+        )
+    
+    status_msg = await message.answer(
+        f"{E_MAGIC} 🎨 <b>Генерирую...</b> {E_MAGIC}\n\n"
+        f"📝 Промпт: <i>{prompt[:100]}</i>\n"
+        f"⏳ Подожди 10-30 секунд {E_CAT_DANCE}",
+        parse_mode="HTML"
+    )
+    
+    try:
+        image_bytes = await generate_image_flux(prompt)
+        
+        if image_bytes:
+            await message.answer_photo(
+                photo=types.BufferedInputFile(image_bytes.getvalue(), filename="generated.png"),
+                caption=f"{E_HEART} <b>Готово!</b> {E_HEART}\n\n"
+                       f"🎨 Модель: <b>FLUX PRO</b>\n"
+                       f"📝 {prompt[:200]}\n"
+                       f"🎲 Всего генераций: <b>{admin_gen_counter}</b>",
+                parse_mode="HTML"
+            )
+            await status_msg.delete()
+        else:
+            # Пробуем fallback
+            await status_msg.edit_text(f"🔄 Пробую альтернативный способ...")
+            
+            fallback_bytes = await generate_image_fallback(prompt)
+            if fallback_bytes:
+                await message.answer_photo(
+                    photo=types.BufferedInputFile(fallback_bytes.getvalue(), filename="generated.png"),
+                    caption=f"{E_HEART} <b>Готово!</b>\n📝 {prompt[:200]}",
+                    parse_mode="HTML"
+                )
+                await status_msg.delete()
+            else:
+                await status_msg.edit_text(
+                    f"{E_CAT_SURPRISED} <b>Не удалось сгенерировать</b>\n\n"
+                    f"❌ Попробуй другой промпт на английском\n"
+                    f"💡 Пример: <code>/draw a cute cat in space, neon, cyberpunk</code>",
+                    parse_mode="HTML"
+                )
+    except Exception as e:
+        await status_msg.edit_text(f"{E_CAT_SURPRISED} Ошибка: {str(e)[:100]}", parse_mode="HTML")
+
+@dp.message(Command("flux"))
+async def flux_image(message: Message):
+    """Быстрая генерация через Flux"""
+    if message.from_user.id not in ADMIN_IDS:
+        return
+    
+    prompt = message.text.replace("/flux", "").strip()
+    if not prompt:
+        return await message.answer("📝 <code>/flux beautiful sunset, mountains, 8K</code>", parse_mode="HTML")
+    
+    status_msg = await message.answer(f"🎨 Генерирую Flux... {E_CAT_DANCE}", parse_mode="HTML")
+    
+    image_bytes = await generate_image_flux(prompt)
+    
+    if image_bytes:
+        await message.answer_photo(
+            photo=types.BufferedInputFile(image_bytes.getvalue(), filename="flux.png"),
+            caption=f"✨ <b>Flux Pro</b>\n📝 {prompt[:150]}",
+            parse_mode="HTML"
+        )
+        await status_msg.delete()
+    else:
+        await status_msg.edit_text(f"❌ Ошибка, попробуй /draw", parse_mode="HTML")
+
+@dp.message(Command("gen_stats"))
+async def gen_stats(message: Message):
+    """Статистика генераций"""
+    if message.from_user.id not in ADMIN_IDS:
+        return
+    
+    text = f"{E_CROWN} <b>Статистика генераций</b> {E_CROWN}\n\n"
+    text += f"🎨 Всего сгенерировано: <b>{admin_gen_counter}</b>\n"
+    text += f"🤖 Модель: <b>FLUX PRO</b> (самое качественное)\n\n"
+    text += f"💡 <b>Команды:</b>\n"
+    text += f"• <code>/draw промпт</code> - генерация\n"
+    text += f"• <code>/flux промпт</code> - быстрая\n"
+    text += f"• <code>/gen_stats</code> - эта статистика"
+    
+    await message.answer(text, parse_mode="HTML")
+
 # ========== ОСНОВНЫЕ КОМАНДЫ ==========
 @dp.message(CommandStart())
 async def start_cmd(message: Message):
@@ -287,7 +484,6 @@ async def start_cmd(message: Message):
     
     await message.answer(text, parse_mode="HTML", reply_markup=get_main_keyboard())
     
-    # Запускаем спонтанные сообщения
     asyncio.create_task(send_spontaneous_message(bot, CHAT_ID))
 
 @dp.message(Command("balance"))
@@ -536,35 +732,4 @@ async def handle_callback(callback: CallbackQuery):
         await callback.answer()
     elif data == "menu_ip":
         online, max_players = await get_server_online()
-        await callback.message.edit_text(f"{E_CROWN} <b>lostearth</b> {E_CROWN}\n\n{E_HOUSE} <b>java:</b> <code>{SERVER['java_ip']}:{SERVER['java_port']}</code>\n{E_NOTE} <b>bedrock:</b> <code>{SERVER['bedrock_ip']}:{SERVER['bedrock_port']}</code>\n{E_CROWN} <b>онлайн:</b> {online}/{max_players}\n\n{E_RABBIT} <i>приятной игры</i>", parse_mode="HTML", reply_markup=get_back_keyboard())
-        await callback.answer()
-    elif data == "menu_premium":
-        await callback.message.edit_text(f"{E_CROWN} <b>премиум доступ</b> {E_CROWN}\n\n{E_MAGIC} <b>друид</b> - 50₽\n{E_NOTE} <b>оракул</b> - 100₽\n{E_CROWN} <b>монарх</b> - 200₽\n{E_RABBIT} <b>херувим</b> - 300₽\n{E_HOUSE} <b>архонт</b> - 400₽\n{E_CAT_DANCE} <b>серафим</b> - 600₽\n\n{E_HEART} <b>по вопросам:</b> @pelmewki379", parse_mode="HTML", reply_markup=get_back_keyboard())
-        await callback.answer()
-    elif data == "menu_enderia":
-        await callback.message.edit_text(f"{E_HEART} <b>энди - твой помощник</b> {E_HEART}\n\n{E_CAT_DANCE} напиши 'энди' и я отвечу\n\n📝 команды: /games", parse_mode="HTML", reply_markup=get_back_keyboard())
-        await callback.answer()
-    elif data == "menu_farm":
-        await callback.message.edit_text(f"{E_HOUSE} напиши 'энди фарма инфо' для информации о фарме", parse_mode="HTML", reply_markup=get_back_keyboard())
-        await callback.answer()
-    elif data == "menu_top":
-        await callback.message.edit_text(f"{E_CROWN} /leaderboard - топ игроков", parse_mode="HTML", reply_markup=get_back_keyboard())
-        await callback.answer()
-
-# ========== ЗАПУСК ==========
-async def main():
-    await connect_db()
-    
-    flask_thread = Thread(target=run_flask, daemon=True)
-    flask_thread.start()
-    
-    bot_info = await bot.get_me()
-    print("=" * 50)
-    print("бот lostearth запущен")
-    print(f"бот: @{bot_info.username}")
-    print("=" * 50)
-    
-    await dp.start_polling(bot)
-
-if __name__ == "__main__":
-    asyncio.run(main())
+        await callback.message.edit_text(f"{E_CROWN} <b>lostearth</b> {E_CROWN}\n\n{E_HOUSE} <b>java:</b> <code>{SERVER['java_ip']}:{SERVER['java_port']}</code>\n
