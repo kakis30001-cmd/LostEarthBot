@@ -257,29 +257,46 @@ async def toggle_spontaneous(message: Message):
 async def start_cmd(message: Message):
     username = message.from_user.username or message.from_user.first_name
     await create_player(username)
-    online, max_players = await get_server_online()
     
-    text = f"""{E_MAGIC} <b>добро пожаловать на {SERVER['name']}</b> {E_MAGIC}
+    text = f"""{E_MAGIC} <b>привет, я энди</b> {E_MAGIC}
 
-{E_HOUSE} <b>мирный режим по заявкам</b>
+{E_CAT_DANCE} я твой текстовый помощник!
 
-{E_CAT_DANCE} <b>я энди - твой живой помощник</b>
+{E_HEART} <b>что я умею:</b>
 
-{E_CROWN} <b>текущий онлайн:</b> {online}/{max_players}
+📝 <b>рассказывать информацию:</b>
+• про сервер lostearth (ip, режимы, правила)
+• про донаты и премиум
+• про онлайн на сервере
+
+🎮 <b>играть с тобой:</b>
+• энди кубик 100 — кости
+• энди футбол 100 — футбол
+• энди слоты 100 — слоты
+• энди плюнуть — плюнуть в игрока
+
+🏭 <b>помогать с фермой:</b>
+• энди фарма — собрать опыт
+• энди фарма инфо — инфо о ферме
+• энди улучши фарму — улучшить ферму
+
+📊 <b>показывать профиль:</b>
+• /balance — баланс xp
+• /profile — профиль
+• /daily — бонус 500 xp
+• /top — топ игроков
 
 {E_CROWN} <b>стартовый баланс: 1000 xp</b>
 
-📝 <b>команды:</b>
-• энди кубик 100 - игра в кости
-• энди футбол 100 - футбол
-• энди плюнуть - плюнуть в игрока (30 xp)
-• энди фарма - собрать опыт
-• энди фарма инфо - инфо о фарме
-• энди улучши фарму - улучшить фарму
+{E_RABBIT} <b>просто спроси меня:</b>
+• "энди список команд"
+• "энди какой айпи"
+• "энди сколько онлайна"
+• "энди расскажи про донаты"
 
-{E_RABBIT} {E_ANIME} {E_CAT_DANCE}"""
-    await message.answer(text, parse_mode="HTML", reply_markup=get_main_keyboard())
-
+{E_CAT_DANCE} я всегда рядом, телепортнусь по первому зову! {E_HEART}"""
+    
+    await message.answer(text, parse_mode="HTML")
 @dp.message(Command("balance"))
 async def balance_cmd(message: Message):
     username = message.from_user.username or message.from_user.first_name
