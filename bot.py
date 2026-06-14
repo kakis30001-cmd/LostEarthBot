@@ -732,4 +732,35 @@ async def handle_callback(callback: CallbackQuery):
         await callback.answer()
     elif data == "menu_ip":
         online, max_players = await get_server_online()
-        await callback.message.edit_text(f"{E_CROWN} <b>lostearth</b> {E_CROWN}\n\n{E_HOUSE} <b>java:</b> <code>{SERVER['java_ip']}:{SERVER['java_port']}</code>\n
+        await callback.message.edit_text(f"{E_CROWN} <b>lostearth</b> {E_CROWN}\n\n{E_HOUSE} <b>java:</b> <code>{SERVER['java_ip']}:{SERVER['java_port']}</code>\n{E_NOTE} <b>bedrock:</b> <code>{SERVER['bedrock_ip']}:{SERVER['bedrock_port']}</code>\n{E_CROWN} <b>онлайн:</b> {online}/{max_players}\n\n{E_RABBIT} <i>приятной игры</i>", parse_mode="HTML", reply_markup=get_back_keyboard())
+        await callback.answer()
+    elif data == "menu_premium":
+        await callback.message.edit_text(f"{E_CROWN} <b>премиум доступ</b> {E_CROWN}\n\n{E_MAGIC} <b>друид</b> - 50₽\n{E_NOTE} <b>оракул</b> - 100₽\n{E_CROWN} <b>монарх</b> - 200₽\n{E_RABBIT} <b>херувим</b> - 300₽\n{E_HOUSE} <b>архонт</b> - 400₽\n{E_CAT_DANCE} <b>серафим</b> - 600₽\n\n{E_HEART} <b>по вопросам:</b> @pelmewki379", parse_mode="HTML", reply_markup=get_back_keyboard())
+        await callback.answer()
+    elif data == "menu_enderia":
+        await callback.message.edit_text(f"{E_HEART} <b>энди - твой помощник</b> {E_HEART}\n\n{E_CAT_DANCE} напиши 'энди' и я отвечу\n\n📝 команды: /games", parse_mode="HTML", reply_markup=get_back_keyboard())
+        await callback.answer()
+    elif data == "menu_farm":
+        await callback.message.edit_text(f"{E_HOUSE} напиши 'энди фарма инфо' для информации о фарме", parse_mode="HTML", reply_markup=get_back_keyboard())
+        await callback.answer()
+    elif data == "menu_top":
+        await callback.message.edit_text(f"{E_CROWN} /leaderboard - топ игроков", parse_mode="HTML", reply_markup=get_back_keyboard())
+        await callback.answer()
+
+# ========== ЗАПУСК ==========
+async def main():
+    await connect_db()
+    
+    flask_thread = Thread(target=run_flask, daemon=True)
+    flask_thread.start()
+    
+    bot_info = await bot.get_me()
+    print("=" * 50)
+    print("бот lostearth запущен")
+    print(f"бот: @{bot_info.username}")
+    print("=" * 50)
+    
+    await dp.start_polling(bot)
+
+if __name__ == "__main__":
+    asyncio.run(main())
