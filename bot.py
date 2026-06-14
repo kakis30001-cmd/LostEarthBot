@@ -181,10 +181,10 @@ async def get_user_bio(user_id: int) -> str:
         return user.bio if user.bio else ""
     except:
         return ""
-
 # ========== ГЕНЕРАЦИЯ ИЗОБРАЖЕНИЙ (ТОЛЬКО ДЛЯ АДМИНА) ==========
 async def generate_image_flux(prompt: str):
     """Генерация через Flux Pro - самое качественное"""
+    from io import BytesIO  # <--- ИМПОРТ ВНУТРИ ФУНКЦИИ
     global admin_gen_counter
     
     if not OPENROUTER_API_KEY:
@@ -247,6 +247,7 @@ async def generate_image_flux(prompt: str):
 
 async def generate_image_fallback(prompt: str):
     """Бесплатный fallback через Pollinations"""
+    from io import BytesIO  # <--- ИМПОРТ ВНУТРИ ФУНКЦИИ
     import urllib.parse
     
     enhanced_prompt = urllib.parse.quote(
