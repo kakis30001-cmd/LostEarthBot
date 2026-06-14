@@ -54,13 +54,15 @@ from database import (
     get_chat_history,
 )
 
+# В начале bot.py
 from games import (
-    game_dice_bet,
+    add_spit, 
+    farm_info, 
+    collect_farm, 
+    upgrade_farm_cmd, 
+    game_dice_bet, 
     game_football_bet,
-    add_spit,
-    collect_farm,
-    farm_info,
-    upgrade_farm_cmd,
+    game_slots_bet  # <--- Добавь это имя в список
 )
 
 load_dotenv()
