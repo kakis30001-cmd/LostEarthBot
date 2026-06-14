@@ -65,8 +65,12 @@ from games import (
 
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv("BOT_TOKEN")
+GROUP_CHAT_ID = -1003891930776  # Зафиксированный ID твоего чата
 
 ADMIN_IDS = [8493522297]
+
+# Анти-спам для игр (хранит ID игроков, которые сейчас играют)
+active_players = set()
 
 # ========== FLASK ==========
 app = Flask(__name__, static_folder='static')
@@ -122,45 +126,27 @@ APPLY_URL = f"{BASE_URL}/apply.html"
 
 online_cache = {}
 last_update = {}
-CHAT_ID = None
 
 # ========== MINECRAFT API ==========
 async def get_java_status(ip: str, port: int = 25565) -> tuple:
-    """Проверяет статус Minecraft сервера через mcstatus"""
     try:
-        print(f"🔍 Подключаюсь к {ip}:{port}...")
-        
-        # Заменили lookup на прямую инициализацию
         server = JavaServer(ip, port)
         status = await server.async_status()
-        
-        online = status.players.online
-        max_players = status.players.max
-        
-        print(f"✅ Сервер онлайн: {online}/{max_players}")
-        return online, max_players
-        
-    except Exception as e:
-        print(f"❌ Ошибка: {e}")
+        return status.players.online, status.players.max
+    except Exception:
         return 0, 0
 
 async def get_server_online():
-    """Возвращает онлайн сервера с кешированием"""
     global online_cache, last_update
-    
     now = datetime.now().timestamp()
-    
     if "online" in last_update and now - last_update["online"] < 30:
         return online_cache.get("online", 0), online_cache.get("max", 0)
     
     online, max_players = await get_java_status(SERVER["java_ip"], SERVER["java_port"])
-    
     online_cache["online"] = online
     online_cache["max"] = max_players
     last_update["online"] = now
-    
     set_server_online(online, max_players)
-    
     return online, max_players
 
 async def get_user_bio(user_id: int) -> str:
@@ -197,94 +183,39 @@ def get_back_keyboard():
 @dp.message(Command("say"))
 async def admin_say(message: Message):
     if message.from_user.id not in ADMIN_IDS:
-        await message.answer("❌ у тебя нет прав", parse_mode="HTML")
-        return
-    
+        return await message.answer("❌ у тебя нет прав", parse_mode="HTML")
     text = message.text.replace("/say", "").strip()
     if not text:
-        await message.answer("📝 /say <текст>\nпример: /say привет всем", parse_mode="HTML")
-        return
-    
+        return await message.answer("📝 /say <текст>\nпример: /say привет всем", parse_mode="HTML")
     await message.answer(f"{E_CAT_DANCE} {text} {E_HEART}", parse_mode="HTML")
-    await message.answer("✅ отправлено", parse_mode="HTML")
 
 @dp.message(Command("sayto"))
 async def admin_say_to(message: Message):
     if message.from_user.id not in ADMIN_IDS:
-        await message.answer("❌ у тебя нет прав", parse_mode="HTML")
-        return
-    
+        return await message.answer("❌ у тебя нет прав", parse_mode="HTML")
     parts = message.text.split(maxsplit=2)
     if len(parts) < 3:
-        await message.answer("📝 /sayto <chat_id> <текст>", parse_mode="HTML")
-        return
-    
+        return await message.answer("📝 /sayto <chat_id> <текст>", parse_mode="HTML")
     try:
-        chat_id = int(parts[1])
-        text = parts[2]
-        await bot.send_message(chat_id, f"{E_CAT_DANCE} {text} {E_HEART}", parse_mode="HTML")
-        await message.answer(f"✅ отправлено в {chat_id}", parse_mode="HTML")
+        await bot.send_message(int(parts[1]), f"{E_CAT_DANCE} {parts[2]} {E_HEART}", parse_mode="HTML")
+        await message.answer(f"✅ отправлено в {parts[1]}", parse_mode="HTML")
     except Exception as e:
         await message.answer(f"❌ ошибка: {e}", parse_mode="HTML")
-
-@dp.message(Command("test_spontaneous"))
-async def test_spontaneous(message: Message):
-    if message.from_user.id not in ADMIN_IDS:
-        await message.answer("❌ у тебя нет прав", parse_mode="HTML")
-        return
-    
-    msg = random.choice(spontaneous_messages_list)
-    await message.answer(f"{E_CAT_DANCE} 🧪 ТЕСТ: {msg} {E_HEART}", parse_mode="HTML")
 
 @dp.message(Command("spontaneous"))
 async def toggle_spontaneous(message: Message):
     if message.from_user.id not in ADMIN_IDS:
-        await message.answer("❌ у тебя нет прав", parse_mode="HTML")
-        return
-    
+        return await message.answer("❌ у тебя нет прав", parse_mode="HTML")
     global spontaneous_enabled
     spontaneous_enabled = not spontaneous_enabled
-    status = "включены" if spontaneous_enabled else "выключены"
-    await message.answer(f"✅ спонтанные сообщения {status}", parse_mode="HTML")
-
-@dp.message(Command("chatlog"))
-async def chat_log(message: Message):
-    if message.from_user.id not in ADMIN_IDS:
-        await message.answer("❌ у тебя нет прав", parse_mode="HTML")
-        return
-    
-    try:
-        with open("chat.log", "r", encoding="utf-8") as f:
-            lines = f.readlines()
-            last_lines = lines[-30:]
-            log_text = "".join(last_lines)
-            if len(log_text) > 4000:
-                log_text = log_text[-4000:]
-            await message.answer(f"📋 последние сообщения:\n<code>{log_text}</code>", parse_mode="HTML")
-    except Exception as e:
-        await message.answer(f"❌ ошибка: {e}", parse_mode="HTML")
-
-@dp.message(Command("clear_all_memory"))
-async def clear_all_memory(message: Message):
-    if message.from_user.id not in ADMIN_IDS:
-        await message.answer("❌ у тебя нет прав", parse_mode="HTML")
-        return
-    
-    from enderia import user_memory, user_greeted
-    user_memory.clear()
-    user_greeted.clear()
-    await message.answer("✅ память всех очищена", parse_mode="HTML")
+    await message.answer(f"✅ спонтанные сообщения {'включены' if spontaneous_enabled else 'выключены'}", parse_mode="HTML")
 
 # ========== ОСНОВНЫЕ КОМАНДЫ ==========
 @dp.message(CommandStart())
 async def start_cmd(message: Message):
-    global CHAT_ID
-    CHAT_ID = message.chat.id
     username = message.from_user.username or message.from_user.first_name
     await create_player(username)
     online, max_players = await get_server_online()
-    
-    asyncio.create_task(send_spontaneous_message(bot, CHAT_ID))
     
     text = f"""{E_MAGIC} <b>добро пожаловать на {SERVER['name']}</b> {E_MAGIC}
 
@@ -319,7 +250,6 @@ async def profile_cmd(message: Message):
     xp = await get_xp(username)
     stats = await get_stats(username)
     farm_level = await get_farm_level(username)
-    
     text = f"""{E_CROWN} <b>профиль игрока</b> {E_CROWN}
 
 {E_HOUSE} имя: {username}
@@ -336,24 +266,19 @@ async def profile_cmd(message: Message):
 @dp.message(Command("daily"))
 async def daily_cmd(message: Message):
     username = message.from_user.username or message.from_user.first_name
-    
     if await can_claim_daily_bonus(username):
         amount = await claim_daily_bonus(username)
         xp = await get_xp(username)
-        text = f"{E_MAGIC} <b>ежедневный бонус</b> {E_MAGIC}\n\n{E_CROWN} +{amount} xp\n💰 баланс: {xp} xp\n\n{E_RABBIT} заходи завтра снова {E_HEART}"
-        await message.answer(text, parse_mode="HTML")
+        await message.answer(f"{E_MAGIC} <b>ежедневный бонус</b> {E_MAGIC}\n\n{E_CROWN} +{amount} xp\n💰 баланс: {xp} xp\n\n{E_RABBIT} заходи завтра снова {E_HEART}", parse_mode="HTML")
     else:
-        text = f"{E_HEART} {username}, ты уже получал бонус сегодня возвращайся завтра {E_CAT_OK}"
-        await message.answer(text, parse_mode="HTML")
+        await message.answer(f"{E_HEART} {username}, ты уже получал бонус сегодня возвращайся завтра {E_CAT_OK}", parse_mode="HTML")
 
 @dp.message(Command("leaderboard"))
 @dp.message(Command("top"))
 async def leaderboard_cmd(message: Message):
     leaders = await get_leaderboard(10)
     if not leaders:
-        await message.answer(f"{E_CROWN} пока нет игроков в топе будь первым {E_MAGIC}", parse_mode="HTML")
-        return
-    
+        return await message.answer(f"{E_CROWN} пока нет игроков в топе будь первым {E_MAGIC}", parse_mode="HTML")
     text = f"{E_CROWN} <b>топ игроков по опыту</b> {E_CROWN}\n\n"
     for i, p in enumerate(leaders, 1):
         medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else "📌"
@@ -386,72 +311,66 @@ async def games_cmd(message: Message):
 /leaderboard - топ игроков"""
     await message.answer(text, parse_mode="HTML")
 
-# ========== ПЛЕВОК ==========
+# ========== ИГРЫ ==========
 @dp.message(lambda msg: msg.text and msg.text.lower() == "энди плюнуть")
 async def spit_cmd(message: Message):
     username = message.from_user.username or message.from_user.first_name
-    
     if not message.reply_to_message:
-        await message.answer(f"{E_CAT_SURPRISED} в кого плюнуть? ответь на сообщение игрока и напиши 'энди плюнуть' {E_HEART}", parse_mode="HTML")
-        return
-    
+        return await message.answer(f"{E_CAT_SURPRISED} в кого плюнуть? ответь на сообщение игрока и напиши 'энди плюнуть' {E_HEART}", parse_mode="HTML")
     target = message.reply_to_message.from_user.first_name or message.reply_to_message.from_user.username or "игрок"
-    
     if message.reply_to_message.from_user.id == message.from_user.id:
-        await message.answer(f"{E_CAT_SURPRISED} ты хочешь плюнуть в себя? странно... {E_HEART}", parse_mode="HTML")
-        return
+        return await message.answer(f"{E_CAT_SURPRISED} ты хочешь плюнуть в себя? странно... {E_HEART}", parse_mode="HTML")
     
     success, msg, new_xp = await add_spit(username, target)
-    
     if success:
         await message.answer(f"{msg}\n\n{E_CROWN} у тебя осталось {new_xp} xp {E_MAGIC}", parse_mode="HTML")
-        
+        # В плевке ИИ оставляем, как было
         ai_response = await get_enderia_response(f"{username} плюнул в {target}", username, is_reply=True, game_result=f"плевок в {target}")
-        if ai_response:
-            await message.answer(f"{E_CAT_DANCE} {ai_response}", parse_mode="HTML")
+        if ai_response: await message.answer(f"{E_CAT_DANCE} {ai_response}", parse_mode="HTML")
     else:
         await message.answer(f"{E_CAT_SURPRISED} {msg}", parse_mode="HTML")
 
-# ========== ИГРЫ ==========
 @dp.message(lambda msg: msg.text and msg.text.lower().startswith("энди кубик"))
 async def dice_game(message: Message):
-    username = message.from_user.username or message.from_user.first_name
-    text = message.text.lower()
+    user_id = message.from_user.id
+    if user_id in active_players:
+        return await message.reply(f"{E_CAT_SURPRISED} подожди, пока закончится прошлая игра!", parse_mode="HTML")
     
+    text = message.text.lower()
     match = re.search(r"энди кубик\s+(\d+)", text)
     if not match:
-        await message.reply(f"{E_CAT_DANCE} напиши ставку например: энди кубик 100 {E_JOYSTICK}", parse_mode="HTML")
-        return
+        return await message.reply(f"{E_CAT_DANCE} напиши ставку например: энди кубик 100 {E_JOYSTICK}", parse_mode="HTML")
     
-    bet_amount = int(match.group(1))
-    result_text, game_result = await game_dice_bet(username, bet_amount, bot, message.chat.id)
-    
-    await message.answer(result_text, parse_mode="HTML")
-    
-    if game_result:
-        ai_response = await get_enderia_response(f"{username} {game_result}", username, is_reply=True, game_result=game_result)
-        if ai_response:
-            await message.answer(f"{E_CAT_DANCE} {ai_response}", parse_mode="HTML")
+    active_players.add(user_id)
+    try:
+        username = message.from_user.username or message.from_user.first_name
+        bet_amount = int(match.group(1))
+        # Получаем только текст результата, игнорируем game_result (чтобы не звать ИИ)
+        result_text, _ = await game_dice_bet(username, bet_amount, bot, message.chat.id)
+        await message.answer(result_text, parse_mode="HTML")
+    finally:
+        active_players.discard(user_id)
 
 @dp.message(lambda msg: msg.text and msg.text.lower().startswith("энди футбол"))
 async def football_game(message: Message):
-    username = message.from_user.username or message.from_user.first_name
-    text = message.text.lower()
+    user_id = message.from_user.id
+    if user_id in active_players:
+        return await message.reply(f"{E_CAT_SURPRISED} подожди, пока закончится прошлая игра!", parse_mode="HTML")
     
+    text = message.text.lower()
     match = re.search(r"энди футбол\s+(\d+)", text)
     if not match:
-        await message.reply(f"{E_CAT_DANCE} напиши ставку например: энди футбол 100 ⚽", parse_mode="HTML")
-        return
+        return await message.reply(f"{E_CAT_DANCE} напиши ставку например: энди футбол 100 ⚽", parse_mode="HTML")
     
-    bet_amount = int(match.group(1))
-    result_text, game_result = await game_football_bet(username, bet_amount, bot, message.chat.id)
-    
-    await message.answer(result_text, parse_mode="HTML")
-    
-    if game_result:
-        ai_response = await get_enderia_response(f"{username} {game_result}", username, is_reply=True, game_result=game_result)
-        if ai_response:
-            await message.answer(f"{E_CAT_DANCE} {ai_response}", parse_mode="HTML")
+    active_players.add(user_id)
+    try:
+        username = message.from_user.username or message.from_user.first_name
+        bet_amount = int(match.group(1))
+        # Игнорируем game_result, ИИ не генерирует текст ответа для футбола
+        result_text, _ = await game_football_bet(username, bet_amount, bot, message.chat.id)
+        await message.answer(result_text, parse_mode="HTML")
+    finally:
+        active_players.discard(user_id)
 
 # ========== ФАРМА ==========
 @dp.message(lambda msg: msg.text and msg.text.lower() == "энди фарма")
@@ -459,50 +378,31 @@ async def farm_collect_cmd(message: Message):
     username = message.from_user.username or message.from_user.first_name
     result_text, game_result = await collect_farm(username)
     await message.answer(result_text, parse_mode="HTML")
-    
     if game_result:
         ai_response = await get_enderia_response(f"{username} {game_result}", username, is_reply=True, game_result=game_result)
-        if ai_response:
-            await message.answer(f"{E_CAT_DANCE} {ai_response}", parse_mode="HTML")
+        if ai_response: await message.answer(f"{E_CAT_DANCE} {ai_response}", parse_mode="HTML")
 
 @dp.message(lambda msg: msg.text and msg.text.lower() == "энди фарма инфо")
 async def farm_info_cmd(message: Message):
-    username = message.from_user.username or message.from_user.first_name
-    text = await farm_info(username)
-    await message.answer(text, parse_mode="HTML")
+    await message.answer(await farm_info(message.from_user.username or message.from_user.first_name), parse_mode="HTML")
 
 @dp.message(lambda msg: msg.text and msg.text.lower() == "энди улучши фарму")
 async def farm_upgrade_cmd(message: Message):
     username = message.from_user.username or message.from_user.first_name
     result_text, game_result = await upgrade_farm_cmd(username)
     await message.answer(result_text, parse_mode="HTML")
-    
     if game_result:
         ai_response = await get_enderia_response(f"{username} {game_result}", username, is_reply=True, game_result=game_result)
-        if ai_response:
-            await message.answer(f"{E_CAT_DANCE} {ai_response}", parse_mode="HTML")
+        if ai_response: await message.answer(f"{E_CAT_DANCE} {ai_response}", parse_mode="HTML")
 
 # ========== ОБРАБОТЧИК ==========
 @dp.message()
 async def handle_message(message: Message):
-    global CHAT_ID
-    if CHAT_ID is None:
-        CHAT_ID = message.chat.id
-        asyncio.create_task(send_spontaneous_message(bot, CHAT_ID))
-    
-    if not message.text:
+    if not message.text or message.text.startswith("/"):
         return
-    
     username = message.from_user.username or message.from_user.first_name
     user_message = message.text
-    
-    if user_message.startswith("/"):
-        return
-    
-    is_reply_to_bot = False
-    if message.reply_to_message:
-        if message.reply_to_message.from_user.id == bot.id:
-            is_reply_to_bot = True
+    is_reply_to_bot = bool(message.reply_to_message and message.reply_to_message.from_user.id == bot.id)
     
     if should_respond(user_message) or is_reply_to_bot:
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
@@ -515,57 +415,33 @@ async def handle_message(message: Message):
 @dp.callback_query()
 async def handle_callback(callback: CallbackQuery):
     data = callback.data
-    
     if data == "menu_main":
         online, max_players = await get_server_online()
-        text = f"{E_HEART} <b>главное меню</b>\n\n{E_CROWN} онлайн: {online}/{max_players}\n\n{E_CAT_DANCE} /games - все команды"
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_main_keyboard())
+        await callback.message.edit_text(f"{E_HEART} <b>главное меню</b>\n\n{E_CROWN} онлайн: {online}/{max_players}\n\n{E_CAT_DANCE} /games - все команды", parse_mode="HTML", reply_markup=get_main_keyboard())
         await callback.answer()
-    
     elif data == "menu_ip":
         online, max_players = await get_server_online()
-        text = f"{E_CROWN} <b>lostearth</b> {E_CROWN}\n\n{E_HOUSE} <b>java:</b> <code>{SERVER['java_ip']}:{SERVER['java_port']}</code>\n{E_NOTE} <b>bedrock:</b> <code>{SERVER['bedrock_ip']}:{SERVER['bedrock_port']}</code>\n{E_CROWN} <b>онлайн:</b> {online}/{max_players}\n\n{E_RABBIT} <i>приятной игры</i>"
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_ip_keyboard())
+        await callback.message.edit_text(f"{E_CROWN} <b>lostearth</b> {E_CROWN}\n\n{E_HOUSE} <b>java:</b> <code>{SERVER['java_ip']}:{SERVER['java_port']}</code>\n{E_NOTE} <b>bedrock:</b> <code>{SERVER['bedrock_ip']}:{SERVER['bedrock_port']}</code>\n{E_CROWN} <b>онлайн:</b> {online}/{max_players}\n\n{E_RABBIT} <i>приятной игры</i>", parse_mode="HTML", reply_markup=get_ip_keyboard())
         await callback.answer()
-    
     elif data == "refresh_online":
         online_cache.clear()
         last_update.clear()
         online, max_players = await get_server_online()
-        
-        # Защита от ошибки TelegramBadRequest
         current_time = datetime.now().strftime("%H:%M:%S")
-        
-        text = (
-            f"{E_CROWN} <b>lostearth</b> {E_CROWN}\n\n"
-            f"{E_HOUSE} <b>java:</b> <code>{SERVER['java_ip']}:{SERVER['java_port']}</code>\n"
-            f"{E_NOTE} <b>bedrock:</b> <code>{SERVER['bedrock_ip']}:{SERVER['bedrock_port']}</code>\n"
-            f"{E_CROWN} <b>онлайн:</b> {online}/{max_players}\n\n"
-            f"{E_RABBIT} <i>приятной игры</i>\n"
-            f"🕒 <i>обновлено: {current_time}</i>"
-        )
-        
         try:
-            await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_ip_keyboard())
+            await callback.message.edit_text(f"{E_CROWN} <b>lostearth</b> {E_CROWN}\n\n{E_HOUSE} <b>java:</b> <code>{SERVER['java_ip']}:{SERVER['java_port']}</code>\n{E_NOTE} <b>bedrock:</b> <code>{SERVER['bedrock_ip']}:{SERVER['bedrock_port']}</code>\n{E_CROWN} <b>онлайн:</b> {online}/{max_players}\n\n{E_RABBIT} <i>приятной игры</i>\n🕒 <i>обновлено: {current_time}</i>", parse_mode="HTML", reply_markup=get_ip_keyboard())
         except TelegramBadRequest:
             pass
-            
         await callback.answer("онлайн обновлён")
-    
     elif data == "menu_premium":
-        text = f"{E_CROWN} <b>премиум доступ</b> {E_CROWN}\n\n{E_MAGIC} <b>друид</b> - 50₽\n{E_NOTE} <b>оракул</b> - 100₽\n{E_CROWN} <b>монарх</b> - 200₽\n{E_RABBIT} <b>херувим</b> - 300₽\n{E_HOUSE} <b>архонт</b> - 400₽\n{E_CAT_DANCE} <b>серафим</b> - 600₽\n\n{E_HEART} <b>по вопросам:</b> @pelmewki379"
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_back_keyboard())
+        await callback.message.edit_text(f"{E_CROWN} <b>премиум доступ</b> {E_CROWN}\n\n{E_MAGIC} <b>друид</b> - 50₽\n{E_NOTE} <b>оракул</b> - 100₽\n{E_CROWN} <b>монарх</b> - 200₽\n{E_RABBIT} <b>херувим</b> - 300₽\n{E_HOUSE} <b>архонт</b> - 400₽\n{E_CAT_DANCE} <b>серафим</b> - 600₽\n\n{E_HEART} <b>по вопросам:</b> @pelmewki379", parse_mode="HTML", reply_markup=get_back_keyboard())
         await callback.answer()
-    
     elif data == "menu_enderia":
-        text = f"{E_HEART} <b>энди - твой помощник</b> {E_HEART}\n\n{E_CAT_DANCE} напиши 'энди' и я отвечу\n\n📝 команды: /games"
-        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_back_keyboard())
+        await callback.message.edit_text(f"{E_HEART} <b>энди - твой помощник</b> {E_HEART}\n\n{E_CAT_DANCE} напиши 'энди' и я отвечу\n\n📝 команды: /games", parse_mode="HTML", reply_markup=get_back_keyboard())
         await callback.answer()
-    
     elif data == "menu_farm":
         await callback.message.edit_text(f"{E_HOUSE} напиши 'энди фарма инфо' для информации о фарме", parse_mode="HTML", reply_markup=get_back_keyboard())
         await callback.answer()
-    
     elif data == "menu_top":
         await callback.message.edit_text(f"{E_CROWN} /leaderboard - топ игроков", parse_mode="HTML", reply_markup=get_back_keyboard())
         await callback.answer()
@@ -582,6 +458,9 @@ async def main():
     print("бот lostearth запущен")
     print(f"бот: @{bot_info.username}")
     print("=" * 50)
+    
+    # Запускаем один раз цикл сообщений строго в нужную группу
+    asyncio.create_task(send_spontaneous_message(bot, GROUP_CHAT_ID))
     
     await dp.start_polling(bot)
 
