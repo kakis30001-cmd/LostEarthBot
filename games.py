@@ -218,3 +218,37 @@ async def game_football_bet(username: str, bet_amount: int, bot, chat_id: int) -
         return result_text, f"промахнулся и проиграл {bet_amount} XP!"
     else:
         return f"🤝 НИЧЬЯ!\n\nТвой удар: {player_value}\nЭнди: {bot_value}\n\n💰 Ставка возвращена!\n💰 Баланс: {xp} XP", f"ничья!"
+
+# Добавь это в конец games.py
+async def game_slots_bet(username: str, bet_amount: int, bot, chat_id: int) -> tuple[str, str]:
+    xp = await get_xp(username)
+    
+    if xp < bet_amount:
+        return f"💰 {username}, у тебя всего {xp} XP! Не хватает на ставку {bet_amount}", None
+    if bet_amount < 50:
+        return f"🎰 {username}, минимальная ставка 50 XP!", None
+    if bet_amount > 500000:
+        return f"🎰 {username}, максимальная ставка 500 000 XP!", None
+
+    await update_xp(username, -bet_amount)
+    
+    await bot.send_message(chat_id, f"🎰 {username} делает ставку, Энди крутит слоты...")
+    msg = await bot.send_dice(chat_id, emoji="🎰")
+    value = msg.dice.value
+    
+    await asyncio.sleep(3) # Ждем анимацию
+    
+    # Логика Telegram слотов: 64 - джекпот
+    if value == 64:
+        win_amount = bet_amount * 4
+        await update_xp(username, win_amount)
+        await update_stats(username, True)
+        return f"🎰 <b>ДЖЕКПОТ!</b>\n\nТри семерки! Выигрыш: {win_amount} XP!", f"выиграл {win_amount} XP"
+    elif value in [1, 22, 43]:
+        win_amount = bet_amount * 3
+        await update_xp(username, win_amount)
+        await update_stats(username, True)
+        return f"🎰 <b>УДАЧА!</b>\n\nДве семерки! Выигрыш: {win_amount} XP!", f"выиграл {win_amount} XP"
+    else:
+        await update_stats(username, False)
+        return f"🎰 <b>Мимо...</b>\n\nНичего не совпало. Ставка {bet_amount} XP сгорела.", "проиграл"
