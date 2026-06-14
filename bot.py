@@ -113,8 +113,6 @@ BUTTON_EMOJI_ID = {
     "crown": "5807868868886009920",
     "house": "5873147866364514353",
     "joystick": "5870717606364713020",
-    "magic": "5474144592817318927",
-    "heart": "5199427253225667842",
 }
 
 SERVER = {
@@ -189,36 +187,36 @@ def get_back_keyboard():
 @dp.message(Command("say"))
 async def admin_say(message: Message):
     if message.from_user.id not in ADMIN_IDS:
-        return await message.answer(f"{E_CAT_SURPRISED} у тебя нет прав", parse_mode="HTML")
+        return await message.answer("❌ у тебя нет прав", parse_mode="HTML")
     text = message.text.replace("/say", "").strip()
     if not text:
-        return await message.answer(f"{E_NOTE} /say <текст>\nпример: /say привет всем", parse_mode="HTML")
+        return await message.answer("📝 /say <текст>\nпример: /say привет всем", parse_mode="HTML")
     await message.answer(f"{E_CAT_DANCE} {text} {E_HEART}", parse_mode="HTML")
 
 @dp.message(Command("sayto"))
 async def admin_say_to(message: Message):
     if message.from_user.id not in ADMIN_IDS:
-        return await message.answer(f"{E_CAT_SURPRISED} у тебя нет прав", parse_mode="HTML")
+        return await message.answer("❌ у тебя нет прав", parse_mode="HTML")
     parts = message.text.split(maxsplit=2)
     if len(parts) < 3:
-        return await message.answer(f"{E_NOTE} /sayto <chat_id> <текст>", parse_mode="HTML")
+        return await message.answer("📝 /sayto <chat_id> <текст>", parse_mode="HTML")
     try:
         await bot.send_message(int(parts[1]), f"{E_CAT_DANCE} {parts[2]} {E_HEART}", parse_mode="HTML")
-        await message.answer(f"{E_CHECK} отправлено в {parts[1]}", parse_mode="HTML")
+        await message.answer(f"✅ отправлено в {parts[1]}", parse_mode="HTML")
     except Exception as e:
-        await message.answer(f"{E_CAT_SURPRISED} ошибка: {e}", parse_mode="HTML")
+        await message.answer(f"❌ ошибка: {e}", parse_mode="HTML")
 
 @dp.message(Command("givexp"))
 async def admin_give_xp(message: Message):
     if message.from_user.id not in ADMIN_IDS:
-        return await message.answer(f"{E_CAT_SURPRISED} у тебя нет прав", parse_mode="HTML")
+        return await message.answer("❌ у тебя нет прав", parse_mode="HTML")
     
     parts = message.text.split(maxsplit=2)
     if len(parts) < 3:
         return await message.answer(
-            f"{E_NOTE} <b>использование:</b> <code>/givexp <имя_игрока> <сумма></code>\n"
-            f"{E_MAGIC} <i>пример: /givexp Steve 5000</i> (выдать 5000)\n"
-            f"{E_MAGIC} <i>пример: /givexp Steve -1000</i> (забрать 1000)", 
+            "📝 <b>Использование:</b> <code>/givexp <имя_игрока> <сумма></code>\n"
+            "💡 <i>Пример: /givexp Steve 5000</i> (выдать 5000)\n"
+            "💡 <i>Пример: /givexp Steve -1000</i> (забрать 1000)", 
             parse_mode="HTML"
         )
     
@@ -226,28 +224,27 @@ async def admin_give_xp(message: Message):
     try:
         amount = int(parts[2])
     except ValueError:
-        return await message.answer(f"{E_CAT_SURPRISED} сумма должна быть целым числом", parse_mode="HTML")
+        return await message.answer("❌ Сумма должна быть целым числом!", parse_mode="HTML")
     
     await update_xp(target_username, amount)
     new_xp = await get_xp(target_username)
-    action = "выдано" if amount > 0 else "списано"
+    action = "Выдано" if amount > 0 else "Списано"
     
     await message.answer(
-        f"{E_MAGIC} <b>успешно</b> {E_MAGIC}\n\n"
-        f"{E_HOUSE} <b>игрок:</b> {target_username}\n"
-        f"{E_CROWN} <b>{action}:</b> {abs(amount)} xp\n"
-        f"{E_JOYSTICK} <b>новый баланс:</b> {new_xp} xp", 
+        f"{E_MAGIC} <b>Успешно!</b>\n\n"
+        f"👤 <b>Игрок:</b> {target_username}\n"
+        f"💰 <b>{action}:</b> {abs(amount)} xp\n"
+        f"🏦 <b>Новый баланс:</b> {new_xp} xp", 
         parse_mode="HTML"
     )
 
 @dp.message(Command("spontaneous"))
 async def toggle_spontaneous(message: Message):
     if message.from_user.id not in ADMIN_IDS:
-        return await message.answer(f"{E_CAT_SURPRISED} у тебя нет прав", parse_mode="HTML")
+        return await message.answer("❌ у тебя нет прав", parse_mode="HTML")
     global spontaneous_enabled
     spontaneous_enabled = not spontaneous_enabled
-    status = "включены" if spontaneous_enabled else "выключены"
-    await message.answer(f"{E_CHECK} спонтанные сообщения {status}", parse_mode="HTML")
+    await message.answer(f"✅ спонтанные сообщения {'включены' if spontaneous_enabled else 'выключены'}", parse_mode="HTML")
 
 # ========== ОСНОВНЫЕ КОМАНДЫ ==========
 @dp.message(CommandStart())
@@ -266,7 +263,7 @@ async def start_cmd(message: Message):
 
 {E_CROWN} <b>стартовый баланс: 1000 xp</b>
 
-{E_NOTE} <b>команды:</b>
+📝 <b>команды:</b>
 • энди кубик 100 - игра в кости
 • энди футбол 100 - футбол
 • энди слоты 100 - игровые автоматы
@@ -309,7 +306,7 @@ async def daily_cmd(message: Message):
     if await can_claim_daily_bonus(username):
         amount = await claim_daily_bonus(username)
         xp = await get_xp(username)
-        await message.answer(f"{E_MAGIC} <b>ежедневный бонус</b> {E_MAGIC}\n\n{E_CROWN} +{amount} xp\n{E_HOUSE} баланс: {xp} xp\n\n{E_RABBIT} заходи завтра снова {E_HEART}", parse_mode="HTML")
+        await message.answer(f"{E_MAGIC} <b>ежедневный бонус</b> {E_MAGIC}\n\n{E_CROWN} +{amount} xp\n💰 баланс: {xp} xp\n\n{E_RABBIT} заходи завтра снова {E_HEART}", parse_mode="HTML")
     else:
         await message.answer(f"{E_HEART} {username}, ты уже получал бонус сегодня возвращайся завтра {E_CAT_OK}", parse_mode="HTML")
 
@@ -334,25 +331,25 @@ async def cmd_online(message: Message):
 async def games_cmd(message: Message):
     text = f"""{E_JOYSTICK} <b>доступные команды</b> {E_JOYSTICK}
 
-{E_MAGIC} <b>игры:</b>
+🎮 <b>игры:</b>
 • энди кубик 100 - кости
 • энди футбол 100 - футбол
 • энди слоты 100 - автоматы
 • энди плюнуть - плюнуть в игрока
 
-{E_HOUSE} <b>фарма:</b>
+🏭 <b>фарма:</b>
 • энди фарма - собрать опыт
 • энди фарма инфо - инфо о фарме
 • энди улучши фарму - улучшить фарму
 
-{E_CROWN} <b>профиль:</b>
+📊 <b>профиль:</b>
 /balance - баланс
 /profile - профиль
 /daily - бонус 500 xp
 /leaderboard - топ игроков"""
     await message.answer(text, parse_mode="HTML")
 
-# ========== НОВАЯ КОМАНДА ДЛЯ БАЛАНСА ИГРОКА В ТЕКСТЕ ==========
+# ========== ОБРАБОТЧИК ДЛЯ БАЛАНСА В ТЕКСТЕ ==========
 @dp.message()
 async def handle_balance_in_text(message: Message):
     if not message.text or message.text.startswith("/"):
@@ -371,7 +368,6 @@ async def handle_balance_in_text(message: Message):
     
     await handle_normal_message(message)
 
-# ========== ОСНОВНОЙ ОБРАБОТЧИК ==========
 async def handle_normal_message(message: Message):
     if not message.text or message.text.startswith("/"):
         return
@@ -431,7 +427,7 @@ async def pay_cmd(message: Message):
     await update_xp(sender, -amount)
     await update_xp(target, amount)
     
-    await message.answer(f"{E_MAGIC} <b>перевод успешен</b> {E_MAGIC}\n{sender} перевел {amount} xp игроку {target} {E_HEART}", parse_mode="HTML")
+    await message.answer(f"{E_MAGIC} <b>перевод успешен</b>\n{sender} перевел {amount} xp игроку {target} {E_HEART}", parse_mode="HTML")
 
 # ========== КУБИК ==========
 @dp.message(lambda msg: msg.text and msg.text.lower().startswith("энди кубик"))
@@ -467,7 +463,7 @@ async def football_game(message: Message):
     text = message.text.lower()
     match = re.search(r"энди футбол\s+(\d+)", text)
     if not match:
-        return await message.reply(f"{E_CAT_DANCE} напиши ставку например: энди футбол 100 {E_JOYSTICK}", parse_mode="HTML")
+        return await message.reply(f"{E_CAT_DANCE} напиши ставку например: энди футбол 100 ⚽", parse_mode="HTML")
     
     bet_amount = int(match.group(1))
     if bet_amount <= 0 or bet_amount > 500000:
@@ -490,7 +486,7 @@ async def slots_game(message: Message):
     
     match = re.search(r"энди слоты\s+(\d+)", message.text.lower())
     if not match:
-        return await message.reply(f"{E_CAT_DANCE} напиши ставку например: энди слоты 100 {E_JOYSTICK}", parse_mode="HTML")
+        return await message.reply(f"{E_CAT_DANCE} напиши ставку например: энди слоты 100 🎰", parse_mode="HTML")
     
     bet_amount = int(match.group(1))
     if bet_amount < 50 or bet_amount > 500000:
@@ -549,27 +545,8 @@ async def handle_callback(callback: CallbackQuery):
         except TelegramBadRequest:
             pass
         await callback.answer("онлайн обновлён")
-    elif data == "menu_premium":
-        donate_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="💎 ПОСМОТРЕТЬ ДОНАТЫ", web_app=WebAppInfo(url=DONATE_URL), icon_custom_emoji_id=BUTTON_EMOJI_ID["crown"])],
-            [InlineKeyboardButton(text="📩 КУПИТЬ ДОНАТ", url="https://t.me/pelmewki379", icon_custom_emoji_id=BUTTON_EMOJI_ID["heart"])],
-            [InlineKeyboardButton(text="◀️ НАЗАД", callback_data="menu_main", icon_custom_emoji_id=BUTTON_EMOJI_ID["back"])]
-        ])
-        await callback.message.edit_text(
-            f"{E_CROWN} <b>премиум доступ</b> {E_CROWN}\n\n"
-            f"{E_MAGIC} <b>друид</b> - 50₽\n"
-            f"{E_NOTE} <b>оракул</b> - 100₽\n"
-            f"{E_CROWN} <b>монарх</b> - 200₽\n"
-            f"{E_RABBIT} <b>херувим</b> - 300₽\n"
-            f"{E_HOUSE} <b>архонт</b> - 400₽\n"
-            f"{E_CAT_DANCE} <b>серафим</b> - 600₽\n\n"
-            f"{E_HEART} <b>по вопросам:</b> @pelmewki379",
-            parse_mode="HTML",
-            reply_markup=donate_keyboard
-        )
-        await callback.answer()
     elif data == "menu_enderia":
-        await callback.message.edit_text(f"{E_HEART} <b>энди - твой помощник</b> {E_HEART}\n\n{E_CAT_DANCE} напиши 'энди' и я отвечу\n\n{E_NOTE} команды: /games", parse_mode="HTML", reply_markup=get_back_keyboard())
+        await callback.message.edit_text(f"{E_HEART} <b>энди - твой помощник</b> {E_HEART}\n\n{E_CAT_DANCE} напиши 'энди' и я отвечу\n\n📝 команды: /games", parse_mode="HTML", reply_markup=get_back_keyboard())
         await callback.answer()
     elif data == "menu_farm":
         await callback.message.edit_text(f"{E_HOUSE} напиши 'энди фарма инфо' для информации о фарме", parse_mode="HTML", reply_markup=get_back_keyboard())
