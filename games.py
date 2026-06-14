@@ -219,10 +219,9 @@ async def game_football_bet(username: str, bet_amount: int, bot, chat_id: int) -
     else:
         return f"🤝 НИЧЬЯ!\n\nТвой удар: {player_value}\nЭнди: {bot_value}\n\n💰 Ставка возвращена!\n💰 Баланс: {xp} XP", f"ничья!"
 
-# Добавь это в конец games.py
 async def game_slots_bet(username: str, bet_amount: int, bot, chat_id: int) -> tuple[str, str]:
     xp = await get_xp(username)
-    
+
     if xp < bet_amount:
         return f"💰 {username}, у тебя всего {xp} XP! Не хватает на ставку {bet_amount}", None
     if bet_amount < 50:
@@ -230,25 +229,52 @@ async def game_slots_bet(username: str, bet_amount: int, bot, chat_id: int) -> t
     if bet_amount > 500000:
         return f"🎰 {username}, максимальная ставка 500 000 XP!", None
 
+    # Списываем ставку ДО игры
     await update_xp(username, -bet_amount)
-    
-    await bot.send_message(chat_id, f"🎰 {username} делает ставку, Энди крутит слоты...")
+
+    # Отправляем анимацию
+    await bot.send_message(chat_id, f"🎰 {username} крутит слоты...")
     msg = await bot.send_dice(chat_id, emoji="🎰")
     value = msg.dice.value
-    
-    await asyncio.sleep(3) # Ждем анимацию
-    
-    # Логика Telegram слотов: 64 - джекпот
-    if value == 64:
-        win_amount = bet_amount * 4
+    await asyncio.sleep(3)
+
+    # Генерируем три числа от 1 до 9 (имитация барабанов)
+    n1, n2, n3 = random.randint(1, 9), random.randint(1, 9), random.randint(1, 9)
+    sevens = [n1, n2, n3].count(7)
+    unique = len(set([n1, n2, n3]))
+
+    # Расчёт множителя
+    if sevens == 3:
+        multiplier = 5       # Джекпот 5x
+        win_amount = int(bet_amount * multiplier)
         await update_xp(username, win_amount)
         await update_stats(username, True)
-        return f"🎰 <b>ДЖЕКПОТ!</b>\n\nТри семерки! Выигрыш: {win_amount} XP!", f"выиграл {win_amount} XP"
-    elif value in [1, 22, 43]:
-        win_amount = bet_amount * 3
+        text = f"🎰 <b>[ {n1} | {n2} | {n3} ]</b>\n\n{E_MAGIC} ДЖЕКПОТ! Три семёрки!\n✨ Ты выиграл {win_amount} XP! (x{multiplier})"
+        log_msg = f"выиграл {win_amount} XP в слоты (джекпот)"
+    elif sevens == 2:
+        multiplier = 2
+        win_amount = int(bet_amount * multiplier)
         await update_xp(username, win_amount)
         await update_stats(username, True)
-        return f"🎰 <b>УДАЧА!</b>\n\nДве семерки! Выигрыш: {win_amount} XP!", f"выиграл {win_amount} XP"
+        text = f"🎰 <b>[ {n1} | {n2} | {n3} ]</b>\n\n{E_CROWN} Удача! Две семёрки!\n✨ Ты выиграл {win_amount} XP! (x{multiplier})"
+        log_msg = f"выиграл {win_amount} XP в слоты (x2)"
+    elif unique == 1:
+        multiplier = 2
+        win_amount = int(bet_amount * multiplier)
+        await update_xp(username, win_amount)
+        await update_stats(username, True)
+        text = f"🎰 <b>[ {n1} | {n2} | {n3} ]</b>\n\n{E_CROWN} Три одинаковых!\n✨ Ты выиграл {win_amount} XP! (x{multiplier})"
+        log_msg = f"выиграл {win_amount} XP в слоты (x2)"
+    elif unique == 2 and sevens == 0:
+        multiplier = 1.3
+        win_amount = int(bet_amount * multiplier)
+        await update_xp(username, win_amount)
+        await update_stats(username, True)
+        text = f"🎰 <b>[ {n1} | {n2} | {n3} ]</b>\n\n{E_CAT_OK} Хорошая комбинация!\n✨ Ты выиграл {win_amount} XP! (x{multiplier})"
+        log_msg = f"выиграл {win_amount} XP в слоты (x1.3)"
     else:
         await update_stats(username, False)
-        return f"🎰 <b>Мимо...</b>\n\nНичего не совпало. Ставка {bet_amount} XP сгорела.", "проиграл"
+        text = f"🎰 <b>[ {n1} | {n2} | {n3} ]</b>\n\n{E_CAT_SURPRISED} Мимо! Ты проиграл {bet_amount} XP."
+        log_msg = "проиграл в слоты"
+
+    return text, log_msg
