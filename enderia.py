@@ -3,7 +3,6 @@ import random
 import re
 import aiohttp
 import asyncio
-import json
 from datetime import datetime, timedelta
 from collections import defaultdict, deque
 from dotenv import load_dotenv
@@ -56,7 +55,7 @@ E_JOYSTICK = emoji(ENDERIA_EMOJI["joystick"], "🎮")
 
 # ========== ПАМЯТЬ ==========
 user_memory = defaultdict(lambda: deque(maxlen=90))
-user_last_greet = {}  # время последнего приветствия
+user_last_greet = {}  
 last_active = {}
 
 def add_to_memory(username: str, user_message: str, bot_response: str):
@@ -68,12 +67,7 @@ def get_user_context(username: str) -> str:
         return ""
     return "\n".join(list(user_memory[username])[-90:])
 
-def clear_user_memory(username: str):
-    if username in user_memory:
-        user_memory[username].clear()
-
 def can_greet(username: str) -> bool:
-    """проверяем, можно ли поздороваться (прошло больше 2 часов)"""
     if username not in user_last_greet:
         return True
     last = user_last_greet[username]
@@ -119,23 +113,41 @@ def save_to_log(username: str, message: str, is_bot: bool = False):
     except:
         pass
 
-# ========== СПОНТАННЫЕ СООБЩЕНИЯ ==========
-spontaneous_messages_list = [
-    "народ, как дела на фермах? у меня криперы уже 3 уровень",
-    "что молчим? пойдёмте вместе на сервер",
-    "эй, кто хочет сыграть в футбол? пиши 'энди футбол 100'",
-    "не забывайте, на мирный режим нужна заявка через бота",
-    "айпи сервера: java 150.241.85.40:25565, bedrock 150.241.85.40:19132",
-]
-
+# ========== СПОНТАННЫЕ СООБЩЕНИЯ КАЖДЫЕ 3 ЧАСА ==========
 spontaneous_enabled = True
+spontaneous_messages_list = [] # Заглушка для импорта
 
 async def send_spontaneous_message(bot, chat_id: int):
     while True:
-        await asyncio.sleep(random.randint(1800, 3600))
-        if spontaneous_enabled:
-            msg = random.choice(spontaneous_messages_list)
-            await bot.send_message(chat_id, f"{E_CAT_DANCE} {msg} {E_HEART}", parse_mode="HTML")
+        # Спим ровно 10800 секунд (3 часа)
+        await asyncio.sleep(10800)
+        
+        if spontaneous_enabled and OPENROUTER_API_KEY:
+            system_prompt = (
+                "ты энди, девушка-эндермен. придумай одно короткое случайное сообщение "
+                "(1-2 предложения) для майнкрафт чата, чтобы начать разговор. "
+                "пиши с маленькой буквы, без приветствий и используй разговорный стиль."
+            )
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(
+                        "https://openrouter.ai/api/v1/chat/completions",
+                        headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"},
+                        json={
+                            "model": MODELS_CHAIN[0],
+                            "messages": [{"role": "system", "content": system_prompt}],
+                            "max_tokens": 150,
+                            "temperature": 0.9,
+                        },
+                        timeout=aiohttp.ClientTimeout(total=30)
+                    ) as response:
+                        if response.status == 200:
+                            data = await response.json()
+                            result = data["choices"][0]["message"]["content"].strip()
+                            result = re.sub(r'<[^>]+>', '', result)
+                            await bot.send_message(chat_id, f"{E_CAT_DANCE} {result} {E_HEART}", parse_mode="HTML")
+            except Exception as e:
+                print(f"ошибка генерации спонтанного сообщения: {e}")
 
 # ========== ОСНОВНАЯ ФУНКЦИЯ ==========
 async def get_enderia_response(user_message: str, username: str, is_reply: bool = False, user_bio: str = "", game_result: str = None) -> str:
@@ -143,19 +155,16 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     
     save_to_log(username, user_message, is_bot=False)
     last_active[username] = datetime.now()
-    
     await save_chat_message(username, user_message, is_bot=False)
     
     is_greeting_msg = is_greeting(user_message)
     is_name_call = is_just_name(user_message)
     can_say_greet = can_greet(username)
-    
     context = get_user_context(username)
     
     if game_result:
         user_message = f"[{game_result}] {user_message}"
     
-    # просто позвали по имени
     if is_name_call and not is_reply:
         response = f"{E_CAT_OK} слушаю, {username} {E_HEART}"
         add_to_memory(username, user_message, response)
@@ -163,7 +172,6 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         await save_andy_dialog(username, user_message, response)
         return response
     
-    # приветствие только раз в 2 часа
     if is_greeting_msg and can_say_greet and not is_reply:
         mark_greeted(username)
         response = f"{E_CAT_DANCE} привет, {username} {E_HEART}"
@@ -172,7 +180,6 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         await save_andy_dialog(username, user_message, response)
         return response
     
-    # если поздоровались но прошло меньше 2 часов - просто отвечаем
     if is_greeting_msg and not can_say_greet and not is_reply:
         response = f"{E_CAT_DANCE} {username} {E_HEART}"
         add_to_memory(username, user_message, response)
@@ -180,7 +187,6 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         await save_andy_dialog(username, user_message, response)
         return response
     
-    # ии ответ
     if OPENROUTER_API_KEY:
         try:
             system_prompt = f"""ты энди, девушка-эндермен
@@ -240,14 +246,12 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         except Exception as e:
             print(f"ошибка ии: {e}")
     
-    # живые fallback ответы
     fallbacks = [
         f"{E_CAT_DANCE} {username} {E_HEART}",
         f"{E_CAT_OK} {username} {E_HEART}",
         f"{E_MAGIC} {username} {E_CAT_DANCE}",
         f"{E_CAT_UP} {username} {E_HEART}",
     ]
-    
     response = random.choice(fallbacks)
     add_to_memory(username, user_message, response)
     save_to_log(username, response, is_bot=True)
