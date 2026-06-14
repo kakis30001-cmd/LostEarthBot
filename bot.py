@@ -312,6 +312,34 @@ async def games_cmd(message: Message):
     await message.answer(text, parse_mode="HTML")
 
 # ========== ИГРЫ ==========
+@dp.message(lambda msg: msg.text and msg.text.lower().startswith("пай "))
+async def pay_cmd(message: Message):
+    if not message.reply_to_message:
+        return await message.answer(f"{E_CAT_SURPRISED} ответь на сообщение игрока, которому хочешь перевести xp!", parse_mode="HTML")
+    
+    match = re.search(r"пай\s+(\d+)", message.text.lower())
+    if not match:
+        return await message.answer(f"{E_CAT_DANCE} напиши сумму, например: пай 100", parse_mode="HTML")
+        
+    amount = int(match.group(1))
+    if amount <= 0 or amount > 5000:
+        return await message.answer(f"{E_CAT_SURPRISED} можно перевести от 1 до 5000 xp за раз!", parse_mode="HTML")
+        
+    sender = message.from_user.username or message.from_user.first_name
+    target = message.reply_to_message.from_user.username or message.reply_to_message.from_user.first_name
+    
+    if sender == target:
+        return await message.answer(f"{E_CAT_SURPRISED} себе переводить нельзя!", parse_mode="HTML")
+        
+    sender_xp = await get_xp(sender)
+    if sender_xp < amount:
+        return await message.answer(f"{E_CAT_SURPRISED} у тебя недостаточно xp! твой баланс: {sender_xp}", parse_mode="HTML")
+        
+    await update_xp(sender, -amount)
+    await update_xp(target, amount)
+    
+    await message.answer(f"{E_MAGIC} <b>перевод успешен!</b>\n{sender} перевел {amount} xp игроку {target} {E_HEART}", parse_mode="HTML")
+
 @dp.message(lambda msg: msg.text and msg.text.lower() == "энди плюнуть")
 async def spit_cmd(message: Message):
     username = message.from_user.username or message.from_user.first_name
@@ -324,7 +352,6 @@ async def spit_cmd(message: Message):
     success, msg, new_xp = await add_spit(username, target)
     if success:
         await message.answer(f"{msg}\n\n{E_CROWN} у тебя осталось {new_xp} xp {E_MAGIC}", parse_mode="HTML")
-        # В плевке ИИ оставляем, как было
         ai_response = await get_enderia_response(f"{username} плюнул в {target}", username, is_reply=True, game_result=f"плевок в {target}")
         if ai_response: await message.answer(f"{E_CAT_DANCE} {ai_response}", parse_mode="HTML")
     else:
@@ -341,11 +368,13 @@ async def dice_game(message: Message):
     if not match:
         return await message.reply(f"{E_CAT_DANCE} напиши ставку например: энди кубик 100 {E_JOYSTICK}", parse_mode="HTML")
     
+    bet_amount = int(match.group(1))
+    if bet_amount <= 0 or bet_amount > 500000:
+        return await message.reply(f"{E_CAT_SURPRISED} ставка должна быть от 1 до 500 000 xp!", parse_mode="HTML")
+        
     active_players.add(user_id)
     try:
         username = message.from_user.username or message.from_user.first_name
-        bet_amount = int(match.group(1))
-        # Получаем только текст результата, игнорируем game_result (чтобы не звать ИИ)
         result_text, _ = await game_dice_bet(username, bet_amount, bot, message.chat.id)
         await message.answer(result_text, parse_mode="HTML")
     finally:
@@ -362,17 +391,68 @@ async def football_game(message: Message):
     if not match:
         return await message.reply(f"{E_CAT_DANCE} напиши ставку например: энди футбол 100 ⚽", parse_mode="HTML")
     
+    bet_amount = int(match.group(1))
+    if bet_amount <= 0 or bet_amount > 500000:
+        return await message.reply(f"{E_CAT_SURPRISED} ставка должна быть от 1 до 500 000 xp!", parse_mode="HTML")
+        
     active_players.add(user_id)
     try:
         username = message.from_user.username or message.from_user.first_name
-        bet_amount = int(match.group(1))
-        # Игнорируем game_result, ИИ не генерирует текст ответа для футбола
         result_text, _ = await game_football_bet(username, bet_amount, bot, message.chat.id)
         await message.answer(result_text, parse_mode="HTML")
     finally:
         active_players.discard(user_id)
 
-# ========== ФАРМА ==========
+@dp.message(lambda msg: msg.text and msg.text.lower().startswith("энди слоты"))
+async def slots_game(message: Message):
+    user_id = message.from_user.id
+    if user_id in active_players:
+        return await message.reply(f"{E_CAT_SURPRISED} подожди, пока закончится прошлая игра!", parse_mode="HTML")
+    
+    match = re.search(r"энди слоты\s+(\d+)", message.text.lower())
+    if not match:
+        return await message.reply(f"{E_CAT_DANCE} напиши ставку например: энди слоты 100 🎰", parse_mode="HTML")
+    
+    bet_amount = int(match.group(1))
+    if bet_amount <= 0 or bet_amount > 500000:
+        return await message.reply(f"{E_CAT_SURPRISED} ставка должна быть от 1 до 500 000 xp!", parse_mode="HTML")
+        
+    active_players.add(user_id)
+    try:
+        username = message.from_user.username or message.from_user.first_name
+        xp = await get_xp(username)
+        if xp < bet_amount:
+            await message.reply(f"{E_CAT_SURPRISED} недостаточно xp! твой баланс: {xp}", parse_mode="HTML")
+            return
+            
+        # Забираем ставку
+        await update_xp(username, -bet_amount)
+        
+        # Генерируем 3 числа от 1 до 9
+        n1, n2, n3 = random.randint(1, 9), random.randint(1, 9), random.randint(1, 9)
+        sevens = [n1, n2, n3].count(7)
+        
+        if sevens == 3:
+            winnings = bet_amount * 4
+            await update_xp(username, winnings)
+            await update_stats(username, True)
+            text = f"🎰 <b>[ {n1} | {n2} | {n3} ]</b>\n\n{E_MAGIC} джекпот! три семерки! ты выиграл {winnings} xp!"
+        elif sevens == 2:
+            winnings = bet_amount * 3
+            await update_xp(username, winnings)
+            await update_stats(username, True)
+            text = f"🎰 <b>[ {n1} | {n2} | {n3} ]</b>\n\n{E_CROWN} отличный улов! две семерки! ты выиграл {winnings} xp!"
+        else:
+            await update_stats(username, False)
+            text = f"🎰 <b>[ {n1} | {n2} | {n3} ]</b>\n\n{E_CAT_SURPRISED} эх, ничего не совпало. ты проиграл {bet_amount} xp."
+            
+        new_xp = await get_xp(username)
+        text += f"\n💰 твой баланс: {new_xp} xp"
+        await message.answer(text, parse_mode="HTML")
+    finally:
+        active_players.discard(user_id)
+
+# ========== ФАРМА ========== (и далее всё как было)
 @dp.message(lambda msg: msg.text and msg.text.lower() == "энди фарма")
 async def farm_collect_cmd(message: Message):
     username = message.from_user.username or message.from_user.first_name
