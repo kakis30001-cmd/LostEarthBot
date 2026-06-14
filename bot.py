@@ -131,32 +131,23 @@ last_update = {}
 
 # ========== MINECRAFT API ==========
 async def get_java_status(ip: str, port: int = 25565) -> tuple:
+    """Проверяет статус Minecraft сервера через mcstatus"""
     try:
+        print(f"🔍 Подключаюсь к {ip}:{port}...")
+        
+        # Используем прямую инициализацию, а не lookup
         server = JavaServer(ip, port)
         status = await server.async_status()
-        return status.players.online, status.players.max
-    except Exception:
+        
+        online = status.players.online
+        max_players = status.players.max
+        
+        print(f"✅ Сервер онлайн: {online}/{max_players}")
+        return online, max_players
+        
+    except Exception as e:
+        print(f"❌ Ошибка подключения: {e}")
         return 0, 0
-
-async def get_server_online():
-    global online_cache, last_update
-    now = datetime.now().timestamp()
-    if "online" in last_update and now - last_update["online"] < 30:
-        return online_cache.get("online", 0), online_cache.get("max", 0)
-    
-    online, max_players = await get_java_status(SERVER["java_ip"], SERVER["java_port"])
-    online_cache["online"] = online
-    online_cache["max"] = max_players
-    last_update["online"] = now
-    set_server_online(online, max_players)
-    return online, max_players
-
-async def get_user_bio(user_id: int) -> str:
-    try:
-        user = await bot.get_chat(user_id)
-        return user.bio if user.bio else ""
-    except:
-        return ""
 
 # ========== КЛАВИАТУРЫ ==========
 def get_main_keyboard():
