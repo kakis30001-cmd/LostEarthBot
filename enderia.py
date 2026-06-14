@@ -5,6 +5,7 @@ import aiohttp
 import asyncio
 from datetime import datetime, timedelta
 from collections import defaultdict, deque
+from io import BytesIO 
 from dotenv import load_dotenv
 
 from database import save_andy_dialog, save_chat_message
