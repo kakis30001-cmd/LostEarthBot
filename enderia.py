@@ -14,11 +14,12 @@ load_dotenv()
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 MODELS_CHAIN = [
-    "qwen/qwen-2.5-72b-instruct:free",
-    "google/gemini-2.0-flash-exp:free",
-    "deepseek/deepseek-chat:free",
-    "meta-llama/llama-3.3-70b-instruct:free",
-    "mistralai/mistral-large-2411:free"
+    "google/gemini-2.0-flash-exp:free",           # Отличный русский, бесплатно
+    "meta-llama/llama-3.3-70b-instruct:free",     # Хороший русский
+    "qwen/qwen-2.5-72b-instruct:free",            # Хороший русский
+    "mistralai/mistral-large-2411:free",          # Хороший русский
+    "deepseek/deepseek-chat:free",                # Хороший русский
+    "microsoft/phi-3.5-mini-128k-instruct:free",  # Лёгкая, русский есть
 ]
 
 # ========== ПРЕМИУМ ЭМОДЗИ ==========
