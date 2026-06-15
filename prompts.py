@@ -121,7 +121,7 @@ def save_to_log(username: str, message: str, is_bot: bool = False):
         pass
 
 # ========== СПОНТАННЫЕ СООБЩЕНИЯ ==========
-spontaneous_enabled = True
+spontaneous_enabled = false
 spontaneous_messages_list = []
 
 async def send_spontaneous_message(bot, chat_id: int):
@@ -545,6 +545,55 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
 ты не можешь влиять на голосование
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    # ========== ВОПРОСЫ ПРО ИГРУ БУНКЕР ==========
+    if any(phrase in user_message.lower() for phrase in [
+        "бункер правила", "правила бункера", "как играть в бункер",
+        "что такое бункер", "бункер игра", "как начать бункер",
+        "сколько игроков в бункере", "бункер награда", "бункер что дают"
+    ]):
+        response = f"""{E_CROWN} 🧟 <b>ИГРА БУНКЕР</b> 🧟 {E_CROWN}
+
+{E_MAGIC} <b>как начать:</b>
+просто напиши <code>энди бункер</code> и создай лобби!
+
+<b>👥 нужно игроков:</b> от 3 до 12 человек
+
+<b>🎭 суть игры:</b>
+• каждый получает ТАЙНУЮ роль в личные сообщения
+• роли разные: возраст, профессия, предметы, навыки
+• нужно доказать что ты полезен для выживания
+• голосуем кого выгнать из бункера
+
+<b>💰 награды:</b>
+• победители: +100 XP
+• выбывшие: -50 XP
+
+<b>⏰ время на раунд:</b>
+• 2 минуты (3-5 игроков)
+• 3 минуты (6-12 игроков)
+
+готовы к апокалипсису? напиши <code>энди бункер</code> чтобы начать! {E_CAT_DANCE}"""
+        add_to_memory(username, user_message, response)
+        await save_chat_message(username, response, is_bot=True)
+        await save_andy_dialog(username, user_message, response)
+        return response
+    
+    # Если спрашивают сколько игроков нужно
+    if "сколько" in user_message.lower() and "бункер" in user_message.lower() and ("игрок" in user_message.lower() or "человек" in user_message.lower()):
+        response = f"{E_NOTE} для игры в бункер нужно от 3 до 12 игроков! сейчас игра идёт? если нет - создай новую командой 'энди бункер' {E_HEART}"
+        add_to_memory(username, user_message, response)
+        await save_chat_message(username, response, is_bot=True)
+        await save_andy_dialog(username, user_message, response)
+        return response
+    
+    # Если спрашивают про награды в бункере
+    if ("награда" in user_message.lower() or "дают" in user_message.lower()) and "бункер" in user_message.lower():
+        response = f"{E_CROWN} победители бункера получают +100 XP, а выбывшие теряют 50 XP. выживи в апокалипсисе! {E_MAGIC}"
+        add_to_memory(username, user_message, response)
+        await save_chat_message(username, response, is_bot=True)
+        await save_andy_dialog(username, user_message, response)
+        return response
     
     # Запрос про онлайн
     if any(phrase in user_message.lower() for phrase in ["онлайн", "сколько народу", "сколько игроков"]):
