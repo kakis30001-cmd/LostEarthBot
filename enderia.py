@@ -15,6 +15,7 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 # ========== ССЫЛКИ ==========
 RULES_URL = "https://lostearthbot-production.up.railway.app/rules.html"
+DONATE_URL = "https://lostearthbot-production.up.railway.app/donate.html"
 APPLY_URL = "https://lostearthbot-production.up.railway.app/apply.html"
 
 # ========== РАБОЧИЕ БЕСПЛАТНЫЕ МОДЕЛИ ==========
