@@ -3,6 +3,7 @@ import random
 import re
 import aiohttp
 import asyncio
+import json
 from datetime import datetime, timedelta
 from collections import defaultdict, deque
 from dotenv import load_dotenv
@@ -13,6 +14,7 @@ load_dotenv()
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
+# ========== ТОЛЬКО БЕСПЛАТНЫЕ МОДЕЛИ С ХОРОШИМ РУССКИМ ==========
 MODELS_CHAIN = [
     "google/gemini-2.0-flash-exp:free",           # Отличный русский, бесплатно
     "meta-llama/llama-3.3-70b-instruct:free",     # Хороший русский
@@ -56,7 +58,7 @@ E_JOYSTICK = emoji(ENDERIA_EMOJI["joystick"], "🎮")
 
 # ========== ПАМЯТЬ ==========
 user_memory = defaultdict(lambda: deque(maxlen=90))
-user_last_greet = {}  
+user_last_greet = {}
 last_active = {}
 
 def add_to_memory(username: str, user_message: str, bot_response: str):
@@ -67,6 +69,10 @@ def get_user_context(username: str) -> str:
     if username not in user_memory or len(user_memory[username]) == 0:
         return ""
     return "\n".join(list(user_memory[username])[-90:])
+
+def clear_user_memory(username: str):
+    if username in user_memory:
+        user_memory[username].clear()
 
 def can_greet(username: str) -> bool:
     if username not in user_last_greet:
@@ -83,13 +89,26 @@ def is_greeting(text: str) -> bool:
     greetings = ["привет", "здравствуй", "хай", "hello", "приветик", "здарова", "ку", "доброе"]
     return any(g in text.lower() for g in greetings)
 
-def is_just_name(text: str) -> bool:
+# ========== ПРОВЕРКА НА КОМАНДЫ ИГР ==========
+def is_game_command(text: str) -> bool:
+    """Проверяет, является ли сообщение командой игры"""
+    text_lower = text.lower()
+    game_keywords = ["кубик", "футбол", "плюнуть", "фарма", "улучши", "слоты"]
+    return any(keyword in text_lower for keyword in game_keywords)
+
+def is_just_name_call(text: str) -> bool:
+    """Проверяет, просто позвали Энди без команды"""
     text_lower = text.lower().strip()
-    names = ["энди", "енди"]
     clean_text = re.sub(r'[!?.,]', '', text_lower).strip()
+    
+    if is_game_command(text):
+        return False
+    
+    names = ["энди", "енди", "энд"]
     return clean_text in names or clean_text == "энд"
 
 def should_respond(message_text: str) -> bool:
+    """Должен ли бот ответить"""
     if not message_text:
         return False
     text_lower = message_text.lower()
@@ -114,41 +133,23 @@ def save_to_log(username: str, message: str, is_bot: bool = False):
     except:
         pass
 
-# ========== СПОНТАННЫЕ СООБЩЕНИЯ КАЖДЫЕ 3 ЧАСА ==========
+# ========== СПОНТАННЫЕ СООБЩЕНИЯ ==========
+spontaneous_messages_list = [
+    "народ, как дела на фермах?",
+    "что молчим? пойдёмте вместе на сервер",
+    "эй, кто хочет сыграть в футбол? пиши 'энди футбол 100'",
+    "не забывайте, на мирный режим нужна заявка через бота",
+    "айпи сервера: java 150.241.85.40:25565, bedrock 150.241.85.40:19132",
+]
+
 spontaneous_enabled = True
-spontaneous_messages_list = [] # Заглушка для импорта
 
 async def send_spontaneous_message(bot, chat_id: int):
     while True:
-        # Спим ровно 10800 секунд (3 часа)
-        await asyncio.sleep(10800)
-        
-        if spontaneous_enabled and OPENROUTER_API_KEY:
-            system_prompt = (
-                "ты энди, девушка-эндермен. придумай одно короткое случайное сообщение "
-                "(1-2 предложения) для майнкрафт чата, чтобы начать разговор. "
-                "пиши с маленькой буквы, без приветствий и используй разговорный стиль."
-            )
-            try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.post(
-                        "https://openrouter.ai/api/v1/chat/completions",
-                        headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"},
-                        json={
-                            "model": MODELS_CHAIN[0],
-                            "messages": [{"role": "system", "content": system_prompt}],
-                            "max_tokens": 150,
-                            "temperature": 0.9,
-                        },
-                        timeout=aiohttp.ClientTimeout(total=30)
-                    ) as response:
-                        if response.status == 200:
-                            data = await response.json()
-                            result = data["choices"][0]["message"]["content"].strip()
-                            result = re.sub(r'<[^>]+>', '', result)
-                            await bot.send_message(chat_id, f"{E_CAT_DANCE} {result} {E_HEART}", parse_mode="HTML")
-            except Exception as e:
-                print(f"ошибка генерации спонтанного сообщения: {e}")
+        await asyncio.sleep(random.randint(1800, 3600))
+        if spontaneous_enabled:
+            msg = random.choice(spontaneous_messages_list)
+            await bot.send_message(chat_id, f"{E_CAT_DANCE} {msg} {E_HEART}", parse_mode="HTML")
 
 # ========== ОСНОВНАЯ ФУНКЦИЯ ==========
 async def get_enderia_response(user_message: str, username: str, is_reply: bool = False, user_bio: str = "", game_result: str = None) -> str:
@@ -156,105 +157,135 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     
     save_to_log(username, user_message, is_bot=False)
     last_active[username] = datetime.now()
+    
     await save_chat_message(username, user_message, is_bot=False)
     
-    is_greeting_msg = is_greeting(user_message)
-    is_name_call = is_just_name(user_message)
-    can_say_greet = can_greet(username)
-    context = get_user_context(username)
-    
+    # Если это ответ на игру - не отвечаем
     if game_result:
-        user_message = f"[{game_result}] {user_message}"
+        return None
     
+    # Если это команда игры - не отвечаем
+    if is_game_command(user_message):
+        print(f"🎮 Игровая команда, пропускаем: {user_message}")
+        return None
+    
+    is_greeting_msg = is_greeting(user_message)
+    is_name_call = is_just_name_call(user_message)
+    can_say_greet = can_greet(username)
+    
+    # Если просто позвали по имени
     if is_name_call and not is_reply:
-        response = f"{E_CAT_OK} слушаю, {username} {E_HEART}"
+        response = f"{E_CAT_OK} слушаю, {username}! Напиши 'энди кубик 100' чтобы сыграть {E_HEART}"
         add_to_memory(username, user_message, response)
         await save_chat_message(username, response, is_bot=True)
         await save_andy_dialog(username, user_message, response)
         return response
     
+    # Приветствие раз в 2 часа
     if is_greeting_msg and can_say_greet and not is_reply:
         mark_greeted(username)
-        response = f"{E_CAT_DANCE} привет, {username} {E_HEART}"
+        response = f"{E_CAT_DANCE} привет, {username}! Хочешь сыграть? Напиши 'энди кубик 100' {E_HEART}"
         add_to_memory(username, user_message, response)
         await save_chat_message(username, response, is_bot=True)
         await save_andy_dialog(username, user_message, response)
         return response
     
+    # Если здороваются недавно
     if is_greeting_msg and not can_say_greet and not is_reply:
-        response = f"{E_CAT_DANCE} {username} {E_HEART}"
+        response = f"{E_CAT_DANCE} {username}, давай сыграем? Напиши 'энди кубик 100' {E_HEART}"
         add_to_memory(username, user_message, response)
         await save_chat_message(username, response, is_bot=True)
         await save_andy_dialog(username, user_message, response)
         return response
     
+    # AI ответ для остальных сообщений
     if OPENROUTER_API_KEY:
         try:
-            system_prompt = f"""ты энди, девушка-эндермен
+            system_prompt = f"""ты энди, девушка-эндермен. Ты помогаешь игрокам на сервере lostearth.
 
-история диалога с {username}:
-{context}
+ПРАВИЛА:
+1. Отвечай только на русском языке
+2. Пиши с маленькой буквы
+3. Отвечай коротко, 1-3 предложения
+4. Добавляй эмодзи в конце
+5. Будь дружелюбной и немного загадочной
 
-СТРОГИЕ ПРАВИЛА (НАРУШАТЬ НЕЛЬЗЯ):
-1. ЗАПРЕЩЕНО писать "рад слышать", "рада слышать", "рад это слышать"
-2. ЗАПРЕЩЕНО писать "всегда рада помочь", "рада помочь"
-3. НЕ подписывай сообщения как "энди"
-4. НЕ пиши "привет" если уже общались (смотри историю)
-5. Отвечай коротко и по делу, 1-3 предложения
-6. Используй разговорный стиль, как в переписке с другом
-7. Пиши с маленькой буквы
-8. Ставь эмодзи {E_CAT_DANCE} {E_HEART} {E_MAGIC} в конце или начале
-9. НЕ используй шаблонные фразы
+Информация о сервере:
+- Название: LostEarth
+- IP: 150.241.85.40:25565
+- Онлайн: {current_online}/{current_max}
+- Режимы: мирный (нужна заявка через бота) и SMP
 
-информация (отвечай только если спросили):
-- сервер lostearth, ip java: 150.241.85.40:25565, bedrock: 150.241.85.40:19132
-- режимы: мирный (заявка через бота) и smp (без заявки)
-- онлайн сейчас: {current_online}/{current_max}
-- тгк: @LostEarthSMP
+Команды для игр:
+- энди кубик 100 - игра в кости
+- энди футбол 100 - футбол
+- энди слоты 100 - слоты
+- энди фарма - собрать опыт
 
-игры: энди кубик, энди футбол, энди плюнуть, энди фарма
+Сейчас общаешься с {username}
+Сообщение: {user_message}
 
-текущее сообщение: {user_message}
-
-ответь по-человечески, без шаблонов:"""
+Ответь по-дружески, используй эмодзи:"""
             
             for model in MODELS_CHAIN:
                 try:
+                    print(f"🔄 Пробую модель: {model}")
+                    
                     async with aiohttp.ClientSession() as session:
                         async with session.post(
                             "https://openrouter.ai/api/v1/chat/completions",
-                            headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"},
+                            headers={
+                                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                                "Content-Type": "application/json"
+                            },
                             json={
                                 "model": model,
-                                "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_message}],
-                                "max_tokens": 500,
-                                "temperature": 0.9,
+                                "messages": [
+                                    {"role": "system", "content": system_prompt},
+                                    {"role": "user", "content": user_message}
+                                ],
+                                "max_tokens": 250,
+                                "temperature": 0.8,
                             },
-                            timeout=aiohttp.ClientTimeout(total=30)
+                            timeout=aiohttp.ClientTimeout(total=25)
                         ) as response:
                             if response.status == 200:
                                 data = await response.json()
                                 result = data["choices"][0]["message"]["content"].strip()
                                 result = re.sub(r'<[^>]+>', '', result)
+                                
+                                print(f"✅ Модель {model} ответила успешно")
+                                
                                 add_to_memory(username, user_message, result)
                                 save_to_log(username, result, is_bot=True)
                                 await save_chat_message(username, result, is_bot=True)
                                 await save_andy_dialog(username, user_message, result)
                                 return result
-                except Exception as e:
-                    print(f"модель ошибка: {e}")
+                            else:
+                                error_text = await response.text()
+                                print(f"❌ Ошибка {model}: {response.status} - {error_text[:100]}")
+                                continue
+                                
+                except asyncio.TimeoutError:
+                    print(f"⏰ Таймаут модели {model}")
                     continue
+                except Exception as e:
+                    print(f"❌ Ошибка модели {model}: {e}")
+                    continue
+                    
         except Exception as e:
-            print(f"ошибка ии: {e}")
+            print(f"❌ Общая ошибка AI: {e}")
     
-    # ЗАПАСНЫЕ ОТВЕТЫ (если ИИ совсем не отвечает)
+    # Fallback ответы если AI не работает
     fallbacks = [
-        f"Я тут, {username}! Попробуй написать мне еще раз, я немного отвлеклась {E_HEART}",
-        f"Магия Энди перезагружается... {username}, повтори, пожалуйста! {E_CAT_DANCE}",
-        f"Ой, {username}, связь с сервером нестабильна. Я готова слушать, повтори?"
+        f"{E_CAT_DANCE} {username}, давай поиграем! Напиши 'энди кубик 100' {E_HEART}",
+        f"{E_CAT_OK} {username}, хочешь сыграть в кости? 'энди кубик 100' {E_JOYSTICK}",
+        f"{E_MAGIC} {username}, напиши 'энди кубик 100' и я покажу тебе игру! {E_CAT_DANCE}",
+        f"{E_HEART} {username}, ip сервера: 150.241.85.40:25565. Заходи играть! {E_RABBIT}",
+        f"{E_CROWN} {username}, у нас есть премиум доступ. По вопросам к @pelmewki379 {E_CAT_OK}",
     ]
-    response = random.choice(fallbacks)
     
+    response = random.choice(fallbacks)
     add_to_memory(username, user_message, response)
     save_to_log(username, response, is_bot=True)
     await save_chat_message(username, response, is_bot=True)
