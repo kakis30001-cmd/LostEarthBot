@@ -254,8 +254,6 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     ]
     response = random.choice(fallbacks)
     
-    ]
-    response = random.choice(fallbacks)
     add_to_memory(username, user_message, response)
     save_to_log(username, response, is_bot=True)
     await save_chat_message(username, response, is_bot=True)
