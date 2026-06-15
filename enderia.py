@@ -157,6 +157,20 @@ def is_donate_request(text: str) -> bool:
     ]
     return any(keyword in text_lower for keyword in donate_keywords)
 
+    # ========== ПРОВЕРКА НА ДОНАТЫ ==========
+    if is_donate_request(user_message):
+        response = f"""{E_CROWN} <b>донат на lostearth</b> {E_CROWN}
+
+все цены и возможности здесь:
+👉 <a href="{DONATE_URL}">ДОНАТЫ И ПРИВИЛЕГИИ</a>
+
+{E_HEART} все деньги идут на хостинг!
+по вопросам: @pelmewki379"""
+        add_to_memory(username, user_message, response)
+        await save_chat_message(username, response, is_bot=True)
+        await save_andy_dialog(username, user_message, response)
+        return response
+
 # ========== ОНЛАЙН ==========
 current_online = 0
 current_max = 0
