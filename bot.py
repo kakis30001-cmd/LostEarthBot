@@ -569,13 +569,15 @@ async def handle_message(message: Message):
     if should_respond(user_message) or is_reply_to_bot:
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
         
-        # Получаем ответ. Внутри get_enderia_response УЖЕ заложено сохранение 
-        # и сообщения пользователя, и ответа бота в БД!
         response = await get_enderia_response(user_message, username, is_reply=is_reply_to_bot)
-        if response:
+        
+        # 👇 НОВАЯ ПРОВЕРКА НА МАРКЕР БУНКЕРА
+        if response == "BUNKER_CREATE_GAME":
+            # Создаём игру в бункер
+            await bunker_command(message)
+        elif response:
             await message.reply(response, parse_mode="HTML")
     else:
-        # Если игроки просто общаются между собой, сохраняем их сообщение в БД напрямую
         await save_chat_message(username, user_message, is_bot=False)
 
 # ========== КОЛБЭКИ ==========
