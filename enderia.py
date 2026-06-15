@@ -54,7 +54,7 @@ E_MAGIC = emoji(ENDERIA_EMOJI["magic"], "✨")
 E_JOYSTICK = emoji(ENDERIA_EMOJI["joystick"], "🎮")
 
 # ========== ПАМЯТЬ ==========
-user_memory = defaultdict(lambda: deque(maxlen=90))
+user_memory = defaultdict(lambda: deque(maxlen=800))
 user_last_greet = {}
 last_active = {}
 
@@ -73,7 +73,7 @@ def can_greet(username: str) -> bool:
     last = user_last_greet[username]
     if isinstance(last, str):
         last = datetime.fromisoformat(last)
-    return datetime.now() - last > timedelta(hours=2)
+    return datetime.now() - last > timedelta(hours=12)
 
 def mark_greeted(username: str):
     user_last_greet[username] = datetime.now().isoformat()
