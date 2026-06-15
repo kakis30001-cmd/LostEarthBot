@@ -147,6 +147,16 @@ def is_apply_request(text: str) -> bool:
     ]
     return any(keyword in text_lower for keyword in apply_keywords)
 
+def is_donate_request(text: str) -> bool:
+    """Проверяет, спрашивает ли игрок про донаты"""
+    text_lower = text.lower()
+    donate_keywords = [
+        "донат", "донат", "купить", "премиум", "донаты",
+        "сколько стоит", "цены", "прайс", "привилегия",
+        "как купить", "хочу купить", "донат на сервер"
+    ]
+    return any(keyword in text_lower for keyword in donate_keywords)
+
 # ========== ОНЛАЙН ==========
 current_online = 0
 current_max = 0
