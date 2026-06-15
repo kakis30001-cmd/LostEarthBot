@@ -5,6 +5,8 @@ from datetime import datetime
 from threading import Thread
 import random
 import urllib.parse
+from typing import Dict, List, Optional, Set  # <--- ДОБАВИТЬ ЭТУ СТРОКУ
+from dataclasses import dataclass  # <--- И ЭТУ
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import CommandStart, Command
