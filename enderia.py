@@ -193,6 +193,14 @@ async def send_spontaneous_message(bot, chat_id: int):
 async def get_enderia_response(user_message: str, username: str, is_reply: bool = False, user_bio: str = "", game_result: str = None) -> str:
     global current_online, current_max
     
+    # ⚠️ ПЕРВАЯ ПРОВЕРКА - команда для создания игры в бункер
+    # ВОЗВРАЩАЕМ СПЕЦИАЛЬНЫЙ МАРКЕР, который bot.py распознает
+    if user_message.lower().strip() == "энди бункер" or user_message.lower().strip() == "енди бункер":
+        return "BUNKER_CREATE_GAME"  # <-- СПЕЦИАЛЬНЫЙ МАРКЕР!
+
+async def get_enderia_response(user_message: str, username: str, is_reply: bool = False, user_bio: str = "", game_result: str = None) -> str:
+    global current_online, current_max
+    
     save_to_log(username, user_message, is_bot=False)
     last_active[username] = datetime.now()
     await save_chat_message(username, user_message, is_bot=False)
