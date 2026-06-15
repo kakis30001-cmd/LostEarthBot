@@ -14,10 +14,11 @@ load_dotenv()
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 MODELS_CHAIN = [
-    "qwen/qwen-2.5-72b-instruct:free",        # Идеальный русский язык
-    "google/gemini-2.0-flash-exp:free",       # Очень умная и быстрая
-    "deepseek/deepseek-chat:free",            # Отличная логика и диалог
-    "meta-llama/llama-3.3-70b-instruct:free"  # Тяжеловес, хорошо держит контекст
+    "qwen/qwen-2.5-72b-instruct:free",
+    "google/gemini-2.0-flash-exp:free",
+    "deepseek/deepseek-chat:free",
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "mistralai/mistral-large-2411:free"
 ]
 
 # ========== ПРЕМИУМ ЭМОДЗИ ==========
@@ -245,11 +246,14 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         except Exception as e:
             print(f"ошибка ии: {e}")
     
+    # ЗАПАСНЫЕ ОТВЕТЫ (если ИИ совсем не отвечает)
     fallbacks = [
-        f"{E_CAT_DANCE} {username} {E_HEART}",
-        f"{E_CAT_OK} {username} {E_HEART}",
-        f"{E_MAGIC} {username} {E_CAT_DANCE}",
-        f"{E_CAT_UP} {username} {E_HEART}",
+        f"Я тут, {username}! Попробуй написать мне еще раз, я немного отвлеклась {E_HEART}",
+        f"Магия Энди перезагружается... {username}, повтори, пожалуйста! {E_CAT_DANCE}",
+        f"Ой, {username}, связь с сервером нестабильна. Я готова слушать, повтори?"
+    ]
+    response = random.choice(fallbacks)
+    
     ]
     response = random.choice(fallbacks)
     add_to_memory(username, user_message, response)
