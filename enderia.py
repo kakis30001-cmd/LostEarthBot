@@ -225,6 +225,95 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         await save_chat_message(username, response, is_bot=True)
         await save_andy_dialog(username, user_message, response)
         return response
+
+        # ========== ИГРА БУНКЕР - ПРЯМЫЕ ОТВЕТЫ ==========
+    user_lower = user_message.lower().strip()
+    
+    # Команда "энди бункер" для создания игры
+    if user_lower == "энди бункер" or user_lower == "енди бункер" or user_lower == "бункер энди":
+        response = f"""{E_CROWN} 🧟 <b>ЗОМБИ АПОКАЛИПСИС - БУНКЕР</b> 🧟 {E_CROWN}
+
+{E_MAGIC} <b>создаю лобби для игры!</b>
+
+напиши в чат <code>энди бункер</code> или нажми на кнопку, чтобы присоединиться!
+
+👥 <b>нужно игроков:</b> от 3 до 12
+💰 <b>награда победителям:</b> +100 XP
+💀 <b>штраф выбывшим:</b> -50 XP
+
+<b>⚡ каждый получит секретную роль в личные сообщения!</b>
+
+жди когда наберётся компания! {E_CAT_DANCE}"""
+        add_to_memory(username, user_message, response)
+        await save_chat_message(username, response, is_bot=True)
+        await save_andy_dialog(username, user_message, response)
+        return response
+    
+    # Вопрос "как играть в бункер"
+    if "как играть" in user_lower and "бункер" in user_lower:
+        response = f"""{E_MAGIC} <b>правила игры "бункер"</b> {E_MAGIC}
+
+1️⃣ <b>начало:</b> напиши <code>энди бункер</code> чтобы создать лобби
+2️⃣ <b>сбор игроков:</b> нужно от 3 до 12 человек
+3️⃣ <b>получение ролей:</b> каждому придёт СЕКРЕТНАЯ роль в личку!
+   (возраст, профессия, предметы, навыки, тайны)
+4️⃣ <b>суть игры:</b> нужно убедить других, что ты полезен в бункере
+5️⃣ <b>голосование:</b> каждый раунд игроки выбирают кого выгнать
+6️⃣ <b>победа:</b> последние 2-3 выживших получают +100 XP
+
+⏰ время на голосование: 2-3 минуты
+
+готов начать? напиши <code>энди бункер</code>! {E_HEART}"""
+        add_to_memory(username, user_message, response)
+        await save_chat_message(username, response, is_bot=True)
+        await save_andy_dialog(username, user_message, response)
+        return response
+    
+    # Вопрос "что такое бункер" или просто "бункер" без команды
+    if ("бункер" in user_lower and not any(x in user_lower for x in ["энди бункер", "енди бункер"])) or user_lower == "что такое бункер":
+        # Проверяем, есть ли активная игра
+        response = f"""{E_HOUSE} <b>бункер</b> - это эпичная игра на выживание в зомби апокалипсисе! 🧟
+
+<b>суть:</b>
+• каждый игрок получает тайную роль (возраст, профессия, предметы)
+• нужно доказать что ты полезен для выживания
+• голосуем и выгоняем наименее полезных
+• последние выжившие побеждают
+
+<b>как начать:</b> напиши <code>энди бункер</code>
+
+<b>награда:</b> победители получают +100 XP!
+
+хочешь попробовать? создай игру командой <code>энди бункер</code> {E_CAT_DANCE}"""
+        add_to_memory(username, user_message, response)
+        await save_chat_message(username, response, is_bot=True)
+        await save_andy_dialog(username, user_message, response)
+        return response
+    
+    # Вопрос про правила бункера
+    if "правила бункера" in user_lower or "правило бункера" in user_lower:
+        response = f"""{E_NOTE} <b>правила игры "бункер"</b> {E_NOTE}
+
+📌 <b>основные правила:</b>
+• не показывай свою роль другим (она в личке!)
+• в общем чате нужно убеждать, что ты полезен
+• голосуй за тех, кто наименее полезен
+• не голосовать = вылетаешь автоматически
+
+📌 <b>как побеждать:</b>
+• придумывай убедительные аргументы
+• объединяйся в альянсы (устно)
+• скрывай свои слабости
+
+📌 <b>наказания:</b>
+• выгнали из бункера = -50 XP
+• не голосовал = автоматический вылет
+
+<b>когда начнём? напиши 'энди бункер'!</b> {E_HEART}"""
+        add_to_memory(username, user_message, response)
+        await save_chat_message(username, response, is_bot=True)
+        await save_andy_dialog(username, user_message, response)
+        return response
     
     # ========== ПРОВЕРКА НА ПРАВИЛА ==========
     if is_rules_request(user_message):
