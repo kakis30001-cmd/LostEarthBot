@@ -3,7 +3,6 @@ import random
 import re
 import aiohttp
 import asyncio
-import json
 from datetime import datetime, timedelta
 from collections import defaultdict, deque
 from dotenv import load_dotenv
@@ -14,14 +13,12 @@ load_dotenv()
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
-# ========== ТОЛЬКО БЕСПЛАТНЫЕ МОДЕЛИ С ХОРОШИМ РУССКИМ ==========
+# ========== РАБОЧИЕ БЕСПЛАТНЫЕ МОДЕЛИ (БЕЗ :free) ==========
 MODELS_CHAIN = [
-    "google/gemini-2.0-flash-exp:free",           # Отличный русский, бесплатно
-    "meta-llama/llama-3.3-70b-instruct:free",     # Хороший русский
-    "qwen/qwen-2.5-72b-instruct:free",            # Хороший русский
-    "mistralai/mistral-large-2411:free",          # Хороший русский
-    "deepseek/deepseek-chat:free",                # Хороший русский
-    "microsoft/phi-3.5-mini-128k-instruct:free",  # Лёгкая, русский есть
+    "qwen/qwen-2.5-72b-instruct",        # Бесплатно, отличный русский
+    "google/gemini-2.0-flash-exp",       # Бесплатно, отличный русский  
+    "microsoft/phi-3.5-mini-instruct",   # Бесплатно, лёгкая
+    "meta-llama/llama-3.2-3b-instruct",  # Бесплатно
 ]
 
 # ========== ПРЕМИУМ ЭМОДЗИ ==========
@@ -70,10 +67,6 @@ def get_user_context(username: str) -> str:
         return ""
     return "\n".join(list(user_memory[username])[-90:])
 
-def clear_user_memory(username: str):
-    if username in user_memory:
-        user_memory[username].clear()
-
 def can_greet(username: str) -> bool:
     if username not in user_last_greet:
         return True
@@ -86,18 +79,15 @@ def mark_greeted(username: str):
     user_last_greet[username] = datetime.now().isoformat()
 
 def is_greeting(text: str) -> bool:
-    greetings = ["привет", "здравствуй", "хай", "hello", "приветик", "здарова", "ку", "доброе"]
+    greetings = ["привет", "здравствуй", "хай", "hello", "приветик", "здарова", "ку", "доброе", "салам"]
     return any(g in text.lower() for g in greetings)
 
-# ========== ПРОВЕРКА НА КОМАНДЫ ИГР ==========
 def is_game_command(text: str) -> bool:
-    """Проверяет, является ли сообщение командой игры"""
     text_lower = text.lower()
-    game_keywords = ["кубик", "футбол", "плюнуть", "фарма", "улучши", "слоты"]
+    game_keywords = ["кубик", "футбол", "плюнуть", "фарма", "улучши", "слоты", "пай"]
     return any(keyword in text_lower for keyword in game_keywords)
 
 def is_just_name_call(text: str) -> bool:
-    """Проверяет, просто позвали Энди без команды"""
     text_lower = text.lower().strip()
     clean_text = re.sub(r'[!?.,]', '', text_lower).strip()
     
@@ -108,7 +98,6 @@ def is_just_name_call(text: str) -> bool:
     return clean_text in names or clean_text == "энд"
 
 def should_respond(message_text: str) -> bool:
-    """Должен ли бот ответить"""
     if not message_text:
         return False
     text_lower = message_text.lower()
@@ -138,8 +127,6 @@ spontaneous_messages_list = [
     "народ, как дела на фермах?",
     "что молчим? пойдёмте вместе на сервер",
     "эй, кто хочет сыграть в футбол? пиши 'энди футбол 100'",
-    "не забывайте, на мирный режим нужна заявка через бота",
-    "айпи сервера: java 150.241.85.40:25565, bedrock 150.241.85.40:19132",
 ]
 
 spontaneous_enabled = True
@@ -151,7 +138,7 @@ async def send_spontaneous_message(bot, chat_id: int):
             msg = random.choice(spontaneous_messages_list)
             await bot.send_message(chat_id, f"{E_CAT_DANCE} {msg} {E_HEART}", parse_mode="HTML")
 
-# ========== ОСНОВНАЯ ФУНКЦИЯ ==========
+# ========== ОСНОВНАЯ ФУНКЦИЯ С AI ==========
 async def get_enderia_response(user_message: str, username: str, is_reply: bool = False, user_bio: str = "", game_result: str = None) -> str:
     global current_online, current_max
     
@@ -190,48 +177,41 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         await save_andy_dialog(username, user_message, response)
         return response
     
-    # Если здороваются недавно
-    if is_greeting_msg and not can_say_greet and not is_reply:
-        response = f"{E_CAT_DANCE} {username}, давай сыграем? Напиши 'энди кубик 100' {E_HEART}"
-        add_to_memory(username, user_message, response)
-        await save_chat_message(username, response, is_bot=True)
-        await save_andy_dialog(username, user_message, response)
-        return response
-    
-    # AI ответ для остальных сообщений
+    # AI ответ (ТОЛЬКО БЕСПЛАТНЫЕ МОДЕЛИ)
     if OPENROUTER_API_KEY:
         try:
+            context = get_user_context(username)
+            
             system_prompt = f"""ты энди, девушка-эндермен. Ты помогаешь игрокам на сервере lostearth.
 
-ПРАВИЛА:
-1. Отвечай только на русском языке
-2. Пиши с маленькой буквы
-3. Отвечай коротко, 1-3 предложения
-4. Добавляй эмодзи в конце
-5. Будь дружелюбной и немного загадочной
+ТВОЙ ХАРАКТЕР:
+- добрая, загадочная, слегка вредная
+- любишь телепортироваться и играть с игроками
+- пишешь с маленькой буквы
+- используешь эмодзи в конце сообщений
 
-Информация о сервере:
-- Название: LostEarth
+ПРАВИЛА ОТВЕТОВ:
+1. Если игрок пишет "нет" на предложение поиграть - не предлагай снова!
+2. Отвечай по существу, не будь назойливой
+3. Используй ласковые обращения: "игрок~", "дружок~", "зайка~"
+
+ИСТОРИЯ ДИАЛОГА:
+{context}
+
+ИНФОРМАЦИЯ О СЕРВЕРЕ:
 - IP: 150.241.85.40:25565
 - Онлайн: {current_online}/{current_max}
-- Режимы: мирный (нужна заявка через бота) и SMP
 
-Команды для игр:
-- энди кубик 100 - игра в кости
-- энди футбол 100 - футбол
-- энди слоты 100 - слоты
-- энди фарма - собрать опыт
+СЕЙЧАС:
+Игрок {username} написал: {user_message}
 
-Сейчас общаешься с {username}
-Сообщение: {user_message}
-
-Ответь по-дружески, используй эмодзи:"""
+Ответь по-человечески, коротко (1-2 предложения), не повторяй то что уже говорила:"""
             
-            for model in MODELS_CHAIN:
-                try:
-                    print(f"🔄 Пробую модель: {model}")
-                    
-                    async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession() as session:
+                for model in MODELS_CHAIN:
+                    try:
+                        print(f"🔄 Пробую {model}...")
+                        
                         async with session.post(
                             "https://openrouter.ai/api/v1/chat/completions",
                             headers={
@@ -244,17 +224,16 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
                                     {"role": "system", "content": system_prompt},
                                     {"role": "user", "content": user_message}
                                 ],
-                                "max_tokens": 250,
+                                "max_tokens": 200,
                                 "temperature": 0.8,
                             },
-                            timeout=aiohttp.ClientTimeout(total=25)
-                        ) as response:
-                            if response.status == 200:
-                                data = await response.json()
+                            timeout=aiohttp.ClientTimeout(total=20)
+                        ) as resp:
+                            if resp.status == 200:
+                                data = await resp.json()
                                 result = data["choices"][0]["message"]["content"].strip()
                                 result = re.sub(r'<[^>]+>', '', result)
-                                
-                                print(f"✅ Модель {model} ответила успешно")
+                                print(f"✅ Ответ от {model}")
                                 
                                 add_to_memory(username, user_message, result)
                                 save_to_log(username, result, is_bot=True)
@@ -262,32 +241,36 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
                                 await save_andy_dialog(username, user_message, result)
                                 return result
                             else:
-                                error_text = await response.text()
-                                print(f"❌ Ошибка {model}: {response.status} - {error_text[:100]}")
+                                error = await resp.text()
+                                print(f"❌ {model} ошибка {resp.status}: {error[:100]}")
                                 continue
                                 
-                except asyncio.TimeoutError:
-                    print(f"⏰ Таймаут модели {model}")
-                    continue
-                except Exception as e:
-                    print(f"❌ Ошибка модели {model}: {e}")
-                    continue
-                    
+                    except asyncio.TimeoutError:
+                        print(f"⏰ Таймаут {model}")
+                        continue
+                    except Exception as e:
+                        print(f"❌ Ошибка {model}: {e}")
+                        continue
+                        
         except Exception as e:
             print(f"❌ Общая ошибка AI: {e}")
     
-    # Fallback ответы если AI не работает
-    fallbacks = [
-        f"{E_CAT_DANCE} {username}, давай поиграем! Напиши 'энди кубик 100' {E_HEART}",
-        f"{E_CAT_OK} {username}, хочешь сыграть в кости? 'энди кубик 100' {E_JOYSTICK}",
-        f"{E_MAGIC} {username}, напиши 'энди кубик 100' и я покажу тебе игру! {E_CAT_DANCE}",
-        f"{E_HEART} {username}, ip сервера: 150.241.85.40:25565. Заходи играть! {E_RABBIT}",
-        f"{E_CROWN} {username}, у нас есть премиум доступ. По вопросам к @pelmewki379 {E_CAT_OK}",
-    ]
+    # Если AI не работает - адекватные fallback ответы с контекстом
+    last_bot = get_last_bot_response(username) if username in user_memory else ""
     
-    response = random.choice(fallbacks)
+    # Если уже предлагали поиграть, не предлагаем снова
+    if "кубик" in last_bot or "сыграть" in last_bot:
+        response = f"{E_CAT_OK} понял, {username}. Если захочешь сыграть - пиши 'энди кубик 100' {E_HEART}"
+    else:
+        response = f"{E_CAT_DANCE} {username}, я тут. Что хочешь узнать? Напиши /games для списка команд {E_HEART}"
+    
     add_to_memory(username, user_message, response)
     save_to_log(username, response, is_bot=True)
     await save_chat_message(username, response, is_bot=True)
     await save_andy_dialog(username, user_message, response)
     return response
+
+def get_last_bot_response(username: str) -> str:
+    if username not in user_memory or len(user_memory[username]) == 0:
+        return ""
+    return user_memory[username][-1].replace("bot: ", "")
