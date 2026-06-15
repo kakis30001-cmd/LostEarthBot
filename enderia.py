@@ -62,7 +62,7 @@ def add_to_memory(username: str, user_message: str, bot_response: str):
     user_memory[username].append(f"user: {user_message}")
     user_memory[username].append(f"bot: {bot_response}")
 
-def get_user_context(username: str, limit: int = 30) -> str:
+def get_user_context(username: str, limit: int = 25) -> str:
     """
     Возвращает последние сообщения для контекста AI
     limit - количество пар сообщений (user+bot)
@@ -78,6 +78,18 @@ def get_full_history(username: str) -> str:
     if username not in user_memory or len(user_memory[username]) == 0:
         return ""
     return "\n".join(list(user_memory[username]))
+
+def get_last_bot_response(username: str) -> str:
+    """Возвращает последний ответ бота"""
+    if username not in user_memory or len(user_memory[username]) == 0:
+        return ""
+    return user_memory[username][-1].replace("bot: ", "")
+
+def get_last_user_message(username: str) -> str:
+    """Возвращает последнее сообщение пользователя"""
+    if username not in user_memory or len(user_memory[username]) < 2:
+        return ""
+    return user_memory[username][-2].replace("user: ", "")
 
 def can_greet(username: str) -> bool:
     if username not in user_last_greet:
@@ -180,7 +192,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         await save_andy_dialog(username, user_message, response)
         return response
     
-    # Приветствие раз в 2 часа
+    # Приветствие раз в 12 часов
     if is_greeting_msg and can_say_greet and not is_reply:
         mark_greeted(username)
         response = f"{E_CAT_DANCE} привет, {username}! Хочешь сыграть? Напиши 'энди кубик 100' {E_HEART}"
@@ -192,7 +204,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     # AI ответ (ТОЛЬКО БЕСПЛАТНЫЕ МОДЕЛИ)
     if OPENROUTER_API_KEY:
         try:
-            context = get_user_context(username)
+            context = get_user_context(username, limit=25)  # Берём последние 25 пар сообщений
             
             system_prompt = f"""ты энди, девушка-эндермен. Ты помогаешь игрокам на сервере lostearth.
 
@@ -268,7 +280,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
             print(f"❌ Общая ошибка AI: {e}")
     
     # Если AI не работает - адекватные fallback ответы с контекстом
-    last_bot = get_last_bot_response(username) if username in user_memory else ""
+    last_bot = get_last_bot_response(username)
     
     # Если уже предлагали поиграть, не предлагаем снова
     if "кубик" in last_bot or "сыграть" in last_bot:
@@ -281,8 +293,3 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     await save_chat_message(username, response, is_bot=True)
     await save_andy_dialog(username, user_message, response)
     return response
-
-def get_last_bot_response(username: str) -> str:
-    if username not in user_memory or len(user_memory[username]) == 0:
-        return ""
-    return user_memory[username][-1].replace("bot: ", "")
