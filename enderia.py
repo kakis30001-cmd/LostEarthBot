@@ -146,11 +146,14 @@ def is_apply_request(text: str) -> bool:
     return any(keyword in text_lower for keyword in apply_keywords)
 
 def is_donate_request(text: str) -> bool:
+    """Проверяет, спрашивает ли игрок про донаты"""
     text_lower = text.lower()
     donate_keywords = [
-        "донат", "купить", "премиум", "донаты",
+        "донат", "донаты", "донат", "купить", "премиум", 
         "сколько стоит", "цены", "прайс", "привилегия",
-        "как купить", "хочу купить", "донат на сервер"
+        "как купить", "хочу купить", "донат на сервер",
+        "привилегии", "прайс", "цен", "стоит", "руб", "грн",
+        "донатик", "пожертв", "поддержать"
     ]
     return any(keyword in text_lower for keyword in donate_keywords)
 
