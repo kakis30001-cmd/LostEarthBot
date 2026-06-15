@@ -146,14 +146,12 @@ def is_apply_request(text: str) -> bool:
     return any(keyword in text_lower for keyword in apply_keywords)
 
 def is_donate_request(text: str) -> bool:
-    """Проверяет, спрашивает ли игрок про донаты"""
     text_lower = text.lower()
     donate_keywords = [
-        "донат", "донаты", "донат", "купить", "премиум", 
+        "донат", "донаты", "купить", "премиум", 
         "сколько стоит", "цены", "прайс", "привилегия",
         "как купить", "хочу купить", "донат на сервер",
-        "привилегии", "прайс", "цен", "стоит", "руб", "грн",
-        "донатик", "пожертв", "поддержать"
+        "привилегии", "руб", "грн", "донатик", "пожертв"
     ]
     return any(keyword in text_lower for keyword in donate_keywords)
 
@@ -191,13 +189,12 @@ async def send_spontaneous_message(bot, chat_id: int):
             msg = random.choice(spontaneous_messages_list)
             await bot.send_message(chat_id, f"{E_CAT_DANCE} {msg} {E_HEART}", parse_mode="HTML")
 
-# ========== ОСНОВНАЯ ФУНКЦИЯ С AI ==========
+# ========== ОСНОВНАЯ ФУНКЦИЯ ==========
 async def get_enderia_response(user_message: str, username: str, is_reply: bool = False, user_bio: str = "", game_result: str = None) -> str:
     global current_online, current_max
     
     save_to_log(username, user_message, is_bot=False)
     last_active[username] = datetime.now()
-    
     await save_chat_message(username, user_message, is_bot=False)
     
     if game_result:
@@ -211,6 +208,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     is_name_call = is_just_name_call(user_message)
     can_say_greet = can_greet(username)
     
+    # Просто имя "Энди"
     if is_name_call and not is_reply:
         response = f"{E_CAT_OK} слушаю, {username}! Напиши 'энди кубик 100' чтобы сыграть {E_HEART}"
         add_to_memory(username, user_message, response)
@@ -218,6 +216,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         await save_andy_dialog(username, user_message, response)
         return response
     
+    # Приветствие
     if is_greeting_msg and can_say_greet and not is_reply:
         mark_greeted(username)
         response = f"{E_CAT_DANCE} привет, {username}! Хочешь сыграть? Напиши 'энди кубик 100' {E_HEART}"
@@ -225,29 +224,10 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         await save_chat_message(username, response, is_bot=True)
         await save_andy_dialog(username, user_message, response)
         return response
-
-        # ========== ИГРА БУНКЕР - ПРЯМЫЕ ОТВЕТЫ ==========
+    
     user_lower = user_message.lower().strip()
     
-    # Команда "энди бункер" для создания игры
-    if user_lower == "энди бункер" or user_lower == "енди бункер" or user_lower == "бункер энди":
-        response = f"""{E_CROWN} 🧟 <b>ЗОМБИ АПОКАЛИПСИС - БУНКЕР</b> 🧟 {E_CROWN}
-
-{E_MAGIC} <b>создаю лобби для игры!</b>
-
-напиши в чат <code>энди бункер</code> или нажми на кнопку, чтобы присоединиться!
-
-👥 <b>нужно игроков:</b> от 3 до 12
-💰 <b>награда победителям:</b> +100 XP
-💀 <b>штраф выбывшим:</b> -50 XP
-
-<b>⚡ каждый получит секретную роль в личные сообщения!</b>
-
-жди когда наберётся компания! {E_CAT_DANCE}"""
-        add_to_memory(username, user_message, response)
-        await save_chat_message(username, response, is_bot=True)
-        await save_andy_dialog(username, user_message, response)
-        return response
+    # ========== ИНФОРМАЦИЯ О БУНКЕРЕ (БЕЗ ПЕРЕХВАТА КОМАНДЫ "энди бункер") ==========
     
     # Вопрос "как играть в бункер"
     if "как играть" in user_lower and "бункер" in user_lower:
@@ -256,12 +236,9 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
 1️⃣ <b>начало:</b> напиши <code>энди бункер</code> чтобы создать лобби
 2️⃣ <b>сбор игроков:</b> нужно от 3 до 12 человек
 3️⃣ <b>получение ролей:</b> каждому придёт СЕКРЕТНАЯ роль в личку!
-   (возраст, профессия, предметы, навыки, тайны)
-4️⃣ <b>суть игры:</b> нужно убедить других, что ты полезен в бункере
-5️⃣ <b>голосование:</b> каждый раунд игроки выбирают кого выгнать
+4️⃣ <b>суть игры:</b> нужно убедить других, что ты полезен
+5️⃣ <b>голосование:</b> каждый раунд выбираем кого выгнать
 6️⃣ <b>победа:</b> последние 2-3 выживших получают +100 XP
-
-⏰ время на голосование: 2-3 минуты
 
 готов начать? напиши <code>энди бункер</code>! {E_HEART}"""
         add_to_memory(username, user_message, response)
@@ -269,47 +246,29 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         await save_andy_dialog(username, user_message, response)
         return response
     
-    # Вопрос "что такое бункер" или просто "бункер" без команды
-    if ("бункер" in user_lower and not any(x in user_lower for x in ["энди бункер", "енди бункер"])) or user_lower == "что такое бункер":
-        # Проверяем, есть ли активная игра
-        response = f"""{E_HOUSE} <b>бункер</b> - это эпичная игра на выживание в зомби апокалипсисе! 🧟
-
-<b>суть:</b>
-• каждый игрок получает тайную роль (возраст, профессия, предметы)
-• нужно доказать что ты полезен для выживания
-• голосуем и выгоняем наименее полезных
-• последние выжившие побеждают
+    # Вопрос "что такое бункер"
+    if ("бункер" in user_lower and "энди" not in user_lower) or user_lower == "что такое бункер":
+        response = f"""{E_HOUSE} <b>бункер</b> - игра на выживание в зомби апокалипсисе! 🧟
 
 <b>как начать:</b> напиши <code>энди бункер</code>
+<b>награда:</b> победители +100 XP!
 
-<b>награда:</b> победители получают +100 XP!
-
-хочешь попробовать? создай игру командой <code>энди бункер</code> {E_CAT_DANCE}"""
+хочешь попробовать? {E_CAT_DANCE}"""
         add_to_memory(username, user_message, response)
         await save_chat_message(username, response, is_bot=True)
         await save_andy_dialog(username, user_message, response)
         return response
     
-    # Вопрос про правила бункера
+    # Вопрос "правила бункера"
     if "правила бункера" in user_lower or "правило бункера" in user_lower:
         response = f"""{E_NOTE} <b>правила игры "бункер"</b> {E_NOTE}
-
-📌 <b>основные правила:</b>
-• не показывай свою роль другим (она в личке!)
-• в общем чате нужно убеждать, что ты полезен
-• голосуй за тех, кто наименее полезен
+• не показывай свою роль другим!
+• убеждай что ты полезен
 • не голосовать = вылетаешь автоматически
+• выгнали = -50 XP
+• победители = +100 XP
 
-📌 <b>как побеждать:</b>
-• придумывай убедительные аргументы
-• объединяйся в альянсы (устно)
-• скрывай свои слабости
-
-📌 <b>наказания:</b>
-• выгнали из бункера = -50 XP
-• не голосовал = автоматический вылет
-
-<b>когда начнём? напиши 'энди бункер'!</b> {E_HEART}"""
+напиши <code>энди бункер</code> чтобы начать! {E_HEART}"""
         add_to_memory(username, user_message, response)
         await save_chat_message(username, response, is_bot=True)
         await save_andy_dialog(username, user_message, response)
