@@ -62,10 +62,22 @@ def add_to_memory(username: str, user_message: str, bot_response: str):
     user_memory[username].append(f"user: {user_message}")
     user_memory[username].append(f"bot: {bot_response}")
 
-def get_user_context(username: str) -> str:
+def get_user_context(username: str, limit: int = 30) -> str:
+    """
+    Возвращает последние сообщения для контекста AI
+    limit - количество пар сообщений (user+bot)
+    """
     if username not in user_memory or len(user_memory[username]) == 0:
         return ""
-    return "\n".join(list(user_memory[username])[-90:])
+    # Берём последние limit*2 сообщений (каждое user+bot)
+    messages = list(user_memory[username])[-limit*2:]
+    return "\n".join(messages)
+
+def get_full_history(username: str) -> str:
+    """Возвращает ВСЮ историю (для отладки)"""
+    if username not in user_memory or len(user_memory[username]) == 0:
+        return ""
+    return "\n".join(list(user_memory[username]))
 
 def can_greet(username: str) -> bool:
     if username not in user_last_greet:
