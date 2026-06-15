@@ -1,4 +1,4 @@
-import os
+import osш
 import random
 import re
 import aiohttp
