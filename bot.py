@@ -4,6 +4,7 @@ import re
 from datetime import datetime
 from threading import Thread
 import random
+import urllib.parse
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import CommandStart, Command
@@ -131,7 +132,6 @@ RULES_URL = f"{BASE_URL}/rules.html"
 APPLY_URL = f"{BASE_URL}/apply.html"
 
 # ========== MINECRAFT API ==========
-# ========== MINECRAFT API ==========
 async def get_java_status(ip: str, port: int = 25565) -> tuple:
     """Проверяет статус Minecraft сервера через mcstatus с диагностикой"""
     try:
@@ -178,6 +178,44 @@ async def admin_say(message: Message):
     if not text:
         return await message.answer("📝 /say <текст>\nпример: /say привет всем", parse_mode="HTML")
     await message.answer(f"{E_CAT_DANCE} {text} {E_HEART}", parse_mode="HTML")
+
+@dp.message(Command("imagine"))
+async def admin_imagine(message: Message):
+    # Проверка на админа
+    if message.from_user.id not in ADMIN_IDS:
+        return await message.answer("❌ у тебя нет прав", parse_mode="HTML")
+    
+    # Получаем текст запроса
+    prompt = message.text.replace("/imagine", "").strip()
+    if not prompt:
+        return await message.answer(
+            "📝 <b>Как использовать:</b> <code>/imagine <описание></code>\n"
+            "💡 <i>Пример: /imagine красивый замок в майнкрафт, шейдеры, 4k</i>", 
+            parse_mode="HTML"
+        )
+    
+    # Отправляем сообщение об ожидании
+    wait_msg = await message.answer(f"{E_MAGIC} Энди рисует, подожди немного...", parse_mode="HTML")
+    
+    try:
+        # Кодируем текст для URL (поддерживает русский язык)
+        encoded_prompt = urllib.parse.quote(prompt)
+        
+        # Генерируем ссылку на картинку (Pollinations.ai работает без ключей)
+        image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true"
+        
+        # Отправляем картинку
+        await bot.send_photo(
+            chat_id=message.chat.id, 
+            photo=image_url, 
+            caption=f"{E_MAGIC} <b>Твой арт:</b> {prompt}",
+            parse_mode="HTML"
+        )
+        # Удаляем сообщение "подожди немного"
+        await wait_msg.delete()
+        
+    except Exception as e:
+        await wait_msg.edit_text(f"❌ <b>Ошибка генерации:</b> {e}", parse_mode="HTML")
 
 @dp.message(Command("sayto"))
 async def admin_say_to(message: Message):
@@ -512,12 +550,18 @@ async def handle_message(message: Message):
     
     is_reply_to_bot = bool(message.reply_to_message and message.reply_to_message.from_user.id == bot.id)
     
+    # Проверяем, обращаются ли к Энди
     if should_respond(user_message) or is_reply_to_bot:
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
-        user_bio = await get_user_bio(message.from_user.id)
-        response = await get_enderia_response(user_message, username, is_reply=is_reply_to_bot, user_bio=user_bio)
+        
+        # Получаем ответ. Внутри get_enderia_response УЖЕ заложено сохранение 
+        # и сообщения пользователя, и ответа бота в БД!
+        response = await get_enderia_response(user_message, username, is_reply=is_reply_to_bot)
         if response:
             await message.reply(response, parse_mode="HTML")
+    else:
+        # Если игроки просто общаются между собой, сохраняем их сообщение в БД напрямую
+        await save_chat_message(username, user_message, is_bot=False)
 
 # ========== КОЛБЭКИ ==========
 @dp.callback_query()
