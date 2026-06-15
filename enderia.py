@@ -125,9 +125,8 @@ def should_respond(message_text: str) -> bool:
     keywords = ["энди", "енди", "энд"]
     return any(keyword in text_lower for keyword in keywords)
 
-# ========== РАСПОЗНАВАНИЕ ЗАПРОСОВ ПРАВИЛ ==========
+# ========== РАСПОЗНАВАНИЕ ЗАПРОСОВ ==========
 def is_rules_request(text: str) -> bool:
-    """Проверяет, спрашивает ли игрок про правила"""
     text_lower = text.lower()
     rules_keywords = [
         "правил", "правила", "правило", "правела", "правело",
@@ -138,7 +137,6 @@ def is_rules_request(text: str) -> bool:
     return any(keyword in text_lower for keyword in rules_keywords)
 
 def is_apply_request(text: str) -> bool:
-    """Проверяет, спрашивает ли игрок про заявку"""
     text_lower = text.lower()
     apply_keywords = [
         "заявк", "как подать", "подать заявку", "как зайти",
@@ -148,28 +146,13 @@ def is_apply_request(text: str) -> bool:
     return any(keyword in text_lower for keyword in apply_keywords)
 
 def is_donate_request(text: str) -> bool:
-    """Проверяет, спрашивает ли игрок про донаты"""
     text_lower = text.lower()
     donate_keywords = [
-        "донат", "донат", "купить", "премиум", "донаты",
+        "донат", "купить", "премиум", "донаты",
         "сколько стоит", "цены", "прайс", "привилегия",
         "как купить", "хочу купить", "донат на сервер"
     ]
     return any(keyword in text_lower for keyword in donate_keywords)
-
-    # ========== ПРОВЕРКА НА ДОНАТЫ ==========
-    if is_donate_request(user_message):
-        response = f"""{E_CROWN} <b>донат на lostearth</b> {E_CROWN}
-
-все цены и возможности здесь:
-👉 <a href="{DONATE_URL}">ДОНАТЫ И ПРИВИЛЕГИИ</a>
-
-{E_HEART} все деньги идут на хостинг!
-по вопросам: @pelmewki379"""
-        add_to_memory(username, user_message, response)
-        await save_chat_message(username, response, is_bot=True)
-        await save_andy_dialog(username, user_message, response)
-        return response
 
 # ========== ОНЛАЙН ==========
 current_online = 0
@@ -240,7 +223,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         await save_andy_dialog(username, user_message, response)
         return response
     
-    # ========== ПРОВЕРКА НА ПРАВИЛА И ЗАЯВКИ ==========
+    # ========== ПРОВЕРКА НА ПРАВИЛА ==========
     if is_rules_request(user_message):
         response = f"""{E_NOTE} <b>правила сервера lostearth</b> {E_NOTE}
 
@@ -253,6 +236,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         await save_andy_dialog(username, user_message, response)
         return response
     
+    # ========== ПРОВЕРКА НА ЗАЯВКУ ==========
     if is_apply_request(user_message):
         response = f"""{E_MAGIC} <b>заявка на мирный режим</b> {E_MAGIC}
 
@@ -261,6 +245,20 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
 👉 <a href="{APPLY_URL}">ПОДАТЬ ЗАЯВКУ</a>
 
 после подачи заявки жди ответа администратора! {E_RABBIT}"""
+        add_to_memory(username, user_message, response)
+        await save_chat_message(username, response, is_bot=True)
+        await save_andy_dialog(username, user_message, response)
+        return response
+    
+    # ========== ПРОВЕРКА НА ДОНАТЫ ==========
+    if is_donate_request(user_message):
+        response = f"""{E_CROWN} <b>донат на lostearth</b> {E_CROWN}
+
+все цены и возможности здесь:
+👉 <a href="{DONATE_URL}">ДОНАТЫ И ПРИВИЛЕГИИ</a>
+
+{E_HEART} все деньги идут на хостинг!
+по вопросам: @pelmewki379"""
         add_to_memory(username, user_message, response)
         await save_chat_message(username, response, is_bot=True)
         await save_andy_dialog(username, user_message, response)
@@ -290,8 +288,6 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
 ИНФОРМАЦИЯ О СЕРВЕРЕ:
 - IP: 150.241.85.40:25565
 - Онлайн: {current_online}/{current_max}
-- Правила: {RULES_URL}
-- Заявка на мирный: {APPLY_URL}
 
 СЕЙЧАС:
 Игрок {username} написал: {user_message}
