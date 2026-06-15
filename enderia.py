@@ -13,12 +13,16 @@ load_dotenv()
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
-# ========== РАБОЧИЕ БЕСПЛАТНЫЕ МОДЕЛИ (БЕЗ :free) ==========
+# ========== ССЫЛКИ ==========
+RULES_URL = "https://lostearthbot-production.up.railway.app/rules.html"
+APPLY_URL = "https://lostearthbot-production.up.railway.app/apply.html"
+
+# ========== РАБОЧИЕ БЕСПЛАТНЫЕ МОДЕЛИ ==========
 MODELS_CHAIN = [
-    "qwen/qwen-2.5-72b-instruct",        # Бесплатно, отличный русский
-    "google/gemini-2.0-flash-exp",       # Бесплатно, отличный русский  
-    "microsoft/phi-3.5-mini-instruct",   # Бесплатно, лёгкая
-    "meta-llama/llama-3.2-3b-instruct",  # Бесплатно
+    "qwen/qwen-2.5-72b-instruct",
+    "google/gemini-2.0-flash-exp",
+    "microsoft/phi-3.5-mini-instruct",
+    "meta-llama/llama-3.2-3b-instruct",
 ]
 
 # ========== ПРЕМИУМ ЭМОДЗИ ==========
@@ -63,30 +67,22 @@ def add_to_memory(username: str, user_message: str, bot_response: str):
     user_memory[username].append(f"bot: {bot_response}")
 
 def get_user_context(username: str, limit: int = 25) -> str:
-    """
-    Возвращает последние сообщения для контекста AI
-    limit - количество пар сообщений (user+bot)
-    """
     if username not in user_memory or len(user_memory[username]) == 0:
         return ""
-    # Берём последние limit*2 сообщений (каждое user+bot)
     messages = list(user_memory[username])[-limit*2:]
     return "\n".join(messages)
 
 def get_full_history(username: str) -> str:
-    """Возвращает ВСЮ историю (для отладки)"""
     if username not in user_memory or len(user_memory[username]) == 0:
         return ""
     return "\n".join(list(user_memory[username]))
 
 def get_last_bot_response(username: str) -> str:
-    """Возвращает последний ответ бота"""
     if username not in user_memory or len(user_memory[username]) == 0:
         return ""
     return user_memory[username][-1].replace("bot: ", "")
 
 def get_last_user_message(username: str) -> str:
-    """Возвращает последнее сообщение пользователя"""
     if username not in user_memory or len(user_memory[username]) < 2:
         return ""
     return user_memory[username][-2].replace("user: ", "")
@@ -127,6 +123,28 @@ def should_respond(message_text: str) -> bool:
     text_lower = message_text.lower()
     keywords = ["энди", "енди", "энд"]
     return any(keyword in text_lower for keyword in keywords)
+
+# ========== РАСПОЗНАВАНИЕ ЗАПРОСОВ ПРАВИЛ ==========
+def is_rules_request(text: str) -> bool:
+    """Проверяет, спрашивает ли игрок про правила"""
+    text_lower = text.lower()
+    rules_keywords = [
+        "правил", "правила", "правило", "правела", "правело",
+        "какие правила", "что за правила", "расскажи правила",
+        "покажи правила", "скинь правила", "дай правила",
+        "правила сервера", "сервер правила", "какие тут правила"
+    ]
+    return any(keyword in text_lower for keyword in rules_keywords)
+
+def is_apply_request(text: str) -> bool:
+    """Проверяет, спрашивает ли игрок про заявку"""
+    text_lower = text.lower()
+    apply_keywords = [
+        "заявк", "как подать", "подать заявку", "как зайти",
+        "мирный режим", "как попасть", "заявка на мирный",
+        "как играть", "как начать играть"
+    ]
+    return any(keyword in text_lower for keyword in apply_keywords)
 
 # ========== ОНЛАЙН ==========
 current_online = 0
@@ -171,11 +189,9 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     
     await save_chat_message(username, user_message, is_bot=False)
     
-    # Если это ответ на игру - не отвечаем
     if game_result:
         return None
     
-    # Если это команда игры - не отвечаем
     if is_game_command(user_message):
         print(f"🎮 Игровая команда, пропускаем: {user_message}")
         return None
@@ -184,7 +200,6 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     is_name_call = is_just_name_call(user_message)
     can_say_greet = can_greet(username)
     
-    # Если просто позвали по имени
     if is_name_call and not is_reply:
         response = f"{E_CAT_OK} слушаю, {username}! Напиши 'энди кубик 100' чтобы сыграть {E_HEART}"
         add_to_memory(username, user_message, response)
@@ -192,7 +207,6 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         await save_andy_dialog(username, user_message, response)
         return response
     
-    # Приветствие раз в 12 часов
     if is_greeting_msg and can_say_greet and not is_reply:
         mark_greeted(username)
         response = f"{E_CAT_DANCE} привет, {username}! Хочешь сыграть? Напиши 'энди кубик 100' {E_HEART}"
@@ -201,10 +215,36 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         await save_andy_dialog(username, user_message, response)
         return response
     
-    # AI ответ (ТОЛЬКО БЕСПЛАТНЫЕ МОДЕЛИ)
+    # ========== ПРОВЕРКА НА ПРАВИЛА И ЗАЯВКИ ==========
+    if is_rules_request(user_message):
+        response = f"""{E_NOTE} <b>правила сервера lostearth</b> {E_NOTE}
+
+вот ссылка на правила:
+👉 <a href="{RULES_URL}">ПРАВИЛА СЕРВЕРА</a>
+
+ознакомься перед игрой, там ничего сложного! {E_CAT_OK}"""
+        add_to_memory(username, user_message, response)
+        await save_chat_message(username, response, is_bot=True)
+        await save_andy_dialog(username, user_message, response)
+        return response
+    
+    if is_apply_request(user_message):
+        response = f"""{E_MAGIC} <b>заявка на мирный режим</b> {E_MAGIC}
+
+хочешь играть без гриферства? подавай заявку!
+
+👉 <a href="{APPLY_URL}">ПОДАТЬ ЗАЯВКУ</a>
+
+после подачи заявки жди ответа администратора! {E_RABBIT}"""
+        add_to_memory(username, user_message, response)
+        await save_chat_message(username, response, is_bot=True)
+        await save_andy_dialog(username, user_message, response)
+        return response
+    
+    # ========== AI ОТВЕТ ==========
     if OPENROUTER_API_KEY:
         try:
-            context = get_user_context(username, limit=25)  # Берём последние 25 пар сообщений
+            context = get_user_context(username, limit=25)
             
             system_prompt = f"""ты энди, девушка-эндермен. Ты помогаешь игрокам на сервере lostearth.
 
@@ -225,6 +265,8 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
 ИНФОРМАЦИЯ О СЕРВЕРЕ:
 - IP: 150.241.85.40:25565
 - Онлайн: {current_online}/{current_max}
+- Правила: {RULES_URL}
+- Заявка на мирный: {APPLY_URL}
 
 СЕЙЧАС:
 Игрок {username} написал: {user_message}
@@ -279,10 +321,9 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         except Exception as e:
             print(f"❌ Общая ошибка AI: {e}")
     
-    # Если AI не работает - адекватные fallback ответы с контекстом
+    # Fallback ответы
     last_bot = get_last_bot_response(username)
     
-    # Если уже предлагали поиграть, не предлагаем снова
     if "кубик" in last_bot or "сыграть" in last_bot:
         response = f"{E_CAT_OK} понял, {username}. Если захочешь сыграть - пиши 'энди кубик 100' {E_HEART}"
     else:
