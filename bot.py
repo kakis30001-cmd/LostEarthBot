@@ -73,6 +73,19 @@ GROUP_CHAT_ID = -1003891930776
 
 ADMIN_IDS = [8493522297]
 
+# Фоновая задача для обновления онлайна
+async def update_online_loop():
+    while True:
+        try:
+            # Опрашиваем сервер
+            online, max_players = await get_java_status(SERVER["java_ip"], SERVER["java_port"])
+            # Обновляем переменные, которые использует Энди
+            set_server_online(online, max_players)
+        except Exception as e:
+            print(f"Ошибка в цикле обновления онлайна: {e}")
+        
+        await asyncio.sleep(60) # Обновляем раз в минуту
+
 # ========== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ==========
 online_cache = {}
 last_update = {}
@@ -591,6 +604,9 @@ async def handle_callback(callback: CallbackQuery):
 # ========== ЗАПУСК ==========
 async def main():
     await connect_db()
+
+    # Запускаем обновление онлайна
+    asyncio.create_task(update_online_loop())
     
     flask_thread = Thread(target=run_flask, daemon=True)
     flask_thread.start()
