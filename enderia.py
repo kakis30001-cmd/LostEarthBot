@@ -14,11 +14,16 @@ load_dotenv()
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 MODELS_CHAIN = [
-    "openai/gpt-4o-mini",
-    "openai/gpt-3.5-turbo",
-    "meta-llama/llama-3.3-70b-instruct",
-    "qwen/qwen2.5-7b-instruct",
-    "google/gemini-flash-1.5",
+    "google/gemini-2.0-flash-exp:free",            # 1. Быстрая и умная модель от Google
+    "deepseek/deepseek-r1:free",                   # 2. Мощнейшая модель с логическим мышлением
+    "meta-llama/llama-3.3-70b-instruct:free",      # 3. Тяжеловес от Meta (Facebook), отличная логика
+    "qwen/qwen-2.5-72b-instruct:free",             # 4. Отлично понимает русский язык и контекст
+    "nvidia/llama-3.1-nemotron-70b-instruct:free", # 5. Крутая версия Llama от Nvidia
+    "deepseek/deepseek-chat:free",                 # 6. Отличный и быстрый чат от DeepSeek
+    "microsoft/phi-3-medium-128k-instruct:free",   # 7. Умная модель среднего размера от Microsoft
+    "meta-llama/llama-3.1-8b-instruct:free",       # 8. Младшая и очень быстрая Llama
+    "mistralai/mistral-7b-instruct:free",          # 9. Легкая и стабильная запасная модель
+    "openrouter/free"                              # 10. Секретное оружие: авто-роутер OpenRouter, который сам выберет доступную бесплатную модель!
 ]
 
 # ========== ПРЕМИУМ ЭМОДЗИ ==========
