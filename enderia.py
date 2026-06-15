@@ -54,7 +54,7 @@ E_MAGIC = emoji(ENDERIA_EMOJI["magic"], "✨")
 E_JOYSTICK = emoji(ENDERIA_EMOJI["joystick"], "🎮")
 
 # ========== ПАМЯТЬ ==========
-user_memory = defaultdict(lambda: deque(maxlen=800))
+user_memory = defaultdict(lambda: deque(maxlen=350))
 user_last_greet = {}
 last_active = {}
 
