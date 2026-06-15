@@ -1,15 +1,12 @@
 import asyncio
 import random
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Dict, List, Optional
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 
-from database import update_xp, get_xp
+from database import update_xp
 from enderia import E_CROWN, E_MAGIC, E_HOUSE, E_HEART, E_CAT_SURPRISED, E_CAT_DANCE, E_NOTE
-
-# ID чата для кнопки возврата
-GROUP_CHAT_ID = -1003891930776
 
 @dataclass
 class BunkerCharacter:
@@ -24,14 +21,13 @@ class BunkerCharacter:
     secret: str
     
     def get_description(self) -> str:
-        """Полное описание персонажа для игрока"""
-        desc = f"""
+        return f"""
 🎭 <b>ТВОЙ ПЕРСОНАЖ В БУНКЕРЕ</b> 🎭
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 👤 <b>возраст:</b> {self.age} лет
 ⚥ <b>пол:</b> {self.gender}
-💼 <b>профессия:</b> {self.profession}
+💼 <b>профессия:</b} {self.profession}
 🎒 <b>предмет:</b> {self.item}
 ⭐ <b>навык:</b> {self.skill}
 🏥 <b>здоровье:</b> {self.health}
@@ -40,9 +36,7 @@ class BunkerCharacter:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ⚠️ <b>НИКОМУ НЕ РАССКАЗЫВАЙ СВОЮ РОЛЬ!</b>
-💡 <i>твоя задача - убедить других, что ты полезен в бункере</i>
 """
-        return desc
 
 class GameState(Enum):
     WAITING = "waiting"
@@ -71,84 +65,49 @@ class BunkerGame:
         self.voting_start_time = None
         self.discussion_start_time = None
         self.lobby_message_id = None
-        self.pinned_message_id = None
-        self.generated_chars = False
         
     def generate_random_character(self) -> BunkerCharacter:
-        """Генерирует рандомного персонажа"""
-        
         age = random.randint(6, 90)
         genders = ["мужчина", "женщина", "небинарная персона"]
         gender = random.choice(genders)
         
         professions = [
-            "врач-хирург", "военный снайпер", "инженер-робототехник", 
-            "шеф-повар", "фермер-растениевод", "механик дизельных двигателей",
-            "электрик высоковольтных сетей", "строитель-высотник", 
-            "охотник на медведей", "рыбак промышленник", "химик-фармацевт",
-            "программист AI", "школьный учитель", "дальнобойщик", 
-            "сантехник", "пожарный", "полицейский", "адвокат",
-            "бизнесмен", "художник", "музыкант", "археолог",
-            "геолог", "биолог", "ветеринар", "стоматолог",
-            "пилот", "моряк", "шахтер", "кузнец"
+            "врач-хирург", "военный снайпер", "инженер", "шеф-повар", 
+            "фермер", "механик", "электрик", "строитель", "охотник", 
+            "рыбак", "химик", "программист", "учитель", "дальнобойщик",
+            "сантехник", "пожарный", "полицейский", "адвокат", "бизнесмен"
         ]
         profession = random.choice(professions)
         
         items = [
-            "зажигалка Zippo", "молоток с зубилом", "полная аптечка", 
-            "банка тушёнки (3 кг)", "охотничий нож", "альпинистская верёвка",
-            "тактический фонарик", "карта метро 2024", "семена пшеницы",
-            "бензопила", "удочка с запасом лески", "книга 'Как выжить в аду'",
-            "фляга с самогоном", "бинты и антисептик", "гаечный ключ",
-            "аккумулятор 12V", "газета 10-летней давности", "компас",
-            "рация", "противогаз", "набор отмычек", "баллончик с перцем",
-            "палатка", "спальник", "котелок", "топор"
+            "зажигалка", "молоток", "аптечка", "тушёнка", "нож", "верёвка",
+            "фонарик", "семена", "бензопила", "удочка", "топор", "компас"
         ]
         item = random.choice(items)
         
         skills = [
-            "может починить любой двигатель", "умеет делать операции вслепую",
-            "готовит из крыс стейк", "видит в темноте", "чувствует ложь",
-            "умеет вскрывать замки", "знает 7 языков", "отличный стрелок",
-            "быстрее всех бегает", "тише всех ходит", "умеет предсказывать погоду",
-            "находит воду везде", "разводит огонь палочками", "лечит травами",
-            "дрессирует животных", "умеет танцевать тверк", "играет на балалайке",
-            "рассказывает лучшие анекдоты", "помнит всё что прочитал"
+            "чинит всё", "делает операции", "готовит из ничего", "видит в темноте",
+            "чувствует ложь", "вскрывает замки", "знает 5 языков", "отличный стрелок",
+            "быстро бегает", "тихо ходит", "находит воду", "разводит огонь"
         ]
         skill = random.choice(skills)
         
         healths = [
-            "абсолютно здоров", "здоров как бык", "здоров",
-            "лёгкая аллергия на пыльцу", "близорукость", "дальнозоркость",
-            "астма", "диабет", "проблемы с сердцем", "эпилепсия",
-            "хронический насморк", "ломаная нога плохо срослась",
-            "потерял палец на руке", "шум в ушах", "мигрень",
-            "язва желудка", "алкоголизм", "курит пачку в день"
+            "абсолютно здоров", "здоров", "лёгкая аллергия", "близорукость",
+            "астма", "диабет", "проблемы с сердцем", "хронический насморк"
         ]
         health = random.choice(healths)
         
         traits = [
-            "агрессивный и вспыльчивый", "добрый и отзывчивый", 
-            "тревожный и мнительный", "спокойный как удав", 
-            "харизматичный манипулятор", "замкнутый интроверт", 
-            "эгоистичный нарцисс", "альтруист помогающий всем",
-            "параноик везде видящий заговор", "оптимист до безумия", 
-            "пессимист всё предрекающий", "ленивый лежебока", 
-            "работяга до седьмого пота", "трус прячущийся за спины",
-            "смельчак лезущий на амбразуру"
+            "агрессивный", "добрый", "тревожный", "спокойный", "харизматичный",
+            "замкнутый", "эгоистичный", "альтруист", "оптимист", "пессимист"
         ]
         trait = random.choice(traits)
         
         secrets = [
-            "на самом деле ты агент КГБ", "ты убил трёх человек в прошлом",
-            "у тебя есть карта с тайным убежищем", "ты заражён вирусом",
-            "ты сын миллиардера", "ты сидел в тюрьме 10 лет",
-            "у тебя есть пистолет (никто не знает)", "ты не умеешь читать",
-            "ты в розыске", "ты работал на правительство",
-            "у тебя аллергия на людей", "ты видишь мёртвых",
-            "ты можешь общаться с животными", "ты бессмертный (вроде)",
-            "у тебя есть тайная лаборатория", "ты из будущего",
-            "ты рептилоид", "ты вампир (пьёшь кровь)"
+            "ты агент КГБ", "ты убивал людей", "у тебя есть тайное убежище",
+            "ты заражён", "ты сын миллиардера", "ты сидел в тюрьме",
+            "у тебя есть пистолет", "ты не умеешь читать", "ты в розыске"
         ]
         secret = random.choice(secrets)
         
@@ -159,80 +118,44 @@ class BunkerGame:
         )
     
     async def generate_all_characters(self):
-        """Генерирует персонажей и отправляет в ЛС с кнопкой возврата в чат"""
-        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-        
+        """Отправляет роли в чат с упоминанием игрока"""
         for player in self.players.values():
             player.character = self.generate_random_character()
             
-            # Кнопка для возврата в чат
-            keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="🏠 ВЕРНУТЬСЯ В ЧАТ", url=f"https://t.me/lostearth_bot?start=chat_{GROUP_CHAT_ID}")]
-            ])
-            
-            # Отправляем в ЛС
-            try:
-                await self.bot.send_message(
-                    player.user_id,
-                    player.character.get_description(),
-                    parse_mode="HTML",
-                    reply_markup=keyboard
-                )
-            except Exception as e:
-                print(f"Не удалось отправить в ЛС {player.username}: {e}")
+            await self.bot.send_message(
+                self.chat_id,
+                f"@{player.username}, твоя роль в бункере:\n{player.character.get_description()}",
+                parse_mode="HTML"
+            )
         
         self.generated_chars = True
         self.state = GameState.CHARACTERS_GENERATED
     
     async def start_discussion(self):
-        """Начинает фазу обсуждения (5 минут) с закреплённым сообщением"""
+        """Начинает обсуждение на 4 минуты"""
         self.state = GameState.DISCUSSION
         self.discussion_start_time = datetime.now()
         
-        # Создаём закрепляемое сообщение
-        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-        
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🎮 ПЕРЕЙТИ К БОТУ", url="https://t.me/lostearth_bot")]
-        ])
-        
-        pinned_msg = await self.bot.send_message(
+        await self.bot.send_message(
             self.chat_id,
-            f"{E_CROWN} 🧟 <b>ИГРА БУНКЕР НАЧАЛАСЬ!</b> 🧟 {E_CROWN}\n\n"
-            f"{E_MAGIC} <b>всем участникам отправлены роли в личные сообщения!</b>\n\n"
-            f"⏰ <b>у вас есть 5 минут на обсуждение!</b>\n\n"
+            f"{E_MAGIC} <b>ВСЕ РОЛИ РОЗДАНЫ!</b> {E_MAGIC}\n\n"
+            f"⏰ <b>у вас есть 4 минуты на обсуждение!</b>\n\n"
             f"💡 <b>советы:</b>\n"
-            f"• обсуждайте кто может быть полезен в бункере\n"
+            f"• обсуждайте кто полезен в бункере\n"
             f"• задавайте вопросы друг другу\n"
             f"• стройте стратегии\n"
-            f"• помните - свои роли показывать НЕЛЬЗЯ!\n\n"
-            f"<i>через 5 минут начнётся голосование!</i>\n\n"
-            f"👇 <b>нажми на кнопку чтобы перейти в бота и посмотреть свою роль</b>",
-            parse_mode="HTML",
-            reply_markup=keyboard
+            f"• НЕ ПОКАЗЫВАЙТЕ свои роли!\n\n"
+            f"<i>через 4 минуты начнётся голосование!</i>",
+            parse_mode="HTML"
         )
         
-        # Закрепляем сообщение
-        try:
-            await self.bot.pin_chat_message(self.chat_id, pinned_msg.message_id)
-            self.pinned_message_id = pinned_msg.message_id
-        except Exception as e:
-            print(f"Не удалось закрепить сообщение: {e}")
-        
-        # Запускаем таймер на 5 минут
         asyncio.create_task(self.discussion_timer())
     
     async def discussion_timer(self):
-        """Таймер обсуждения - 5 минут"""
-        await asyncio.sleep(300)  # 5 минут
+        """Таймер 4 минуты"""
+        await asyncio.sleep(240)  # 4 минуты
         
         if self.state == GameState.DISCUSSION:
-            # Открепляем сообщение
-            try:
-                await self.bot.unpin_chat_message(self.chat_id, self.pinned_message_id)
-            except:
-                pass
-            
             await self.bot.send_message(
                 self.chat_id,
                 f"{E_CAT_SURPRISED} <b>ВРЕМЯ ОБСУЖДЕНИЯ ЗАКОНЧИЛОСЬ!</b>\n\nначинаем голосование!",
@@ -240,7 +163,6 @@ class BunkerGame:
             )
             await asyncio.sleep(2)
             self.state = GameState.ACTIVE
-            # Передаём управление в bot.py для начала голосования
             from bot import start_bunker_round
             await start_bunker_round(self.chat_id)
     
@@ -249,15 +171,12 @@ class BunkerGame:
     
     def get_players_to_eliminate(self) -> int:
         alive = len(self.get_alive_players())
-        rules = {3: 1, 4: 2, 5: 2, 6: 2, 7: 2, 8: 2, 9: 3, 10: 3, 11: 3, 12: 3}
+        rules = {3: 1, 4: 2, 5: 2, 6: 2, 7: 2, 8: 2, 9: 3, 10: 3}
         return rules.get(alive, 1)
     
     def get_voting_time(self) -> int:
         alive = len(self.get_alive_players())
-        if alive <= 5:
-            return 120  # 2 минуты
-        else:
-            return 180  # 3 минуты
+        return 120 if alive <= 5 else 180
     
     def can_start(self) -> bool:
-        return 3 <= len(self.players) <= 12
+        return 3 <= len(self.players) <= 10
