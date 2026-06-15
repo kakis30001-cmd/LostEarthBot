@@ -8,6 +8,7 @@ from enum import Enum
 from database import update_xp
 from enderia import E_CROWN, E_MAGIC, E_HOUSE, E_HEART, E_CAT_SURPRISED, E_CAT_DANCE, E_NOTE
 
+
 @dataclass
 class BunkerCharacter:
     """Персонаж игрока"""
@@ -27,7 +28,7 @@ class BunkerCharacter:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 👤 <b>возраст:</b> {self.age} лет
 ⚥ <b>пол:</b> {self.gender}
-💼 <b>профессия:</b} {self.profession}
+💼 <b>профессия:</b> {self.profession}
 🎒 <b>предмет:</b> {self.item}
 ⭐ <b>навык:</b> {self.skill}
 🏥 <b>здоровье:</b> {self.health}
@@ -38,12 +39,14 @@ class BunkerCharacter:
 ⚠️ <b>НИКОМУ НЕ РАССКАЗЫВАЙ СВОЮ РОЛЬ!</b>
 """
 
+
 class GameState(Enum):
     WAITING = "waiting"
     CHARACTERS_GENERATED = "characters_generated"
     DISCUSSION = "discussion"
     VOTING = "voting"
     FINISHED = "finished"
+
 
 @dataclass
 class BunkerPlayer:
@@ -53,6 +56,7 @@ class BunkerPlayer:
     is_alive: bool = True
     vote_count: int = 0
     has_voted: bool = False
+
 
 class BunkerGame:
     def __init__(self, chat_id: int, host_id: int, bot):
@@ -72,8 +76,8 @@ class BunkerGame:
         gender = random.choice(genders)
         
         professions = [
-            "врач-хирург", "военный снайпер", "инженер", "шеф-повар", 
-            "фермер", "механик", "электрик", "строитель", "охотник", 
+            "врач-хирург", "военный снайпер", "инженер", "шеф-повар",
+            "фермер", "механик", "электрик", "строитель", "охотник",
             "рыбак", "химик", "программист", "учитель", "дальнобойщик",
             "сантехник", "пожарный", "полицейский", "адвокат", "бизнесмен"
         ]
@@ -153,7 +157,7 @@ class BunkerGame:
     
     async def discussion_timer(self):
         """Таймер 4 минуты"""
-        await asyncio.sleep(240)  # 4 минуты
+        await asyncio.sleep(240)
         
         if self.state == GameState.DISCUSSION:
             await self.bot.send_message(
@@ -176,7 +180,10 @@ class BunkerGame:
     
     def get_voting_time(self) -> int:
         alive = len(self.get_alive_players())
-        return 120 if alive <= 5 else 180
+        if alive <= 5:
+            return 120
+        else:
+            return 180
     
     def can_start(self) -> bool:
         return 3 <= len(self.players) <= 10
