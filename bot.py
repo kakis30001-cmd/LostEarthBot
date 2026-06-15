@@ -606,7 +606,7 @@ async def handle_callback(callback: CallbackQuery):
         await callback.answer()
 
 # ========== ИГРА БУНКЕР ==========
-from bunker_game import BunkerGame, GameState
+from bunker_game import BunkerGame, GameState, BunkerPlayer
 
 # Хранилище игр
 active_bunker_games: Dict[int, BunkerGame] = {}
