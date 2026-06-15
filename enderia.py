@@ -189,17 +189,13 @@ async def send_spontaneous_message(bot, chat_id: int):
             msg = random.choice(spontaneous_messages_list)
             await bot.send_message(chat_id, f"{E_CAT_DANCE} {msg} {E_HEART}", parse_mode="HTML")
 
-# ========== ОСНОВНАЯ ФУНКЦИЯ ==========
+# ========== ОСНОВНАЯ ФУНКЦИЯ (ОДНА, НЕ ДВЕ!) ==========
 async def get_enderia_response(user_message: str, username: str, is_reply: bool = False, user_bio: str = "", game_result: str = None) -> str:
     global current_online, current_max
     
     # ⚠️ ПЕРВАЯ ПРОВЕРКА - команда для создания игры в бункер
-    # ВОЗВРАЩАЕМ СПЕЦИАЛЬНЫЙ МАРКЕР, который bot.py распознает
-    if user_message.lower().strip() == "энди бункер" or user_message.lower().strip() == "енди бункер":
-        return "BUNKER_CREATE_GAME"  # <-- СПЕЦИАЛЬНЫЙ МАРКЕР!
-
-async def get_enderia_response(user_message: str, username: str, is_reply: bool = False, user_bio: str = "", game_result: str = None) -> str:
-    global current_online, current_max
+    if user_message.lower().strip() in ["энди бункер", "енди бункер", "энд бункер"]:
+        return "BUNKER_CREATE_GAME"
     
     save_to_log(username, user_message, is_bot=False)
     last_active[username] = datetime.now()
@@ -235,7 +231,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     
     user_lower = user_message.lower().strip()
     
-    # ========== ИНФОРМАЦИЯ О БУНКЕРЕ (БЕЗ ПЕРЕХВАТА КОМАНДЫ "энди бункер") ==========
+    # ========== ИНФОРМАЦИЯ О БУНКЕРЕ ==========
     
     # Вопрос "как играть в бункер"
     if "как играть" in user_lower and "бункер" in user_lower:
