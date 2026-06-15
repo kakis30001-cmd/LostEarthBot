@@ -1,11 +1,15 @@
 import asyncio
 import random
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 from dataclasses import dataclass, field
 from enum import Enum
 
 from database import update_xp, get_xp
+from enderia import E_CROWN, E_MAGIC, E_HOUSE, E_HEART, E_CAT_SURPRISED, E_CAT_DANCE, E_NOTE
+
+# ID чата для кнопки возврата
+GROUP_CHAT_ID = -1003891930776
 
 @dataclass
 class BunkerCharacter:
@@ -43,7 +47,7 @@ class BunkerCharacter:
 class GameState(Enum):
     WAITING = "waiting"
     CHARACTERS_GENERATED = "characters_generated"
-    ACTIVE = "active"
+    DISCUSSION = "discussion"
     VOTING = "voting"
     FINISHED = "finished"
 
@@ -65,20 +69,18 @@ class BunkerGame:
         self.state = GameState.WAITING
         self.current_round = 0
         self.voting_start_time = None
+        self.discussion_start_time = None
         self.lobby_message_id = None
+        self.pinned_message_id = None
         self.generated_chars = False
         
     def generate_random_character(self) -> BunkerCharacter:
-        """Генерирует рандомного персонажа с уникальными характеристиками"""
+        """Генерирует рандомного персонажа"""
         
-        # Возраст от 6 до 90
         age = random.randint(6, 90)
-        
-        # Пол
         genders = ["мужчина", "женщина", "небинарная персона"]
         gender = random.choice(genders)
         
-        # Профессии (разнообразные)
         professions = [
             "врач-хирург", "военный снайпер", "инженер-робототехник", 
             "шеф-повар", "фермер-растениевод", "механик дизельных двигателей",
@@ -92,7 +94,6 @@ class BunkerGame:
         ]
         profession = random.choice(professions)
         
-        # Предметы (странные и полезные)
         items = [
             "зажигалка Zippo", "молоток с зубилом", "полная аптечка", 
             "банка тушёнки (3 кг)", "охотничий нож", "альпинистская верёвка",
@@ -105,7 +106,6 @@ class BunkerGame:
         ]
         item = random.choice(items)
         
-        # Навыки (полезные и бесполезные)
         skills = [
             "может починить любой двигатель", "умеет делать операции вслепую",
             "готовит из крыс стейк", "видит в темноте", "чувствует ложь",
@@ -117,7 +117,6 @@ class BunkerGame:
         ]
         skill = random.choice(skills)
         
-        # Здоровье
         healths = [
             "абсолютно здоров", "здоров как бык", "здоров",
             "лёгкая аллергия на пыльцу", "близорукость", "дальнозоркость",
@@ -128,7 +127,6 @@ class BunkerGame:
         ]
         health = random.choice(healths)
         
-        # Характер
         traits = [
             "агрессивный и вспыльчивый", "добрый и отзывчивый", 
             "тревожный и мнительный", "спокойный как удав", 
@@ -141,7 +139,6 @@ class BunkerGame:
         ]
         trait = random.choice(traits)
         
-        # Тайна (скрытая информация)
         secrets = [
             "на самом деле ты агент КГБ", "ты убил трёх человек в прошлом",
             "у тебя есть карта с тайным убежищем", "ты заражён вирусом",
@@ -162,46 +159,100 @@ class BunkerGame:
         )
     
     async def generate_all_characters(self):
-        """Генерирует персонажей для всех игроков и отправляет в личку"""
+        """Генерирует персонажей и отправляет в ЛС с кнопкой возврата в чат"""
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+        
         for player in self.players.values():
             player.character = self.generate_random_character()
             
-            # Отправляем ТОЛЬКО этому игроку в личное сообщение!
+            # Кнопка для возврата в чат
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🏠 ВЕРНУТЬСЯ В ЧАТ", url=f"https://t.me/lostearth_bot?start=chat_{GROUP_CHAT_ID}")]
+            ])
+            
+            # Отправляем в ЛС
             try:
                 await self.bot.send_message(
                     player.user_id,
                     player.character.get_description(),
-                    parse_mode="HTML"
-                )
-                await self.bot.send_message(
-                    player.user_id,
-                    f"{E_MAGIC} <b>твоя цель - выжить в бункере!</b>\n\n"
-                    f"💡 <i>никому не рассказывай свою роль\n"
-                    f"докажи что ты полезен для группы</i>",
-                    parse_mode="HTML"
+                    parse_mode="HTML",
+                    reply_markup=keyboard
                 )
             except Exception as e:
-                print(f"Не удалось отправить сообщение {player.username}: {e}")
+                print(f"Не удалось отправить в ЛС {player.username}: {e}")
         
         self.generated_chars = True
         self.state = GameState.CHARACTERS_GENERATED
     
+    async def start_discussion(self):
+        """Начинает фазу обсуждения (5 минут) с закреплённым сообщением"""
+        self.state = GameState.DISCUSSION
+        self.discussion_start_time = datetime.now()
+        
+        # Создаём закрепляемое сообщение
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🎮 ПЕРЕЙТИ К БОТУ", url="https://t.me/lostearth_bot")]
+        ])
+        
+        pinned_msg = await self.bot.send_message(
+            self.chat_id,
+            f"{E_CROWN} 🧟 <b>ИГРА БУНКЕР НАЧАЛАСЬ!</b> 🧟 {E_CROWN}\n\n"
+            f"{E_MAGIC} <b>всем участникам отправлены роли в личные сообщения!</b>\n\n"
+            f"⏰ <b>у вас есть 5 минут на обсуждение!</b>\n\n"
+            f"💡 <b>советы:</b>\n"
+            f"• обсуждайте кто может быть полезен в бункере\n"
+            f"• задавайте вопросы друг другу\n"
+            f"• стройте стратегии\n"
+            f"• помните - свои роли показывать НЕЛЬЗЯ!\n\n"
+            f"<i>через 5 минут начнётся голосование!</i>\n\n"
+            f"👇 <b>нажми на кнопку чтобы перейти в бота и посмотреть свою роль</b>",
+            parse_mode="HTML",
+            reply_markup=keyboard
+        )
+        
+        # Закрепляем сообщение
+        try:
+            await self.bot.pin_chat_message(self.chat_id, pinned_msg.message_id)
+            self.pinned_message_id = pinned_msg.message_id
+        except Exception as e:
+            print(f"Не удалось закрепить сообщение: {e}")
+        
+        # Запускаем таймер на 5 минут
+        asyncio.create_task(self.discussion_timer())
+    
+    async def discussion_timer(self):
+        """Таймер обсуждения - 5 минут"""
+        await asyncio.sleep(300)  # 5 минут
+        
+        if self.state == GameState.DISCUSSION:
+            # Открепляем сообщение
+            try:
+                await self.bot.unpin_chat_message(self.chat_id, self.pinned_message_id)
+            except:
+                pass
+            
+            await self.bot.send_message(
+                self.chat_id,
+                f"{E_CAT_SURPRISED} <b>ВРЕМЯ ОБСУЖДЕНИЯ ЗАКОНЧИЛОСЬ!</b>\n\nначинаем голосование!",
+                parse_mode="HTML"
+            )
+            await asyncio.sleep(2)
+            self.state = GameState.ACTIVE
+            # Передаём управление в bot.py для начала голосования
+            from bot import start_bunker_round
+            await start_bunker_round(self.chat_id)
+    
     def get_alive_players(self) -> List[BunkerPlayer]:
-        """Возвращает живых игроков"""
         return [p for p in self.players.values() if p.is_alive]
     
     def get_players_to_eliminate(self) -> int:
-        """Сколько игроков выгнать в этом раунде"""
         alive = len(self.get_alive_players())
-        
-        # Правила выгоняния
-        rules = {
-            3: 1, 4: 2, 5: 2, 6: 2, 7: 2, 8: 2, 9: 3, 10: 3, 11: 3, 12: 3
-        }
+        rules = {3: 1, 4: 2, 5: 2, 6: 2, 7: 2, 8: 2, 9: 3, 10: 3, 11: 3, 12: 3}
         return rules.get(alive, 1)
     
     def get_voting_time(self) -> int:
-        """Время на голосование в секундах"""
         alive = len(self.get_alive_players())
         if alive <= 5:
             return 120  # 2 минуты
@@ -209,9 +260,4 @@ class BunkerGame:
             return 180  # 3 минуты
     
     def can_start(self) -> bool:
-        """Можно ли начинать игру"""
         return 3 <= len(self.players) <= 12
-
-
-# Импортируем эмодзи (нужно добавить в начало файла)
-from enderia import E_CROWN, E_MAGIC, E_HOUSE, E_HEART, E_CAT_SURPRISED, E_CAT_DANCE, E_NOTE
