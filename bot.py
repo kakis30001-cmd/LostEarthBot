@@ -567,7 +567,8 @@ async def handle_message(message: Message):
     else:
         await save_chat_message(username, user_message, is_bot=False)
 
-# ========== ИГРА БУНКЕР - КОМАНДЫ ==========
+# ========== ИГРА БУНКЕР ==========
+
 @dp.message(lambda msg: msg.text and msg.text.lower() == "энди бункер")
 async def bunker_command(message: Message):
     """Создать игру в бункер"""
@@ -593,117 +594,19 @@ async def bunker_command(message: Message):
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🎮 ПРИСОЕДИНИТЬСЯ", callback_data="bunker_join")],
-        [InlineKeyboardButton(text="🚀 НАЧАТЬ (3-10 игроков)", callback_data="bunker_start")],
+        [InlineKeyboardButton(text="🚀 НАЧАТЬ (5-10 игроков)", callback_data="bunker_start")],
         [InlineKeyboardButton(text="❌ ОТМЕНИТЬ", callback_data="bunker_cancel")]
     ])
     
     await message.answer(
-        f"{E_CROWN} 🧟 <b>ЗОМБИ АПОКАЛИПСИС - БУНКЕР</b> 🧟 {E_CROWN}\n\n"
+        f"{E_CROWN} 🧟 <b>БУНКЕР 2.0</b> 🧟 {E_CROWN}\n\n"
         f"{E_MAGIC} <b>игроков:</b> {len(game.players)}/10\n"
         f"{E_HOUSE} <b>создатель:</b> {username}\n\n"
-        f"<i>для старта нужно от 3 до 10 игроков!\n"
-        f"роли придут в чат с тегом @username</i>",
+        f"<i>для старта нужно от 5 до 10 игроков!\n"
+        f"каждый получит роль в ЛС и будет раскрывать информацию о себе</i>",
         parse_mode="HTML",
         reply_markup=keyboard
     )
-
-async def auto_cancel_lobby(chat_id: int, delay: int):
-    await asyncio.sleep(delay)
-    if chat_id in bunker_lobbies:
-        del bunker_lobbies[chat_id]
-
-async def start_bunker_round(chat_id: int):
-    """Начинает раунд голосования"""
-    if chat_id not in active_bunker_games:
-        return
-    
-    game = active_bunker_games[chat_id]
-    alive_players = game.get_alive_players()
-    to_eliminate = game.get_players_to_eliminate()
-    
-    for player in game.players.values():
-        player.vote_count = 0
-        player.has_voted = False
-    
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🗳️ ПРОГОЛОСОВАТЬ", callback_data="bunker_show_vote")]
-    ])
-    
-    players_list = "\n".join([f"• {p.username}" for p in alive_players])
-    
-    await bot.send_message(
-        chat_id,
-        f"{E_CROWN} 🧟 <b>РАУНД {game.current_round + 1}</b> 🧟 {E_CROWN}\n\n"
-        f"{E_MAGIC} <b>в бункере осталось:</b> {len(alive_players)} человек\n"
-        f"{E_HOUSE} <b>нужно выгнать:</b> {to_eliminate}\n\n"
-        f"<b>живые игроки:</b>\n{players_list}\n\n"
-        f"💡 <b>совет:</b> пишите в чат почему ВЫ должны остаться!\n"
-        f"⏰ <b>время на голосование:</b> {game.get_voting_time()//60} минут\n\n"
-        f"<i>нажми на кнопку чтобы проголосовать</i>",
-        parse_mode="HTML",
-        reply_markup=keyboard
-    )
-    
-    game.state = GameState.VOTING
-    game.voting_start_time = datetime.now()
-    asyncio.create_task(bunker_voting_timer(chat_id))
-
-async def bunker_voting_timer(chat_id: int):
-    """Таймер голосования"""
-    await asyncio.sleep(5)
-    
-    if chat_id not in active_bunker_games:
-        return
-    
-    game = active_bunker_games[chat_id]
-    voting_time = game.get_voting_time()
-    await asyncio.sleep(voting_time)
-    
-    if chat_id not in active_bunker_games:
-        return
-    
-    await finish_bunker_voting(chat_id)
-
-async def finish_bunker_voting(chat_id: int):
-    """Завершает голосование и выгоняет игроков"""
-    if chat_id not in active_bunker_games:
-        return
-    
-    game = active_bunker_games[chat_id]
-    alive_players = game.get_alive_players()
-    to_eliminate = game.get_players_to_eliminate()
-    
-    if not alive_players:
-        return
-    
-    alive_players.sort(key=lambda x: x.vote_count, reverse=True)
-    eliminated = alive_players[:to_eliminate]
-    
-    result_text = f"{E_CAT_DANCE} <b>результаты голосования:</b>\n\n"
-    
-    for player in eliminated:
-        player.is_alive = False
-        result_text += f"❌ {player.username} - выгнан из бункера! (голосов: {player.vote_count})\n"
-        await update_xp(player.username, -50)
-    
-    remaining = game.get_alive_players()
-    
-    if len(remaining) <= 3:
-        result_text += f"\n{E_CROWN} <b>ПОБЕДИТЕЛИ:</b> {E_CROWN}\n"
-        for player in remaining:
-            await update_xp(player.username, 100)
-            result_text += f"✨ {player.username} +100 XP!\n"
-        
-        await bot.send_message(chat_id, result_text, parse_mode="HTML")
-        del active_bunker_games[chat_id]
-    else:
-        await bot.send_message(chat_id, result_text, parse_mode="HTML")
-        game.current_round += 1
-        game.state = GameState.ACTIVE
-        await asyncio.sleep(5)
-        await start_bunker_round(chat_id)
-
-# ========== КОЛБЭКИ ДЛЯ БУНКЕРА ==========
 
 @dp.callback_query(lambda c: c.data == "bunker_join")
 async def bunker_join_callback(callback: CallbackQuery):
@@ -733,7 +636,7 @@ async def bunker_join_callback(callback: CallbackQuery):
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🎮 ПРИСОЕДИНИТЬСЯ", callback_data="bunker_join")],
-        [InlineKeyboardButton(text="🚀 НАЧАТЬ (3-10 игроков)", callback_data="bunker_start")],
+        [InlineKeyboardButton(text="🚀 НАЧАТЬ (5-10 игроков)", callback_data="bunker_start")],
         [InlineKeyboardButton(text="❌ ОТМЕНИТЬ", callback_data="bunker_cancel")]
     ])
     
@@ -741,10 +644,10 @@ async def bunker_join_callback(callback: CallbackQuery):
     
     try:
         await callback.message.edit_text(
-            f"{E_CROWN} 🧟 <b>ЗОМБИ АПОКАЛИПСИС - БУНКЕР</b> 🧟 {E_CROWN}\n\n"
+            f"{E_CROWN} 🧟 <b>БУНКЕР 2.0</b> 🧟 {E_CROWN}\n\n"
             f"{E_MAGIC} <b>игроков:</b> {len(game.players)}/10\n"
             f"{E_HOUSE} <b>участники:</b>\n{players_list}\n\n"
-            f"<i>для старта нужно от 3 до 10 игроков!</i>",
+            f"<i>для старта нужно от 5 до 10 игроков!</i>",
             parse_mode="HTML",
             reply_markup=keyboard
         )
@@ -769,12 +672,13 @@ async def bunker_start_callback(callback: CallbackQuery):
         return
     
     if not game.can_start():
-        await callback.answer(f"❌ нужно от 3 до 10 игроков! сейчас {len(game.players)}", show_alert=True)
+        await callback.answer(f"❌ нужно от 5 до 10 игроков! сейчас {len(game.players)}", show_alert=True)
         return
     
     await callback.message.edit_text(
         f"{E_MAGIC} <b>генерация персонажей...</b>\n\n"
-        f"<i>каждому игроку будет отправлена его роль в чат с тегом @username</i>",
+        f"<i>каждому игроку отправлена его роль в ЛС!\n"
+        f"проверьте личные сообщения @lostearth_bot</i>",
         parse_mode="HTML"
     )
     
@@ -784,8 +688,8 @@ async def bunker_start_callback(callback: CallbackQuery):
     active_bunker_games[chat_id] = game
     del bunker_lobbies[chat_id]
     
-    await game.start_discussion()
-    await callback.answer("✅ Игра началась! Смотрите роли в чате!")
+    await game.start_reveal_phase()
+    await callback.answer("✅ Игра началась! Проверьте ЛС бота!")
 
 @dp.callback_query(lambda c: c.data == "bunker_cancel")
 async def bunker_cancel_callback(callback: CallbackQuery):
@@ -811,68 +715,120 @@ async def bunker_cancel_callback(callback: CallbackQuery):
     
     await callback.answer("✅ игра отменена")
 
-@dp.callback_query(lambda c: c.data == "bunker_show_vote")
-async def bunker_show_vote_menu_callback(callback: CallbackQuery):
-    chat_id = callback.message.chat.id
+# ========== КОЛБЭКИ ДЛЯ РАСКРЫТИЯ ==========
+
+@dp.callback_query(lambda c: c.data and c.data.startswith("reveal_"))
+async def bunker_reveal_callback(callback: CallbackQuery):
+    user_id = callback.from_user.id
+    key = callback.data.split("_")[1]
+    
+    game = None
+    for g in active_bunker_games.values():
+        if user_id in g.players:
+            game = g
+            break
+    
+    if not game:
+        await callback.answer("❌ игра не найдена", show_alert=True)
+        return
+    
+    if game.state != GameState.REVEALING:
+        await callback.answer("❌ сейчас не время для раскрытия", show_alert=True)
+        return
+    
+    player = game.players[user_id]
+    
+    if not player.is_alive:
+        await callback.answer("❌ ты выбыл", show_alert=True)
+        return
+    
+    if key in player.revealed:
+        player.revealed.remove(key)
+    else:
+        if len(player.revealed) >= 3:
+            await callback.answer("❌ можно раскрыть только 3 характеристики!", show_alert=True)
+            return
+        player.revealed.append(key)
+    
+    keyboard = game.get_reveal_keyboard(player)
+    
+    try:
+        await callback.message.edit_reply_markup(reply_markup=keyboard)
+    except Exception as e:
+        print(f"Ошибка обновления: {e}")
+    
+    await callback.answer("✅ выбор сохранён!")
+
+@dp.callback_query(lambda c: c.data == "reveal_done")
+async def bunker_reveal_done_callback(callback: CallbackQuery):
     user_id = callback.from_user.id
     
-    if chat_id not in active_bunker_games:
+    game = None
+    for g in active_bunker_games.values():
+        if user_id in g.players:
+            game = g
+            break
+    
+    if not game:
         await callback.answer("❌ игра не найдена", show_alert=True)
         return
     
-    game = active_bunker_games[chat_id]
-    
-    if game.state != GameState.VOTING:
-        await callback.answer("❌ сейчас не время для голосования", show_alert=True)
+    if game.state != GameState.REVEALING:
+        await callback.answer("❌ сейчас не время", show_alert=True)
         return
     
-    player = game.players.get(user_id)
-    if not player or not player.is_alive:
-        await callback.answer("❌ ты выбыл из игры", show_alert=True)
+    player = game.players[user_id]
+    
+    if not player.is_alive:
+        await callback.answer("❌ ты выбыл", show_alert=True)
         return
     
-    if player.has_voted:
-        await callback.answer("❌ ты уже проголосовал!", show_alert=True)
+    if not player.revealed:
+        await callback.answer("❌ выбери хотя бы одну характеристику!", show_alert=True)
         return
     
-    alive_others = [p for p in game.get_alive_players() if p.user_id != user_id]
+    player.has_revealed_this_round = True
     
-    if not alive_others:
-        await callback.answer("❌ некого выгонять", show_alert=True)
-        return
-    
-    buttons = []
-    for target in alive_others:
-        buttons.append([InlineKeyboardButton(f"❌ {target.username}", callback_data=f"bunker_vote_{target.user_id}")])
-    buttons.append([InlineKeyboardButton("🔙 ОТМЕНА", callback_data="bunker_cancel_vote")])
-    
-    keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
-    
-    await callback.message.answer(
-        f"{E_MAGIC} <b>голосование в бункере!</b>\n\nвыбери кого выгнать:",
-        parse_mode="HTML",
-        reply_markup=keyboard
+    await callback.message.edit_text(
+        f"{E_CAT_OK} <b>ты готов!</b>\n\n"
+        f"<i>жду остальных игроков...</i>",
+        parse_mode="HTML"
     )
-    await callback.answer()
-
-@dp.callback_query(lambda c: c.data and c.data.startswith("bunker_vote_"))
-async def bunker_process_vote_callback(callback: CallbackQuery):
-    target_id = int(callback.data.split("_")[2])
-    voter_id = callback.from_user.id
-    chat_id = callback.message.chat.id
     
-    if chat_id not in active_bunker_games:
+    all_ready = True
+    for p in game.get_alive_players():
+        if not p.has_revealed_this_round:
+            all_ready = False
+            break
+    
+    if all_ready:
+        await game.start_voting_phase()
+    
+    await callback.answer("✅ готово!")
+
+# ========== КОЛБЭКИ ДЛЯ ГОЛОСОВАНИЯ ==========
+
+@dp.callback_query(lambda c: c.data and c.data.startswith("vote_"))
+async def bunker_vote_callback(callback: CallbackQuery):
+    target_id = int(callback.data.split("_")[1])
+    voter_id = callback.from_user.id
+    
+    game = None
+    for g in active_bunker_games.values():
+        if voter_id in g.players:
+            game = g
+            break
+    
+    if not game:
         await callback.answer("❌ игра не найдена", show_alert=True)
         return
-    
-    game = active_bunker_games[chat_id]
     
     if game.state != GameState.VOTING:
         await callback.answer("❌ сейчас не время для голосования", show_alert=True)
         return
     
-    voter = game.players.get(voter_id)
-    target = game.players.get(target_id)
+    voter = game.players[voter_id]
+    target = game.players[target_id]
     
     if not voter or not voter.is_alive:
         await callback.answer("❌ ты не можешь голосовать", show_alert=True)
@@ -889,20 +845,67 @@ async def bunker_process_vote_callback(callback: CallbackQuery):
     target.vote_count += 1
     voter.has_voted = True
     
-    try:
-        await callback.message.delete()
-    except:
-        pass
+    await callback.message.edit_text(
+        f"✅ ты проголосовал против {target.username}!\n\n<i>жду остальных...</i>",
+        parse_mode="HTML"
+    )
     
-    await callback.answer(f"✅ ты проголосовал против {target.username}!", show_alert=True)
+    all_voted = True
+    for p in game.get_alive_players():
+        if not p.has_voted:
+            all_voted = False
+            break
+    
+    if all_voted:
+        await game.finish_voting()
+    
+    await callback.answer(f"✅ голос за {target.username} принят!", show_alert=True)
 
-@dp.callback_query(lambda c: c.data == "bunker_cancel_vote")
-async def bunker_cancel_vote_callback(callback: CallbackQuery):
-    try:
-        await callback.message.delete()
-    except:
-        pass
-    await callback.answer("❌ голосование отменено")
+@dp.callback_query(lambda c: c.data == "vote_skip")
+async def bunker_vote_skip_callback(callback: CallbackQuery):
+    voter_id = callback.from_user.id
+    
+    game = None
+    for g in active_bunker_games.values():
+        if voter_id in g.players:
+            game = g
+            break
+    
+    if not game:
+        await callback.answer("❌ игра не найдена", show_alert=True)
+        return
+    
+    if game.state != GameState.VOTING:
+        await callback.answer("❌ сейчас не время", show_alert=True)
+        return
+    
+    voter = game.players[voter_id]
+    
+    if not voter or not voter.is_alive:
+        await callback.answer("❌ ты не можешь голосовать", show_alert=True)
+        return
+    
+    if voter.has_voted:
+        await callback.answer("❌ ты уже проголосовал", show_alert=True)
+        return
+    
+    voter.has_voted = True
+    
+    await callback.message.edit_text(
+        f"⏭️ ты пропустил голосование\n\n<i>жду остальных...</i>",
+        parse_mode="HTML"
+    )
+    
+    all_voted = True
+    for p in game.get_alive_players():
+        if not p.has_voted:
+            all_voted = False
+            break
+    
+    if all_voted:
+        await game.finish_voting()
+    
+    await callback.answer("✅ пропущено")
 
 # ========== ОБЩИЙ КОЛБЭК ДЛЯ МЕНЮ ==========
 @dp.callback_query()
