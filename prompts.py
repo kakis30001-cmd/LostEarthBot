@@ -182,34 +182,21 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     # Бункер
     if user_message.lower().strip() in ["энди бункер", "енди бункер", "энд бункер"]:
         return "BUNKER_CREATE_GAME"
-    
-    # ========== ПРОВЕРКА НА МАТ (МАКСИМАЛЬНО ПРОСТАЯ) ==========
+        # ========== ПРОВЕРКА НА МАТ (МАКСИМАЛЬНО ТУПАЯ) ==========
     user_lower = user_message.lower()
     
-    # Все матерные слова
-    bad_words = [
-        'нахуй', 'на хую', 'нахуц', 'нах',
-        'заебал', 'заебала', 'заебали',
-        'бля', 'блядь',
-        'хуй', 'хуесос', 'хуя', 'хуё',
-        'пизда', 'пиздец',
-        'сучка', 'сука',
-        'мудак', 'шлюха',
-        'идиот', 'дебил',
-        'лох', 'урод',
-        'тварь', 'чмо',
-        'пидор', 'долбаеб', 'долбоёб',
-        'ебать', 'ёбаный', 'ебаный',
-        'еблан', 'отвали', 'заткнись',
-        'ублюдок', 'выродок'
-    ]
-    
-    is_bad = False
-    for word in bad_words:
-        if word in user_lower:
-            is_bad = True
-            print(f"🔴 Найдено матерное слово: {word} в сообщении от {username}")
-            break
+    # Проверяем только 2 самых частых слова
+    if "нахуй" in user_lower or "хуй" in user_lower:
+        is_bad = True
+        print(f"🔴 Найдено матерное слово: нахуй/хуй в сообщении от {username}")
+    elif "заебал" in user_lower or "заебала" in user_lower:
+        is_bad = True
+        print(f"🔴 Найдено матерное слово: заебал в сообщении от {username}")
+    elif "бля" in user_lower:
+        is_bad = True
+        print(f"🔴 Найдено матерное слово: бля в сообщении от {username}")
+    else:
+        is_bad = False
     
     if is_bad:
         user_insult_counter[username] += 1
