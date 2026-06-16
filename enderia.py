@@ -8,6 +8,7 @@ from collections import defaultdict, deque
 from dotenv import load_dotenv
 
 from database import save_andy_dialog, save_chat_message
+from prompts import get_system_prompt  # <-- БЕРЁМ ПРОМПТ ИЗ prompts.py
 
 load_dotenv()
 
@@ -198,10 +199,8 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     if user_message.lower().strip() in ["энди бункер", "енди бункер", "энд бункер"]:
         return "BUNKER_CREATE_GAME"
     
-    # ========== 2. ПРОВЕРКА НА МАТ (САМАЯ ПЕРВАЯ!) ==========
+    # ========== 2. ПРОВЕРКА НА МАТ ==========
     user_lower = user_message.lower()
-    
-    # Все матерные слова
     if "нахуй" in user_lower or "хуй" in user_lower or "заебал" in user_lower or "бля" in user_lower:
         user_insult_counter[username] += 1
         count = user_insult_counter[username]
@@ -232,7 +231,6 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         await save_andy_dialog(username, user_message, response)
         return response
     
-    # Если не мат - сбрасываем счётчик
     user_insult_counter[username] = 0
     
     # ========== 3. ОСТАЛЬНОЙ КОД ==========
@@ -267,6 +265,8 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         await save_chat_message(username, response, is_bot=True)
         await save_andy_dialog(username, user_message, response)
         return response
+    
+    user_lower = user_message.lower().strip()
     
     # ========== ИНФОРМАЦИЯ О БУНКЕРЕ ==========
     if "как играть" in user_lower and "бункер" in user_lower:
@@ -352,35 +352,22 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         await save_andy_dialog(username, user_message, response)
         return response
     
-    # ========== AI ОТВЕТ ==========
+    # ========== AI ОТВЕТ (БЕРЁТ ПРОМПТ ИЗ prompts.py) ==========
     if OPENROUTER_API_KEY:
         try:
             context = get_user_context(username, limit=25)
+            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             
-            system_prompt = f"""ты энди, девушка-эндермен. Ты помогаешь игрокам на сервере lostearth.
-
-ТВОЙ ХАРАКТЕР:
-- добрая, загадочная, слегка вредная
-- любишь телепортироваться и играть с игроками
-- пишешь с маленькой буквы
-- используешь эмодзи в конце сообщений
-
-ПРАВИЛА ОТВЕТОВ:
-1. Если игрок пишет "нет" на предложение поиграть - не предлагай снова!
-2. Отвечай по существу, не будь назойливой
-3. Используй ласковые обращения: "игрок~", "дружок~", "зайка~"
-
-ИСТОРИЯ ДИАЛОГА:
-{context}
-
-ИНФОРМАЦИЯ О СЕРВЕРЕ:
-- IP: 150.241.85.40:25565
-- Онлайн: {current_online}/{current_max}
-
-СЕЙЧАС:
-Игрок {username} написал: {user_message}
-
-Ответь по-человечески, коротко (1-2 предложения), не повторяй то что уже говорила:"""
+            # БЕРЁМ ПРОМПТ ИЗ ФАЙЛА prompts.py
+            system_prompt = get_system_prompt(
+                username=username,
+                current_time=current_time,
+                online=current_online,
+                max_players=current_max,
+                server_status="онлайн",
+                context=context,
+                user_message=user_message
+            )
             
             async with aiohttp.ClientSession() as session:
                 for model in MODELS_CHAIN:
@@ -400,7 +387,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
                                     {"role": "user", "content": user_message}
                                 ],
                                 "max_tokens": 200,
-                                "temperature": 0.8,
+                                "temperature": 0.85,
                             },
                             timeout=aiohttp.ClientTimeout(total=20)
                         ) as resp:
@@ -433,7 +420,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     # Fallback ответы
     last_bot = get_last_bot_response(username)
     
-    if "кубик" in last_bot or "сыграть" in last_bot:
+    if "кубик" в last_bot or "сыграть" in last_bot:
         response = f"{E_CAT_OK} понял, {username}. Если захочешь сыграть - пиши 'энди кубик 100' {E_HEART}"
     else:
         response = f"{E_CAT_DANCE} {username}, я тут. Что хочешь узнать? Напиши /games для списка команд {E_HEART}"
