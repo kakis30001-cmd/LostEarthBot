@@ -641,7 +641,7 @@ async def bunker_command(message: Message):
         f"{E_MAGIC} <b>игроков:</b> {len(game.players)}/10\n"
         f"{E_HOUSE} <b>создатель:</b> {username}\n\n"
         f"<i>для старта нужно от 5 до 10 игроков!\n"
-        f"каждый получит роль в ЛС и будет раскрывать информацию о себе</i>",
+        f"каждый получит роль в ЛС</i>",
         parse_mode="HTML",
         reply_markup=keyboard
     )
@@ -727,7 +727,7 @@ async def bunker_start_callback(callback: CallbackQuery):
     del bunker_lobbies[chat_id]
     
     await game.start_reveal_phase()
-    await callback.answer("✅ Игра началась! Проверьте ЛС бота!")
+    await callback.answer("✅ Игра началась!")
 
 @dp.callback_query(lambda c: c.data == "bunker_cancel")
 async def bunker_cancel_callback(callback: CallbackQuery):
@@ -757,13 +757,12 @@ async def bunker_cancel_callback(callback: CallbackQuery):
 
 @dp.callback_query(lambda c: c.data and c.data.startswith("reveal_"))
 async def bunker_reveal_callback(callback: CallbackQuery):
+    """Обработка выбора характеристики для раскрытия"""
     user_id = callback.from_user.id
-    key = callback.data.split("_")[1]
+    parts = callback.data.split("_")
+    key = parts[1]
     
-    if key == "locked":
-        await callback.answer("❌ ты уже раскрыл характеристику в этом раунде!", show_alert=True)
-        return
-    
+    # Ищем игру
     game = None
     for g in active_bunker_games.values():
         if user_id in g.players:
@@ -779,86 +778,47 @@ async def bunker_reveal_callback(callback: CallbackQuery):
         return
     
     player = game.players[user_id]
-    
     if not player.is_alive:
         await callback.answer("❌ ты выбыл", show_alert=True)
         return
     
-    if player.has_revealed_this_round:
-        await callback.answer("❌ ты уже раскрыл характеристику в этом раунде!", show_alert=True)
-        return
-    
-    if key in player.revealed:
-        player.revealed.remove(key)
-    else:
-        if player.revealed:
-            old_key = player.revealed[0]
-            player.revealed.remove(old_key)
+    # Сохраняем раскрытую характеристику
+    if key not in player.revealed:
         player.revealed.append(key)
     
-    keyboard = game.get_reveal_keyboard(player)
+    # Получаем значение характеристики
+    char = player.character
+    value = getattr(char, key, None)
     
-    try:
-        await callback.message.edit_reply_markup(reply_markup=keyboard)
-    except Exception as e:
-        print(f"Ошибка обновления: {e}")
-    
-    await callback.answer("✅ выбор сохранён!")
-
-@dp.callback_query(lambda c: c.data == "reveal_done")
-async def bunker_reveal_done_callback(callback: CallbackQuery):
-    user_id = callback.from_user.id
-    
-    game = None
-    for g in active_bunker_games.values():
-        if user_id in g.players:
-            game = g
-            break
-    
-    if not game:
-        await callback.answer("❌ игра не найдена", show_alert=True)
-        return
-    
-    if game.state != GameState.REVEALING:
-        await callback.answer("❌ сейчас не время", show_alert=True)
-        return
-    
-    player = game.players[user_id]
-    
-    if not player.is_alive:
-        await callback.answer("❌ ты выбыл", show_alert=True)
-        return
-    
-    if not player.revealed:
-        await callback.answer("❌ выбери хотя бы одну характеристику!", show_alert=True)
-        return
-    
-    player.has_revealed_this_round = True
-    
-    await callback.message.edit_text(
-        f"{E_CAT_OK} <b>ты готов!</b>\n\n"
-        f"<i>жду остальных игроков...</i>",
+    # Отправляем в чат
+    await bot.send_message(
+        game.chat_id,
+        f"📢 @{player.username} раскрыл: {value}",
         parse_mode="HTML"
     )
     
-    all_ready = True
-    for p in game.get_alive_players():
-        if not p.has_revealed_this_round:
-            all_ready = False
-            break
+    await callback.answer(f"✅ ты раскрыл: {value}", show_alert=True)
     
-    if all_ready:
-        await game.start_voting_phase()
+    # Удаляем сообщение с кнопками у игрока
+    try:
+        await callback.message.delete()
+    except:
+        pass
     
-    await callback.answer("✅ готово!")
+    # Переход к следующему игроку
+    game.reveal_index += 1
+    await game.next_reveal()
 
 # ========== КОЛБЭКИ ДЛЯ ГОЛОСОВАНИЯ ==========
 
 @dp.callback_query(lambda c: c.data and c.data.startswith("vote_"))
 async def bunker_vote_callback(callback: CallbackQuery):
-    target_id = int(callback.data.split("_")[1])
+    """Обработка голоса"""
+    parts = callback.data.split("_")
+    target_id = int(parts[1])
     voter_id = callback.from_user.id
     
+    # Ищем игру
     game = None
     for g in active_bunker_games.values():
         if voter_id in g.players:
@@ -888,6 +848,7 @@ async def bunker_vote_callback(callback: CallbackQuery):
         await callback.answer("❌ ты уже проголосовал", show_alert=True)
         return
     
+    # Засчитываем голос
     target.vote_count += 1
     voter.has_voted = True
     
@@ -896,6 +857,7 @@ async def bunker_vote_callback(callback: CallbackQuery):
         parse_mode="HTML"
     )
     
+    # Проверяем, все ли проголосовали
     all_voted = True
     for p in game.get_alive_players():
         if not p.has_voted:
@@ -909,6 +871,7 @@ async def bunker_vote_callback(callback: CallbackQuery):
 
 @dp.callback_query(lambda c: c.data == "vote_skip")
 async def bunker_vote_skip_callback(callback: CallbackQuery):
+    """Пропуск голосования"""
     voter_id = callback.from_user.id
     
     game = None
