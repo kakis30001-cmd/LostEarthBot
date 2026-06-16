@@ -222,27 +222,38 @@ class BunkerGame:
         asyncio.create_task(self.reveal_timer())
     
     def get_reveal_keyboard(self, player: BunkerPlayer) -> InlineKeyboardMarkup:
-        """Создаёт клавиатуру для выбора раскрытия"""
-        buttons = []
-        options = [
-            ("💼 профессия", "profession"),
-            ("🎯 хобби", "hobby"),
-            ("🎒 багаж", "baggage"),
-            ("⭐ умение", "skill"),
-            ("📌 факт", "fact"),
-            ("🏆 хорош в", "good_at"),
-            ("🏥 здоровье", "health"),
-            ("🧠 психика", "mental_state"),
-        ]
-        
+    """Создаёт клавиатуру для выбора раскрытия (только 1 за раунд)"""
+    buttons = []
+    options = [
+        ("💼 профессия", "profession"),
+        ("🎯 хобби", "hobby"),
+        ("🎒 багаж", "baggage"),
+        ("⭐ умение", "skill"),
+        ("📌 факт", "fact"),
+        ("🏆 хорош в", "good_at"),
+        ("🏥 здоровье", "health"),
+        ("🧠 психика", "mental_state"),
+    ]
+    
+    # Если игрок уже раскрыл что-то в этом раунде - блокируем выбор
+    if player.has_revealed_this_round:
+        # Показываем что уже раскрыто
+        for label, key in options:
+            if key in player.revealed:
+                buttons.append([InlineKeyboardButton(f"✅ {label}", callback_data=f"reveal_{key}")])
+            else:
+                buttons.append([InlineKeyboardButton(f"🔒 {label}", callback_data=f"reveal_locked")])
+        buttons.append([InlineKeyboardButton("✅ ГОТОВО", callback_data="reveal_done")])
+    else:
+        # Можно выбрать только 1
         for label, key in options:
             if key in player.revealed:
                 buttons.append([InlineKeyboardButton(f"✅ {label}", callback_data=f"reveal_{key}")])
             else:
                 buttons.append([InlineKeyboardButton(f"◻️ {label}", callback_data=f"reveal_{key}")])
-        
         buttons.append([InlineKeyboardButton("✅ ГОТОВО", callback_data="reveal_done")])
-        return InlineKeyboardMarkup(inline_keyboard=buttons)
+    
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
     
     async def reveal_timer(self):
         """Таймер 90 секунд на раскрытие"""
