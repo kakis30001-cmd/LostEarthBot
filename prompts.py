@@ -423,7 +423,7 @@ def get_system_prompt(username: str, current_time: str, online: int = 0, max_pla
 
 отвечай кратко, по делу, с маленькой буквы, используй эмодзи. не используй html теги в ответе!"""
 
-# ========== ОСНОВНАЯ ФУНКЦИЯ ==========
+# ========== ОСНОВНАЯ ФУНКЦИЯ (исправленная) ==========
 async def get_enderia_response(user_message: str, username: str, is_reply: bool = False, user_bio: str = "", game_result: str = None) -> str:
     global current_online, current_max
     
@@ -436,11 +436,13 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     can_say_greet = can_greet(username)
     context = get_user_context(username)
     
-    # ========== ПРОВЕРКА НА ОСКОРБЛЕНИЯ ==========
+    # ========== ПРОВЕРКА НА ОСКОРБЛЕНИЯ (сохраняем в памяти) ==========
     if is_insult(user_message):
-        # Увеличиваем счётчик оскорблений
+        # Увеличиваем счётчик оскорблений в памяти (сохраняется между сообщениями)
         user_insult_counter[username] += 1
         count = user_insult_counter[username]
+        
+        print(f"🔥 {username} оскорбил Энди {count} раз")  # Для отладки
         
         if count == 1:
             responses = [
@@ -470,19 +472,25 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
             await save_andy_dialog(username, user_message, response)
             return response
             
-        else:  # 3+ раз
+        else:  # 3+ раз - ПОШЛЁМ НАХУЙ!
             responses = [
                 f"иди нахуй, {username} 🖕",
                 f"заебал уже со своими шутками, {username}",
                 f"пошёл нахуй, клоун",
                 f"отвали, {username}, надоел",
-                f"закрой рот и иди играть"
+                f"закрой рот и иди играть, {username}",
+                f"нахуй иди, {username}, я не терпила",
+                f"чё ты ко мне пристал? иди нахуй 🖕"
             ]
             response = random.choice(responses)
             add_to_memory(username, user_message, response)
             await save_chat_message(username, response, is_bot=True)
             await save_andy_dialog(username, user_message, response)
             return response
+    
+    # Если игрок просто написал "энди" (не оскорблял) - сбрасываем счётчик
+    if is_name_call and not is_insult(user_message):
+        user_insult_counter[username] = 0
     
     # Если просто имя
     if is_name_call and not is_reply:
@@ -492,7 +500,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         await save_andy_dialog(username, user_message, response)
         return response
     
-    # Приветствие (если давно не виделись)
+    # Приветствие
     if is_greeting_msg and can_say_greet and not is_reply:
         mark_greeted(username)
         response = f"{E_CAT_DANCE} привет, {username}! чё надо? {E_HEART}"
@@ -623,7 +631,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
                                     {"role": "system", "content": system_prompt},
                                     {"role": "user", "content": user_message}
                                 ],
-                                "max_tokens": 150,  # Уменьшил для коротких ответов
+                                "max_tokens": 150,
                                 "temperature": 0.9,
                             },
                             timeout=aiohttp.ClientTimeout(total=20)
@@ -643,7 +651,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         except Exception as e:
             print(f"ошибка ии: {e}")
     
-    # Fallback ответы (короткие)
+    # Fallback ответы
     fallbacks = [
         f"чё, {username}? {E_HEART}",
         f"тут я, {username} {E_CAT_DANCE}",
