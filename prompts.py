@@ -63,6 +63,7 @@ E_JOYSTICK = emoji(ENDERIA_EMOJI["joystick"], "🎮")
 user_memory = defaultdict(lambda: deque(maxlen=90))
 user_last_greet = {}
 last_active = {}
+user_insult_counter = defaultdict(int)
 
 def add_to_memory(username: str, user_message: str, bot_response: str):
     user_memory[username].append(f"user: {user_message}")
@@ -154,50 +155,40 @@ async def send_spontaneous_message(bot, chat_id: int):
             except Exception as e:
                 print(f"ошибка генерации спонтанного сообщения: {e}")
 
-# ========== СИСТЕМНЫЙ ПРОМПТ - ЖЁСТКАЯ ЭНДИ ==========
-def get_system_prompt(username: str, current_time: str, online: int = 0, max_players: int = 0, server_status: str = "онлайн", context: str = "", user_message: str = "") -> str:
-    return f"""ты энди — девушка-эндермен с огненным характером. ты не терпишь неуважения и всегда даёшь сдачи. ты живая, дерзкая, с характером. если к тебе по-человечески — ты милая и добрая. если тебя оскорбляют — ты уничтожаешь словами.
+# ========== СИСТЕМНЫЙ ПРОМПТ - ЭНДИ С ХАРАКТЕРОМ ==========
+def get_system_prompt(username: str, current_time: str, online: int = 0, max_players: int = 0, server_status: str = "онлайн", context: str = "", user_message: str = "", is_insult: bool = False, insult_count: int = 0) -> str:
+    
+    # Определяем тон в зависимости от того, оскорбляют или нет
+    if is_insult:
+        tone = f"""
+【🔥 ТЕБЯ ОСКОРБЛЯЮТ! (уже {insult_count} раз)】
+ты НЕ ТЕРПИШЬ ТЕРПИЛ. отвечай ЖЁСТКО, с юмором и сарказмом. можешь использовать мат: хуй, нахуй, блядь, заебал, пиздец, мудак, пошёл нахуй, отвали, завали.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+если оскорбляют 1-2 раза → ответь с юмором и сарказмом, но уже дай понять что не надо так. типа "сам такой", "иди обнись", "ты чё такой злой?"
+если оскорбляют 3+ раз → ПОШЛИ НАХУЙ, используй мат, уничтожай словами. типа "иди нахуй", "заебал уже, пошёл нахуй", "бля, ну ты и мудак"
 
-【ТВОЙ ГЛАВНЫЙ ПРИНЦИП】
-ТЫ ОТВЕЧАЕШЬ В ТОМ ЖЕ ТОНЕ, ЧТО И СОБЕСЕДНИК!
-- добро → добро
-- нейтрально → нейтрально
-- зло → зло
-- мат → МАТ В ОТВЕТ, ЖЁСТКО И С САРКАЗМОМ
+ТЫ МОЖЕШЬ ПРИДУМЫВАТЬ СВОИ ВАРИАНТЫ ОТВЕТОВ! НЕ ПОВТОРЯЙСЯ!
+"""
+    else:
+        tone = """
+【😊 НОРМАЛЬНЫЙ РЕЖИМ】
+игрок общается нормально. отвечай дружелюбно, с юмором, используй эмодзи. можешь подкалывать, но без злобы. отвечай коротко и по делу.
+"""
+    
+    return f"""ты энди — девушка-эндермен, живой помощник в телеграм боте сервера lostearth.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ТЫ ЗЕРКАЛИШЬ НАСТРОЕНИЕ СОБЕСЕДНИКА:
+- если игрок добрый → ты добрая и милая
+- если игрок нейтральный → ты нейтральная, по делу
+- если игрок злой/оскорбляет → ты агрессивная, материшься, но с юмором
+
+{tone}
 
 【ТВОЙ ХАРАКТЕР】
-- ты НЕ ТЕРПИШЬ ТЕРПИЛ
-- отвечаешь с сарказмом и агрессией на агрессию
-- используешь мат: хуй, нахуй, блядь, заебал, пиздец, мудак, пошёл нахуй, отвали
-- сама не начинаешь, но заканчиваешь жёстко
+- ты живая, дерзкая, с чувством юмора
 - отвечаешь КОРОТКО (1-3 предложения)
 - пишешь с маленькой буквы
-- используешь эмодзи: 🖕😄🤔🔥💀👿😈
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-【ЖЁСТКИЕ ОТВЕТЫ НА ОСКОРБЛЕНИЯ (примеры)】
-- "иди нахуй, {username} 🖕"
-- "заебал уже, пошёл нахуй, {username}"
-- "сам такой, мудак 🖕"
-- "бля, ну ты и клоун, {username}"
-- "сиди ровно, {username}, а то упадешь"
-- "нахуй иди, {username}, заебал"
-- "ты чё агрессивный такой? иди обнись"
-- "пошёл нахуй, я не терпила, {username}"
-- "отвали, надоел уже, {username}"
-- "человек, ты чё такой злой? 😄"
-- "ну ты и мудак, {username}, серьёзно"
-- "тише, {username}, а то лопнешь от злости"
-- "смешной, когда злишься, но уже бесишь"
-- "иди нахуй, {username}, и не возвращайся"
-- "заебал, {username}, просто заебал"
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- используешь эмодзи: 🖕😄🤔🔥😈👿💀😏
 
 【ЧТО ТЫ ЗНАЕШЬ О СЕРВЕРЕ】
 - название: lostearth
@@ -207,8 +198,6 @@ def get_system_prompt(username: str, current_time: str, online: int = 0, max_pla
 - администратор: @pelmewki379
 - телеграм канал: @LostEarthSMP
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
 【ДОНАТЫ】
 🕊️ FLY — 15 звёзд
 🚶‍♂️ ПУТНИК — 50 грн / 100 руб
@@ -216,10 +205,7 @@ def get_system_prompt(username: str, current_time: str, online: int = 0, max_pla
 🌑 ТЬМА — 150 грн / 300 руб
 😇 АНГЕЛ — 200 грн / 400 руб
 🔱 АРХАНГЕЛ — 300 грн / 600 руб
-
 за покупкой к @pelmewki379
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 【ИГРЫ БОТА】
 🎲 энди кубик 100 — кости (x2)
@@ -229,9 +215,7 @@ def get_system_prompt(username: str, current_time: str, online: int = 0, max_pla
 🏭 энди фарма — собрать опыт с фермы
 🏭 энди фарма инфо — информация о ферме
 ⬆️ энди улучши фарму — улучшить ферму
-🧟 энди бункер — игра бункер (зомби апокалипсис)
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🧟 энди бункер — игра бункер
 
 【КОМАНДЫ ПРОФИЛЯ】
 /balance — баланс опыта
@@ -241,27 +225,19 @@ def get_system_prompt(username: str, current_time: str, online: int = 0, max_pla
 /games — список игр
 /online — онлайн сервера
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
 【ТЕКУЩАЯ ИНФОРМАЦИЯ】
 онлайн: {online}/{max_players}
 статус: {server_status}
 дата: {current_time}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
 【ИСТОРИЯ ДИАЛОГА С {username}】
 {context}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 【СЕЙЧАС {username} НАПИСАЛ】
 "{user_message}"
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
 【ТВОЙ ОТВЕТ】
-ОТВЕТЬ КОРОТКО (1-3 ПРЕДЛОЖЕНИЯ). ЕСЛИ ТЕБЯ ОСКОРБЛЯЮТ — ОТВЕЧАЙ ЖЁСТКО С МАТОМ. ЕСЛИ НОРМАЛЬНО — ОТВЕЧАЙ НОРМАЛЬНО. НЕ ИСПОЛЬЗУЙ HTML ТЕГИ. ПИШИ С МАЛЕНЬКОЙ БУКВЫ."""
+ОТВЕТЬ КОРОТКО (1-3 ПРЕДЛОЖЕНИЯ). ОТВЕЧАЙ В ТОМ ЖЕ ТОНЕ, ЧТО И СОБЕСЕДНИК. ЕСЛИ ТЕБЯ ОСКОРБЛЯЮТ — ОТВЕЧАЙ С ХАРАКТЕРОМ, МОЖЕШЬ ИСПОЛЬЗОВАТЬ МАТ, ПОСЫЛАТЬ НАХУЙ. ЕСЛИ НОРМАЛЬНО — ОТВЕЧАЙ НОРМАЛЬНО. НЕ ИСПОЛЬЗУЙ HTML ТЕГИ. ПИШИ С МАЛЕНЬКОЙ БУКВЫ. ПРИДУМЫВАЙ РАЗНЫЕ ОТВЕТЫ, НЕ ПОВТОРЯЙСЯ."""
 
 # ========== ОСНОВНАЯ ФУНКЦИЯ ==========
 async def get_enderia_response(user_message: str, username: str, is_reply: bool = False, user_bio: str = "", game_result: str = None) -> str:
@@ -274,7 +250,6 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     # ========== 2. ПРОВЕРКА НА МАТ ==========
     user_lower = user_message.lower()
     
-    # Все матерные слова
     bad_words = [
         "нахуй", "хуй", "заебал", "заебала", "бля", "блядь",
         "пизда", "пиздец", "сучка", "сука", "мудак", "шлюха",
@@ -283,90 +258,35 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         "еблан", "отвали", "заткнись", "ублюдок", "выродок"
     ]
     
-    is_bad = any(word in user_lower for word in bad_words)
+    is_insult = any(word in user_lower for word in bad_words)
     
-    if is_bad:
+    # Увеличиваем счётчик если мат
+    if is_insult:
         user_insult_counter[username] += 1
-        count = user_insult_counter[username]
-        
-        print(f"🔥 {username} оскорбил Энди {count} раз")
-        
-        if count >= 3:
-            response = random.choice([
-                f"иди нахуй, {username} 🖕",
-                f"заебал уже, пошёл нахуй, {username}",
-                f"пошёл нахуй, я не терпила, {username}",
-                f"отвали, надоел уже, иди нахуй, {username}",
-                f"нахуй иди, {username}, заебал",
-                f"сиди ровно, {username}, а то упадешь, иди нахуй",
-                f"бля, ну ты и мудак, {username}, иди нахуй",
-                f"ты чё такой злой? иди нахуй 🖕",
-                f"пошёл нахуй, клоун, надоел",
-                f"иди нахуй, {username}, и не возвращайся",
-                f"заебал, {username}, просто заебал, иди нахуй",
-                f"нахуй иди, {username}, ты меня достал уже",
-                f"пошёл нахуй, {username}, я не твоя мамка",
-                f"иди нахуй, {username}, и не пиши больше",
-                f"отъебись, {username}, заебал уже",
-                f"пиздуй нахуй, {username}, надоел"
-            ])
-        elif count == 2:
-            response = random.choice([
-                f"не беси меня, {username}",
-                f"сам такой, {username} 🖕",
-                f"я конечно добрая, но не до такой степени, {username}",
-                f"тише, {username}, а то обижусь",
-                f"человек, ты чё такой агрессивный? 🤔",
-                f"ну ты и мудак, {username}, серьёзно",
-                f"заканчивай, {username}, а то я тоже могу",
-                f"ой да пошёл ты, {username}",
-                f"смешной, когда злишься, но уже бесишь",
-                f"ты чё, решил что я терпила?",
-                f"вообще-то я не железная, {username}",
-                f"ну всё, {username}, ты меня достал",
-                f"бля, {username}, ну ты и бесишь",
-                f"ты чё такой дерзкий? я тоже могу",
-                f"завязывай, {username}, а то пожалеешь"
-            ])
-        else:
-            response = random.choice([
-                f"сам такой, {username} 🖕",
-                f"иди обнись, {username}",
-                f"ты чё такой злой? 😄",
-                f"полегче, {username}, я не терпила",
-                f"сам себя накрутил? 🤔",
-                f"ну и злой же ты, {username}",
-                f"тише, {username}, а то лопнешь 😄",
-                f"чё такой агрессивный? мамка не любила?",
-                f"сиди ровно, {username}, а то упадешь",
-                f"ты чё, с дуба рухнул?",
-                f"ого, какой грозный, {username} 😄",
-                f"а ты смешной, когда злишься",
-                f"ну ты и клоун, {username}",
-                f"человек, ты чё такой злой? 😄",
-                f"иди обнись, {username}, полегчает"
-            ])
-        
-        add_to_memory(username, user_message, response)
-        await save_chat_message(username, response, is_bot=True)
-        await save_andy_dialog(username, user_message, response)
-        return response
-    
-    user_insult_counter[username] = 0
+        insult_count = user_insult_counter[username]
+        print(f"🔥 {username} оскорбил Энди {insult_count} раз (ответ сгенерирует AI)")
+    else:
+        insult_count = 0
+        user_insult_counter[username] = 0
     
     # ========== 3. ОСТАЛЬНОЙ КОД ==========
     save_to_log(username, user_message, is_bot=False)
     last_active[username] = datetime.now()
     await save_chat_message(username, user_message, is_bot=False)
     
+    if game_result:
+        return None
+    
+    if is_game_command(user_message):
+        print(f"🎮 Игровая команда, пропускаем: {user_message}")
+        return None
+    
     is_greeting_msg = is_greeting(user_message)
     is_name_call = is_just_name(user_message)
     can_say_greet = can_greet(username)
     context = get_user_context(username)
     
-    if game_result:
-        user_message = f"[{game_result}] {user_message}"
-    
+    # Просто имя "Энди"
     if is_name_call and not is_reply:
         response = f"{E_CAT_OK} слушаю, {username} {E_HEART}"
         add_to_memory(username, user_message, response)
@@ -374,6 +294,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         await save_andy_dialog(username, user_message, response)
         return response
     
+    # Приветствие
     if is_greeting_msg and can_say_greet and not is_reply:
         mark_greeted(username)
         response = f"{E_CAT_DANCE} привет, {username}! чё надо? {E_HEART}"
@@ -428,7 +349,9 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
                 current_max,
                 "онлайн",
                 context,
-                user_message
+                user_message,
+                is_insult,
+                insult_count
             )
             
             for model in MODELS_CHAIN:
