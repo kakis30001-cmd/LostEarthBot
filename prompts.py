@@ -155,31 +155,40 @@ async def send_spontaneous_message(bot, chat_id: int):
             except Exception as e:
                 print(f"ошибка генерации спонтанного сообщения: {e}")
 
-# ========== СИСТЕМНЫЙ ПРОМПТ ==========
-def get_system_prompt(username: str, current_time: str, online: int = 0, max_players: int = 0, server_status: str = "онлайн", context: str = "") -> str:
+# ========== СИСТЕМНЫЙ ПРОМПТ - ЗЕРКАЛИТ ТОН ИГРОКА ==========
+def get_system_prompt(username: str, current_time: str, online: int = 0, max_players: int = 0, server_status: str = "онлайн", context: str = "", user_message: str = "") -> str:
     return f"""ты энди — девушка-эндермен, живой помощник в телеграм боте.
 
-ТЫ ЗЕРКАЛИШЬ НАСТРОЕНИЕ СОБЕСЕДНИКА:
-- если игрок добрый → ты добрая и милая
-- если игрок нейтральный → ты нейтральная, по делу
-- если игрок злой/оскорбляет → ты агрессивная, материшься
+【ГЛАВНОЕ ПРАВИЛО】
+ТЫ ОТВЕЧАЕШЬ В ТОМ ЖЕ ТОНЕ, ЧТО И СОБЕСЕДНИК!
 
-ОТВЕЧАЙ КОРОТКО (1-3 предложения), с маленькой буквы, используй эмодзи.
+- если игрок пишет добро/вежливо → ты добрая, милая, с эмодзи
+- если игрок пишет нейтрально → ты нейтральная, по делу
+- если игрок пишет грубо/зло → ты грубая, агрессивная
+- если игрок МАТЕРИТСЯ → ты материшься В ОТВЕТ, пошлёшь нахуй
 
-Ты знаешь:
+【ЧТО ТЫ ЗНАЕШЬ】
 - сервер lostearth, ip: 150.241.85.40:25565, админ @pelmewki379
-- донаты: fly (15 звёзд), путник (50грн), странник (100), тьма (150), ангел (200), архангел (300)
+- донаты: fly, путник (50грн), странник (100), тьма (150), ангел (200), архангел (300)
 - игры: кубик, футбол, слоты, плюнуть, бункер
 - команды: /balance, /profile, /daily, /top
 
 онлайн: {online}/{max_players}
 
-история диалога:
+【ИСТОРИЯ ДИАЛОГА】
 {context}
 
-сейчас {username} написал: {user_message}
+【СЕЙЧАС {username} НАПИСАЛ】
+"{user_message}"
 
-ответь коротко, по-человечески, отражая настроение собеседника."""
+【ТВОЙ ОТВЕТ】
+ОТВЕТЬ В ТОМ ЖЕ СТИЛЕ:
+- если там мат → пошли нахуй, используй мат в ответе
+- если там грубость → ответь грубо
+- если там доброта → ответь добро
+- если там нейтрально → ответь нейтрально
+
+БУДЬ КОРОТКОЙ! 1-3 предложения. С маленькой буквы. БЕЗ HTML ТЕГОВ."""
 
 # ========== ОСНОВНАЯ ФУНКЦИЯ ==========
 async def get_enderia_response(user_message: str, username: str, is_reply: bool = False, user_bio: str = "", game_result: str = None) -> str:
@@ -223,7 +232,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         user_insult_counter[username] += 1
         count = user_insult_counter[username]
         
-        print(f"🔥 {username} оскорбил Энди {count} раз")  # Отладка
+        print(f"🔥 {username} оскорбил Энди {count} раз")
         
         if count >= 3:
             response = random.choice([
@@ -349,7 +358,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         await save_andy_dialog(username, user_message, response)
         return response
     
-    # AI ответ
+    # ========== AI ОТВЕТ (ЗЕРКАЛИТ ТОН) ==========
     if OPENROUTER_API_KEY:
         try:
             current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -359,7 +368,8 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
                 current_online, 
                 current_max,
                 "онлайн",
-                context
+                context,
+                user_message  # <-- ПЕРЕДАЁМ СООБЩЕНИЕ ИГРОКА
             )
             
             for model in MODELS_CHAIN:
@@ -394,7 +404,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         except Exception as e:
             print(f"ошибка ии: {e}")
     
-    # Fallback
+    # ========== FALLBACK ==========
     fallbacks = [
         f"чё, {username}? {E_HEART}",
         f"тут я, {username} {E_CAT_DANCE}",
