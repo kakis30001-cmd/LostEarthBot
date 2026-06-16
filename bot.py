@@ -722,6 +722,11 @@ async def bunker_reveal_callback(callback: CallbackQuery):
     user_id = callback.from_user.id
     key = callback.data.split("_")[1]
     
+    # Если кнопка заблокирована
+    if key == "locked":
+        await callback.answer("❌ ты уже раскрыл характеристику в этом раунде!", show_alert=True)
+        return
+    
     game = None
     for g in active_bunker_games.values():
         if user_id in g.players:
@@ -742,14 +747,23 @@ async def bunker_reveal_callback(callback: CallbackQuery):
         await callback.answer("❌ ты выбыл", show_alert=True)
         return
     
+    # Если уже раскрыл в этом раунде
+    if player.has_revealed_this_round:
+        await callback.answer("❌ ты уже раскрыл характеристику в этом раунде!", show_alert=True)
+        return
+    
+    # Переключаем раскрытие (можно выбрать только 1)
     if key in player.revealed:
+        # Если уже раскрыто - убираем
         player.revealed.remove(key)
     else:
-        if len(player.revealed) >= 3:
-            await callback.answer("❌ можно раскрыть только 3 характеристики!", show_alert=True)
-            return
+        # Если выбрано что-то другое - убираем старое
+        if player.revealed:
+            old_key = player.revealed[0]
+            player.revealed.remove(old_key)
         player.revealed.append(key)
     
+    # Обновляем клавиатуру
     keyboard = game.get_reveal_keyboard(player)
     
     try:
