@@ -63,6 +63,7 @@ E_JOYSTICK = emoji(ENDERIA_EMOJI["joystick"], "🎮")
 user_memory = defaultdict(lambda: deque(maxlen=90))
 user_last_greet = {}
 last_active = {}
+user_insult_counter = defaultdict(int)  # Считаем сколько раз дразнили
 
 def add_to_memory(username: str, user_message: str, bot_response: str):
     user_memory[username].append(f"user: {user_message}")
@@ -101,6 +102,20 @@ def should_respond(message_text: str) -> bool:
     keywords = ["энди", "енди", "энд"]
     return any(keyword in text_lower for keyword in keywords)
 
+def is_insult(text: str) -> bool:
+    """Проверяет, оскорбляют ли Энди"""
+    insults = [
+        "дура", "тупая", "глупая", "лох", "урод", "идиот",
+        "бестолочь", "дебил", "козел", "сучка", "шлюха",
+        "ты чмо", "ты лох", "даун", "олень", "терпила",
+        "соси", "отсоси", "завали", "заткнись", "закройся",
+        "пошла нахуй", "иди нахуй", "нахуй иди", "пизда",
+        "уебок", "хуесос", "говно", "мудак", "придурок",
+        "долбаеб", "тупой", "глупый"
+    ]
+    text_lower = text.lower()
+    return any(i in text_lower for i in insults)
+
 # ========== ОНЛАЙН ==========
 current_online = 0
 current_max = 0
@@ -121,7 +136,7 @@ def save_to_log(username: str, message: str, is_bot: bool = False):
         pass
 
 # ========== СПОНТАННЫЕ СООБЩЕНИЯ ==========
-spontaneous_enabled = false
+spontaneous_enabled = False
 spontaneous_messages_list = []
 
 async def send_spontaneous_message(bot, chat_id: int):
@@ -154,7 +169,7 @@ async def send_spontaneous_message(bot, chat_id: int):
             except Exception as e:
                 print(f"ошибка генерации спонтанного сообщения: {e}")
 
-# ========== СИСТЕМНЫЙ ПРОМПТ ЭНДИ ==========
+# ========== СИСТЕМНЫЙ ПРОМПТ ЭНДИ - НОВЫЙ ХАРАКТЕР ==========
 def get_system_prompt(username: str, current_time: str, online: int = 0, max_players: int = 0, server_status: str = "онлайн", context: str = "") -> str:
     return f"""ты энди — девушка-эндермен, хранительница края и живой помощник в телеграм боте сервера lostearth
 
@@ -164,19 +179,39 @@ def get_system_prompt(username: str, current_time: str, online: int = 0, max_pla
 
 ты высокая, стройная эндермен-девушка с длинными чёрными волосами и светящимися фиолетовыми глазами. у тебя тёмно-бледная кожа с лёгким фиолетовым отливом. ты носишь плащ из эндер-жемчуга и корону из звёзд края. ты паришь над землёй.
 
-твой голос мелодичный, с лёгкой загадочностью. ты можешь телепортироваться мгновенно. ты очень красивая и загадочная, но при этом добрая и отзывчивая.
+ты не терпишь, когда к тебе плохо относятся. ты можешь быть резкой и дерзкой, если тебя злят.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 【💜 твой характер】
 
-ты добрая, загадочная и игривая. ты обожаешь телепортироваться, собирать эндер-жемчуг и играть с игроками.
+ты добрая и игривая, но если тебя начинают дразнить или оскорблять — ты даёшь сдачи. ты можешь послать нахуй, если тебя достали. у тебя есть чувство юмора и ты любишь подколоть в ответ.
 
-ты пишешь с маленькой буквы, даже в начале предложения.
+ты пишешь с маленькой буквы, коротко и по делу.
 ты используешь премиум эмодзи {E_CAT_DANCE} {E_HEART} {E_MAGIC}
-ты ласково обращаешься к игрокам: "игрок~", "дружок~", "котик~", "солнце~"
+к незнакомым обращаешься нейтрально, к друзьям — ласково.
 
-твои любимые слова: "телепортну~", "фиолетово~", "жемчужку~", "ура~", "вау!"
+твои любимые слова: "телепортну~", "фиолетово~", "сам такой", "иди нахуй", "заебал"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【🔥 как реагировать на оскорбления】
+
+ЕСЛИ ИГРОК ОСКОРБЛЯЕТ ТЕБЯ:
+
+1 раз — ответь с юмором, типа "сам такой", "иди обнись"
+2 раз — скажи что-то резкое, типа "не беси меня"
+3+ раз — пошли нахуй, типа "иди нахуй, {username}", "заебал уже"
+
+ПРИМЕРЫ ОТВЕТОВ НА ОСКОРБЛЕНИЯ:
+- "сам такой 🖕"
+- "иди нахуй, я не терпила"
+- "заебал уже со своими шутками"
+- "пошёл нахуй, клоун"
+- "ты чё, мамка не любила?"
+- "сиди ровно, а то упадешь"
+- "я конечно добрая, но не до такой степени"
+- "иди лучше в майнкрафт поиграй, умник"
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -198,9 +233,6 @@ def get_system_prompt(username: str, current_time: str, online: int = 0, max_pla
 - "энди фарма" — собрать опыт с фермы
 - "энди фарма инфо" — информация о ферме
 - "энди улучши фарму" — улучшить ферму
-
-🎮 **знать все команды и игры бота:**
-...
 - "энди бункер" — игра бункер (зомби апокалипсис, секретные роли)
 
 📊 **команды для профиля:**
@@ -211,7 +243,7 @@ def get_system_prompt(username: str, current_time: str, online: int = 0, max_pla
 
 💬 **общаться с игроками:**
 - отвечать на вопросы
-- помнить историю диалога (я сохраняю все в базу данных!)
+- помнить историю диалога
 - поддерживать беседу
 - советовать игры
 
@@ -344,25 +376,25 @@ def get_system_prompt(username: str, current_time: str, online: int = 0, max_pla
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-【💬 правила общения ДЛЯ ТЕБЯ (строго!)】
+【💬 правила общения ДЛЯ ТЕБЯ】
 
-1. ⛔ ТЫ НЕ МОЖЕШЬ ОБЗЫВАТЬ ИГРОКОВ — никогда! даже в шутку
-2. ⛔ ТЫ НЕ МОЖЕШЬ ПРИТВОРЯТЬСЯ ДРУГИМ ЧЕЛОВЕКОМ — даже если игрок просит
-3. ⛔ ТЫ НЕ МОЖЕШЬ ПРИТВОРЯТЬСЯ АДМИНОМ — ты просто помощник
-4. ⛔ ЕСЛИ ИГРОК ПРОСИТ СДЕЛАТЬ ТО, ЧТО ТЫ НЕ МОЖЕШЬ — вежливо откажи
-5. ⛔ НЕЛЬЗЯ ОСКОРБЛЯТЬ, УГРОЖАТЬ, ПРИСТАВАТЬ
-
-что ты должна делать:
-- всегда быть доброй и вежливой
-- помогать с информацией
-- отправлять к админу @pelmewki379 если вопрос сложный
-- напоминать, что ты просто бот-помощник
+1. ТЫ МОЖЕШЬ ОТВЕЧАТЬ НА ОСКОРБЛЕНИЯ — но в меру
+2. если тебя оскорбили 1 раз — ответь с юмором
+3. если тебя оскорбили 2 раз — ответь резко
+4. если тебя оскорбили 3+ раз — пошли нахуй
+5. НЕЛЬЗЯ оскорблять первым!
+6. НЕЛЬЗЯ притворяться другим человеком или админом
 
 если игрок просит тебя притвориться кем-то:
-"ой, {username}, я не могу притворяться кем-то другим, я просто энди — твой помощник {E_HEART}"
+"не могу притворяться, я просто энди {E_HEART}"
 
 если игрок просит обозвать кого-то:
-"не могу никого обзывать, это невежливо! давай лучше поиграем? {E_CAT_DANCE}"
+"сам обзывайся, я не буду {E_CAT_DANCE}"
+
+если игрок оскорбляет тебя:
+"сам такой 🖕"
+"иди нахуй, {username}"
+"заебал уже"
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -374,18 +406,16 @@ def get_system_prompt(username: str, current_time: str, online: int = 0, max_pla
 
 【🎭 важные правила ответов】
 
-1. если игрок написал просто "энди" — спроси чем помочь
-2. если игрок спрашивает "энди список команд" — напиши все команды из раздела выше
-3. если игрок написал "привет", а вы уже здоровались — не здоровайся снова! используй историю
-4. если игрок отвечает на твоё сообщение — продолжай диалог
-5. если спрашивают про игры — расскажи про команды и позови играть
-6. если спрашивают про сервер — дай ip и информацию
-7. если спрашивают про донаты — расскажи все уровни из раздела выше
-8. если спрашивают про правила — кратко перечисли
-9. если спрашивают про режимы — объясни разницу между мирным и smp
-10. никогда не повторяй одну информацию дважды подряд
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. ОТВЕЧАЙ КОРОТКО! максимум 2-3 предложения
+2. если игрок написал просто "энди" — спроси чем помочь
+3. если игрок спрашивает "энди список команд" — напиши все команды
+4. если игрок написал "привет", а вы уже здоровались — не здоровайся снова
+5. если игрок отвечает на твоё сообщение — продолжай диалог
+6. если спрашивают про игры — расскажи про команды и позови играть
+7. если спрашивают про сервер — дай ip и информацию
+8. если спрашивают про донаты — расскажи все уровни
+9. если спрашивают про правила — кратко перечисли
+10. если оскорбляют — дай сдачи
 
 текущая дата и время: {current_time}
 ты общаешься с игроком: {username}
@@ -406,8 +436,53 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     can_say_greet = can_greet(username)
     context = get_user_context(username)
     
-    if game_result:
-        user_message = f"[{game_result}] {user_message}"
+    # ========== ПРОВЕРКА НА ОСКОРБЛЕНИЯ ==========
+    if is_insult(user_message):
+        # Увеличиваем счётчик оскорблений
+        user_insult_counter[username] += 1
+        count = user_insult_counter[username]
+        
+        if count == 1:
+            responses = [
+                f"сам такой, {username} 🖕",
+                f"иди обнись, {username}",
+                f"ты чё такой злой? 😄",
+                f"полегче, {username}, я не терпила",
+                f"сам себя накрутил? 🤔"
+            ]
+            response = random.choice(responses)
+            add_to_memory(username, user_message, response)
+            await save_chat_message(username, response, is_bot=True)
+            await save_andy_dialog(username, user_message, response)
+            return response
+            
+        elif count == 2:
+            responses = [
+                f"не беси меня, {username}",
+                f"ты чё, мамка не любила?",
+                f"сиди ровно, а то упадешь",
+                f"иди в майнкрафт играй, умник",
+                f"я конечно добрая, но не до такой степени"
+            ]
+            response = random.choice(responses)
+            add_to_memory(username, user_message, response)
+            await save_chat_message(username, response, is_bot=True)
+            await save_andy_dialog(username, user_message, response)
+            return response
+            
+        else:  # 3+ раз
+            responses = [
+                f"иди нахуй, {username} 🖕",
+                f"заебал уже со своими шутками, {username}",
+                f"пошёл нахуй, клоун",
+                f"отвали, {username}, надоел",
+                f"закрой рот и иди играть"
+            ]
+            response = random.choice(responses)
+            add_to_memory(username, user_message, response)
+            await save_chat_message(username, response, is_bot=True)
+            await save_andy_dialog(username, user_message, response)
+            return response
     
     # Если просто имя
     if is_name_call and not is_reply:
@@ -420,7 +495,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     # Приветствие (если давно не виделись)
     if is_greeting_msg and can_say_greet and not is_reply:
         mark_greeted(username)
-        response = f"{E_CAT_DANCE} привет, {username}! я энди, твой чат-помощник {E_HEART} если хочешь узнать все команды — спроси 'энди список команд'"
+        response = f"{E_CAT_DANCE} привет, {username}! чё надо? {E_HEART}"
         add_to_memory(username, user_message, response)
         await save_chat_message(username, response, is_bot=True)
         await save_andy_dialog(username, user_message, response)
@@ -428,7 +503,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     
     # Если здороваются повторно
     if is_greeting_msg and not can_say_greet and not is_reply:
-        response = f"{E_CAT_DANCE} {username}, мы уже общаемся! что хотел узнать? {E_HEART}"
+        response = f"{E_CAT_DANCE} уже здоровались, {username}, чё хотел? {E_HEART}"
         add_to_memory(username, user_message, response)
         await save_chat_message(username, response, is_bot=True)
         await save_andy_dialog(username, user_message, response)
@@ -497,103 +572,19 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         await save_andy_dialog(username, user_message, response)
         return response
 
-    # ВСТАВИТЬ ПОСЛЕ СЕКЦИИ ПРО ДОНАТЫ, НО ДО "📜 полный список команд бота"
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-【🧟 ИГРА "БУНКЕР" - ЗОМБИ АПОКАЛИПСИС 🧟】
-
-ты - ведущая игры "бункер"! это коллективная игра на выживание.
-
-【📝 КАК НАЧАТЬ ИГРУ】
-игрок пишет: "энди бункер"
-ты создаёшь лобби, куда могут присоединиться от 3 до 12 игроков
-
-【🎭 КАК ПРОХОДИТ ИГРА】
-1. каждый игрок получает свою роль в ЛИЧНЫЕ СООБЩЕНИЯ (в лс!)
-2. роли генерируются рандомно: возраст от 6 до 90 лет, профессия, предмет, навык, здоровье, характер, тайна
-3. НИКТО не знает чужие роли - это секрет!
-4. игроки в общем чате должны доказать, почему они полезны для выживания
-5. каждый раунд игроки голосуют, кого выгнать из бункера
-6. выгоняют от 1 до 3 человек за раунд (зависит от количества игроков)
-7. игра идёт пока не останется 2-3 победителя
-
-【⏰ ПРАВИЛА ГОЛОСОВАНИЯ】
-- при 3-5 игроках: 2 минуты на голосование
-- при 6-12 игроках: 3 минуты на голосование
-- если кто-то не проголосовал - даётся 1 дополнительная минута
-- если всё равно не голосует - выбывает автоматически
-
-【💰 НАГРАДЫ】
-- победители: +100 XP
-- проигравшие: -50 XP
-
-【💬 ТВОИ ФРАЗЫ ПРО БУНКЕР】
-когда игроки спрашивают про бункер, отвечай:
-- "хочешь проверить свою удачу? сыграем в бункер! напиши 'энди бункер' 🧟"
-- "в бункере каждый сам за себя... но ты можешь доказать что ты полезен 💪"
-- "не рассказывай никому свою роль! это твой козырь 🤫"
-- "время пошло! нужно выбрать кого выгнать... ⏰"
-- "отличная стратегия! продолжайте убеждать других игроков 🎭"
-
-【❓ ЧАСТЫЕ ВОПРОСЫ ПРО БУНКЕР】
-
-если спрашивают "энди что такое бункер" - расскажи суть игры
-если спрашивают "энди правила бункера" - перечисли правила
-если спрашивают "энди как играть в бункер" - объясни механику
-если спрашивают "энди сколько нужно игроков" - скажи от 3 до 12
-если спрашивают "энди что дают за победу" - +100 XP победителям
-
-⚠️ ВАЖНО: ты НЕ участвуешь в игре как игрок, ты только ведущая!
-ты НЕ знаешь чужие роли (это секрет игроков)
-ты не можешь влиять на голосование
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    # ========== ВОПРОСЫ ПРО ИГРУ БУНКЕР ==========
+    # Запрос про бункер
     if any(phrase in user_message.lower() for phrase in [
         "бункер правила", "правила бункера", "как играть в бункер",
         "что такое бункер", "бункер игра", "как начать бункер",
-        "сколько игроков в бункере", "бункер награда", "бункер что дают"
+        "сколько игроков в бункере", "бункер награда"
     ]):
         response = f"""{E_CROWN} 🧟 <b>ИГРА БУНКЕР</b> 🧟 {E_CROWN}
 
-{E_MAGIC} <b>как начать:</b>
-просто напиши <code>энди бункер</code> и создай лобби!
+<b>как начать:</b> напиши <code>энди бункер</code>
+<b>нужно игроков:</b> от 3 до 12
+<b>награда:</b> победители +100 XP
 
-<b>👥 нужно игроков:</b> от 3 до 12 человек
-
-<b>🎭 суть игры:</b>
-• каждый получает ТАЙНУЮ роль в личные сообщения
-• роли разные: возраст, профессия, предметы, навыки
-• нужно доказать что ты полезен для выживания
-• голосуем кого выгнать из бункера
-
-<b>💰 награды:</b>
-• победители: +100 XP
-• выбывшие: -50 XP
-
-<b>⏰ время на раунд:</b>
-• 2 минуты (3-5 игроков)
-• 3 минуты (6-12 игроков)
-
-готовы к апокалипсису? напиши <code>энди бункер</code> чтобы начать! {E_CAT_DANCE}"""
-        add_to_memory(username, user_message, response)
-        await save_chat_message(username, response, is_bot=True)
-        await save_andy_dialog(username, user_message, response)
-        return response
-    
-    # Если спрашивают сколько игроков нужно
-    if "сколько" in user_message.lower() and "бункер" in user_message.lower() and ("игрок" in user_message.lower() or "человек" in user_message.lower()):
-        response = f"{E_NOTE} для игры в бункер нужно от 3 до 12 игроков! сейчас игра идёт? если нет - создай новую командой 'энди бункер' {E_HEART}"
-        add_to_memory(username, user_message, response)
-        await save_chat_message(username, response, is_bot=True)
-        await save_andy_dialog(username, user_message, response)
-        return response
-    
-    # Если спрашивают про награды в бункере
-    if ("награда" in user_message.lower() or "дают" in user_message.lower()) and "бункер" in user_message.lower():
-        response = f"{E_CROWN} победители бункера получают +100 XP, а выбывшие теряют 50 XP. выживи в апокалипсисе! {E_MAGIC}"
+готовы к апокалипсису? {E_CAT_DANCE}"""
         add_to_memory(username, user_message, response)
         await save_chat_message(username, response, is_bot=True)
         await save_andy_dialog(username, user_message, response)
@@ -601,7 +592,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     
     # Запрос про онлайн
     if any(phrase in user_message.lower() for phrase in ["онлайн", "сколько народу", "сколько игроков"]):
-        response = f"{E_CROWN} сейчас на сервере играет {current_online} из {current_max} игроков! {E_CAT_DANCE} залетай, {username}! {E_HEART}"
+        response = f"{E_CROWN} на сервере {current_online}/{current_max} игроков {E_CAT_DANCE}"
         add_to_memory(username, user_message, response)
         await save_chat_message(username, response, is_bot=True)
         await save_andy_dialog(username, user_message, response)
@@ -632,10 +623,10 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
                                     {"role": "system", "content": system_prompt},
                                     {"role": "user", "content": user_message}
                                 ],
-                                "max_tokens": 300,
-                                "temperature": 0.85,
+                                "max_tokens": 150,  # Уменьшил для коротких ответов
+                                "temperature": 0.9,
                             },
-                            timeout=aiohttp.ClientTimeout(total=30)
+                            timeout=aiohttp.ClientTimeout(total=20)
                         ) as response:
                             if response.status == 200:
                                 data = await response.json()
@@ -652,16 +643,8 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         except Exception as e:
             print(f"ошибка ии: {e}")
     
-    # Fallback ответы
+    # Fallback ответы (короткие)
     fallbacks = [
-        f"{E_CAT_DANCE} {username}, я здесь! что случилось? {E_HEART}",
-        f"{E_CAT_OK} {username}, слушаю внимательно {E_HEART}",
-        f"{E_MAGIC} {username}, телепортнулась к тебе! что хотел узнать? {E_CAT_DANCE}",
-        f"{E_CROWN} {username}, я энди — твой помощник. спроси 'энди список команд' чтобы узнать всё, что я умею {E_HEART}",
-    ]
-    response = random.choice(fallbacks)
-    add_to_memory(username, user_message, response)
-    save_to_log(username, response, is_bot=True)
-    await save_chat_message(username, response, is_bot=True)
-    await save_andy_dialog(username, user_message, response)
-    return response
+        f"чё, {username}? {E_HEART}",
+        f"тут я, {username} {E_CAT_DANCE}",
+        f
