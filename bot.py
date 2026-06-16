@@ -118,6 +118,15 @@ def serve_apply():
 def serve_apply_html():
     return send_from_directory('static', 'apply.html')
 
+# ========== ДОБАВЛЯЕМ DONATE ==========
+@app.route('/donate')
+def serve_donate():
+    return send_from_directory('static', 'donate.html')
+
+@app.route('/donate.html')
+def serve_donate_html():
+    return send_from_directory('static', 'donate.html')
+
 def run_flask():
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port, debug=False)
