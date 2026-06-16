@@ -157,6 +157,55 @@ def is_donate_request(text: str) -> bool:
     ]
     return any(keyword in text_lower for keyword in donate_keywords)
 
+# ========== ЖЁСТКИЕ ОТВЕТЫ НА МАТ ==========
+INSULT_RESPONSES_1 = [
+    "сам такой, {username} 🖕",
+    "иди обнись, {username}",
+    "ты чё такой злой? 😄",
+    "полегче, {username}, я не терпила",
+    "сам себя накрутил? 🤔",
+    "ну и злой же ты, {username}",
+    "тише, {username}, а то лопнешь 😄",
+    "чё такой агрессивный? мамка не любила?",
+    "сиди ровно, {username}, а то упадешь",
+    "ты чё, с дуба рухнул?",
+    "ого, какой грозный, {username} 😄",
+    "а ты смешной, когда злишься",
+    "ну ты и клоун, {username}"
+]
+
+INSULT_RESPONSES_2 = [
+    "не беси меня, {username}",
+    "сам такой, {username} 🖕",
+    "я конечно добрая, но не до такой степени, {username}",
+    "тише, {username}, а то обижусь",
+    "человек, ты чё такой агрессивный? 🤔",
+    "ну ты и мудак, {username}, серьёзно",
+    "заканчивай, {username}, а то я тоже могу",
+    "ой да пошёл ты, {username}",
+    "смешной, когда злишься, но уже бесишь",
+    "ты чё, решил что я терпила?",
+    "вообще-то я не железная, {username}",
+    "ну всё, {username}, ты меня достал"
+]
+
+INSULT_RESPONSES_3 = [
+    "иди нахуй, {username} 🖕",
+    "заебал уже, пошёл нахуй, {username}",
+    "пошёл нахуй, я не терпила, {username}",
+    "отвали, надоел уже, иди нахуй, {username}",
+    "нахуй иди, {username}, заебал",
+    "сиди ровно, {username}, а то упадешь, иди нахуй",
+    "бля, ну ты и мудак, {username}, иди нахуй",
+    "ты чё такой злой? иди нахуй 🖕",
+    "пошёл нахуй, клоун, надоел",
+    "иди нахуй, {username}, и не возвращайся",
+    "заебал, {username}, просто заебал, иди нахуй",
+    "нахуй иди, {username}, ты меня достал уже",
+    "пошёл нахуй, {username}, я не твоя мамка",
+    "иди нахуй, {username}, и не пиши больше"
+]
+
 # ========== ОНЛАЙН ==========
 current_online = 0
 current_max = 0
@@ -199,32 +248,32 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     if user_message.lower().strip() in ["энди бункер", "енди бункер", "энд бункер"]:
         return "BUNKER_CREATE_GAME"
     
-    # ========== 2. ПРОВЕРКА НА МАТ ==========
+    # ========== 2. ЖЁСТКАЯ ПРОВЕРКА НА МАТ ==========
     user_lower = user_message.lower()
-    if "нахуй" in user_lower or "хуй" in user_lower or "заебал" in user_lower or "бля" in user_lower:
+    
+    # Все матерные слова
+    bad_words = [
+        "нахуй", "хуй", "заебал", "заебала", "бля", "блядь",
+        "пизда", "пиздец", "сучка", "сука", "мудак", "шлюха",
+        "идиот", "дебил", "лох", "урод", "тварь", "чмо",
+        "пидор", "долбаеб", "долбоёб", "ебать", "ёбаный",
+        "еблан", "отвали", "заткнись", "ублюдок", "выродок"
+    ]
+    
+    is_bad = any(word in user_lower for word in bad_words)
+    
+    if is_bad:
         user_insult_counter[username] += 1
         count = user_insult_counter[username]
         
         print(f"🔥 {username} оскорбил Энди {count} раз")
         
         if count >= 3:
-            response = random.choice([
-                f"иди нахуй, {username} 🖕",
-                f"заебал уже, пошёл нахуй, {username}",
-                f"пошёл нахуй, я не терпила",
-                f"отвали, надоел уже, иди нахуй"
-            ])
+            response = random.choice(INSULT_RESPONSES_3).format(username=username)
         elif count == 2:
-            response = random.choice([
-                f"не беси меня, {username}",
-                f"сам такой, {username} 🖕"
-            ])
+            response = random.choice(INSULT_RESPONSES_2).format(username=username)
         else:
-            response = random.choice([
-                f"сам такой, {username} 🖕",
-                f"иди обнись, {username}",
-                f"ты чё такой злой? 😄"
-            ])
+            response = random.choice(INSULT_RESPONSES_1).format(username=username)
         
         add_to_memory(username, user_message, response)
         await save_chat_message(username, response, is_bot=True)
