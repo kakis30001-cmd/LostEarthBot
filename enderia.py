@@ -157,54 +157,17 @@ def is_donate_request(text: str) -> bool:
     ]
     return any(keyword in text_lower for keyword in donate_keywords)
 
-# ========== ЖЁСТКИЕ ОТВЕТЫ НА МАТ ==========
-INSULT_RESPONSES_1 = [
-    "сам такой, {username} 🖕",
-    "иди обнись, {username}",
-    "ты чё такой злой? 😄",
-    "полегче, {username}, я не терпила",
-    "сам себя накрутил? 🤔",
-    "ну и злой же ты, {username}",
-    "тише, {username}, а то лопнешь 😄",
-    "чё такой агрессивный? мамка не любила?",
-    "сиди ровно, {username}, а то упадешь",
-    "ты чё, с дуба рухнул?",
-    "ого, какой грозный, {username} 😄",
-    "а ты смешной, когда злишься",
-    "ну ты и клоун, {username}"
-]
-
-INSULT_RESPONSES_2 = [
-    "не беси меня, {username}",
-    "сам такой, {username} 🖕",
-    "я конечно добрая, но не до такой степени, {username}",
-    "тише, {username}, а то обижусь",
-    "человек, ты чё такой агрессивный? 🤔",
-    "ну ты и мудак, {username}, серьёзно",
-    "заканчивай, {username}, а то я тоже могу",
-    "ой да пошёл ты, {username}",
-    "смешной, когда злишься, но уже бесишь",
-    "ты чё, решил что я терпила?",
-    "вообще-то я не железная, {username}",
-    "ну всё, {username}, ты меня достал"
-]
-
-INSULT_RESPONSES_3 = [
-    "иди нахуй, {username} 🖕",
-    "заебал уже, пошёл нахуй, {username}",
-    "пошёл нахуй, я не терпила, {username}",
-    "отвали, надоел уже, иди нахуй, {username}",
-    "нахуй иди, {username}, заебал",
-    "сиди ровно, {username}, а то упадешь, иди нахуй",
-    "бля, ну ты и мудак, {username}, иди нахуй",
-    "ты чё такой злой? иди нахуй 🖕",
-    "пошёл нахуй, клоун, надоел",
-    "иди нахуй, {username}, и не возвращайся",
-    "заебал, {username}, просто заебал, иди нахуй",
-    "нахуй иди, {username}, ты меня достал уже",
-    "пошёл нахуй, {username}, я не твоя мамка",
-    "иди нахуй, {username}, и не пиши больше"
-]
+def is_insult(text: str) -> bool:
+    """Проверяет, оскорбляют ли Энди"""
+    text_lower = text.lower()
+    bad_words = [
+        "нахуй", "хуй", "заебал", "заебала", "бля", "блядь",
+        "пизда", "пиздец", "сучка", "сука", "мудак", "шлюха",
+        "идиот", "дебил", "лох", "урод", "тварь", "чмо",
+        "пидор", "долбаеб", "долбоёб", "ебать", "ёбаный",
+        "еблан", "отвали", "заткнись", "ублюдок", "выродок"
+    ]
+    return any(word in text_lower for word in bad_words)
 
 # ========== ОНЛАЙН ==========
 current_online = 0
@@ -248,39 +211,16 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     if user_message.lower().strip() in ["энди бункер", "енди бункер", "энд бункер"]:
         return "BUNKER_CREATE_GAME"
     
-    # ========== 2. ЖЁСТКАЯ ПРОВЕРКА НА МАТ ==========
-    user_lower = user_message.lower()
+    # ========== 2. ПРОВЕРКА НА МАТ (только для счётчика и флага) ==========
+    is_insult_msg = is_insult(user_message)
     
-    # Все матерные слова
-    bad_words = [
-        "нахуй", "хуй", "заебал", "заебала", "бля", "блядь",
-        "пизда", "пиздец", "сучка", "сука", "мудак", "шлюха",
-        "идиот", "дебил", "лох", "урод", "тварь", "чмо",
-        "пидор", "долбаеб", "долбоёб", "ебать", "ёбаный",
-        "еблан", "отвали", "заткнись", "ублюдок", "выродок"
-    ]
-    
-    is_bad = any(word in user_lower for word in bad_words)
-    
-    if is_bad:
+    if is_insult_msg:
         user_insult_counter[username] += 1
-        count = user_insult_counter[username]
-        
-        print(f"🔥 {username} оскорбил Энди {count} раз")
-        
-        if count >= 3:
-            response = random.choice(INSULT_RESPONSES_3).format(username=username)
-        elif count == 2:
-            response = random.choice(INSULT_RESPONSES_2).format(username=username)
-        else:
-            response = random.choice(INSULT_RESPONSES_1).format(username=username)
-        
-        add_to_memory(username, user_message, response)
-        await save_chat_message(username, response, is_bot=True)
-        await save_andy_dialog(username, user_message, response)
-        return response
-    
-    user_insult_counter[username] = 0
+        insult_count = user_insult_counter[username]
+        print(f"🔥 {username} оскорбил Энди {insult_count} раз (ответ сгенерирует AI)")
+    else:
+        insult_count = 0
+        user_insult_counter[username] = 0
     
     # ========== 3. ОСТАЛЬНОЙ КОД ==========
     save_to_log(username, user_message, is_bot=False)
@@ -297,6 +237,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     is_greeting_msg = is_greeting(user_message)
     is_name_call = is_just_name_call(user_message)
     can_say_greet = can_greet(username)
+    context = get_user_context(username, limit=25)
     
     # Просто имя "Энди"
     if is_name_call and not is_reply:
@@ -401,7 +342,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         await save_andy_dialog(username, user_message, response)
         return response
     
-    # ========== AI ОТВЕТ ==========
+    # ========== AI ОТВЕТ (ГЕНЕРИРУЕТ ВСЁ, ВКЛЮЧАЯ МАТЫ) ==========
     if OPENROUTER_API_KEY:
         try:
             context = get_user_context(username, limit=25)
@@ -414,7 +355,9 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
                 max_players=current_max,
                 server_status="онлайн",
                 context=context,
-                user_message=user_message
+                user_message=user_message,
+                is_insult=is_insult_msg,
+                insult_count=insult_count
             )
             
             async with aiohttp.ClientSession() as session:
@@ -435,7 +378,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
                                     {"role": "user", "content": user_message}
                                 ],
                                 "max_tokens": 200,
-                                "temperature": 0.85,
+                                "temperature": 0.9,
                             },
                             timeout=aiohttp.ClientTimeout(total=20)
                         ) as resp:
