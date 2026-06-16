@@ -24,7 +24,6 @@ class BunkerCharacter:
     mental_state: str
     
     def get_full_description(self) -> str:
-        """Полное описание для ЛС"""
         return f"""
 🎭 <b>ТВОЙ ПЕРСОНАЖ В БУНКЕРЕ</b> 🎭
 
@@ -42,11 +41,9 @@ class BunkerCharacter:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ⚠️ <b>ЭТО ТОЛЬКО ДЛЯ ТЕБЯ!</b>
-💡 <i>ты будешь выбирать, что раскрыть другим</i>
 """
     
     def get_public_info(self, revealed: List[str]) -> str:
-        """Публичная информация (только то, что раскрыто)"""
         info = []
         if "profession" in revealed:
             info.append(f"💼 профессия: {self.profession}")
@@ -99,15 +96,11 @@ class BunkerGame:
         self.players: Dict[int, BunkerPlayer] = {}
         self.state = GameState.WAITING
         self.current_round = 0
-        self.voting_start_time = None
-        self.discussion_start_time = None
+        self.reveal_index = 0  # Индекс текущего игрока на раскрытие
         self.lobby_message_id = None
-        self.reveal_messages: Dict[int, int] = {}
         self.pinned_message_id = None
-        self.game_started = False
         
     def generate_random_character(self) -> BunkerCharacter:
-        """Генерирует персонажа"""
         age = random.randint(16, 65)
         genders = ["мужчина", "женщина"]
         gender = random.choice(genders)
@@ -115,47 +108,24 @@ class BunkerGame:
         professions = [
             "врач", "военный", "инженер", "повар", "фермер", "механик",
             "электрик", "строитель", "охотник", "рыбак", "химик", "программист",
-            "учитель", "сантехник", "пожарный", "полицейский", "адвокат",
-            "сексолог", "массажист", "психолог", "тату-мастер"
+            "учитель", "сантехник", "пожарный", "полицейский", "адвокат"
         ]
         profession = random.choice(professions)
         
-        hobbies = [
-            "чтение книг", "игра на гитаре", "рисование", "садоводство",
-            "рыбалка", "охота", "готовка", "медитация", "спорт"
-        ]
+        hobbies = ["чтение", "гитара", "рисование", "садоводство", "рыбалка", "охота", "готовка", "спорт"]
         hobby = random.choice(hobbies)
         
-        # Багаж с редкими предметами
-        normal_items = [
-            "рюкзак с едой", "аптечка", "набор инструментов", "оружие",
-            "книги", "семена", "вода", "тёплая одежда", "спальный мешок",
-            "фонарик", "верёвка", "котелок", "спички", "компас"
-        ]
-        rare_items = [
-            "резиновая баба", "дилдо", "секс-кукла", "вибратор",
-            "порножурнал", "засушенный член", "пачка прокладок"
-        ]
+        normal_items = ["рюкзак с едой", "аптечка", "набор инструментов", "оружие", "книги", "семена", "вода"]
+        rare_items = ["резиновая баба", "дилдо", "секс-кукла", "вибратор", "порножурнал"]
         baggage = random.choice(rare_items) if random.random() < 0.15 else random.choice(normal_items)
         
-        skills = [
-            "отличный стрелок", "умеет делать операции", "готовит из ничего",
-            "видит в темноте", "чувствует ложь", "вскрывает замки",
-            "знает языки", "быстро бегает", "умеет соблазнять"
-        ]
+        skills = ["отличный стрелок", "делает операции", "готовит из ничего", "видит в темноте", "чувствует ложь", "вскрывает замки", "знает языки"]
         skill = random.choice(skills)
         
-        facts = [
-            "был в армии", "работал в морге", "жил в лесу 5 лет",
-            "победил в соревнованиях", "спас человека", "был в опасной экспедиции",
-            "работал в секс-шопе", "снимался в порно"
-        ]
+        facts = ["был в армии", "работал в морге", "жил в лесу 5 лет", "победил в соревнованиях", "спас человека"]
         fact = random.choice(facts)
         
-        good_at = [
-            "в экстремальных ситуациях", "в общении с людьми", "в планировании",
-            "в импровизации", "в психологии", "в выживании", "в постели"
-        ]
+        good_at = ["в экстремальных ситуациях", "в общении с людьми", "в планировании", "в импровизации", "в психологии"]
         good_at = random.choice(good_at)
         
         healths = ["отличное", "хорошее", "среднее", "слабое", "хронические проблемы"]
@@ -172,16 +142,10 @@ class BunkerGame:
         )
     
     def generate_random_cards(self) -> List[str]:
-        """Генерирует 1 случайную карточку"""
-        cards = [
-            "🔄 заменить профессию", "🔄 заменить здоровье", "🔄 заменить умение",
-            "🔄 заменить психику", "🔄 заменить хобби", "🔄 заменить багаж",
-            "🔄 заменить возраст", "🔄 заменить факт"
-        ]
+        cards = ["заменить профессию", "заменить здоровье", "заменить умение", "заменить психику"]
         return [random.choice(cards)]
     
     async def generate_all_characters(self):
-        """Отправляет роли в ЛС каждому игроку"""
         from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
         
         for player in self.players.values():
@@ -196,7 +160,7 @@ class BunkerGame:
             try:
                 await self.bot.send_message(
                     player.user_id,
-                    player.character.get_full_description() + f"\n\n🎴 <b>твоя карточка:</b> {player.cards[0]}\n\n👇 <b>нажми на кнопку чтобы перейти в бота и начать игру</b>",
+                    player.character.get_full_description() + f"\n\n🎴 <b>твоя карточка:</b> {player.cards[0]}",
                     parse_mode="HTML",
                     reply_markup=keyboard
                 )
@@ -204,68 +168,47 @@ class BunkerGame:
                 print(f"Не удалось отправить в ЛС {player.username}: {e}")
         
         self.state = GameState.CHARACTERS_GENERATED
-        self.game_started = True
-        
-        await self.send_pinned_message()
-    
-    async def send_pinned_message(self):
-        """Отправляет закреплённое сообщение"""
-        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-        
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🎮 ПЕРЕЙТИ В БОТА", url="https://t.me/lostearth_bot?start=bunker")]
-        ])
-        
-        msg = await self.bot.send_message(
-            self.chat_id,
-            f"{E_CROWN} 🧟 <b>ИГРА БУНКЕР НАЧАЛАСЬ!</b> 🧟 {E_CROWN}\n\n"
-            f"{E_MAGIC} <b>всем игрокам отправлены роли в ЛС!</b>\n\n"
-            f"📌 <b>как играть:</b>\n"
-            f"1️⃣ перейди в бота по кнопке ниже\n"
-            f"2️⃣ выбери 1 характеристику для раскрытия\n"
-            f"3️⃣ жди остальных игроков (90 секунд)\n"
-            f"4️⃣ после раскрытия всех - голосование\n\n"
-            f"<i>в каждом раунде раскрывается 1 новая характеристика!</i>\n"
-            f"<i>останутся 3 победителя!</i>",
-            parse_mode="HTML",
-            reply_markup=keyboard
-        )
-        
-        try:
-            await self.bot.pin_chat_message(self.chat_id, msg.message_id)
-            self.pinned_message_id = msg.message_id
-        except Exception as e:
-            print(f"Не удалось закрепить сообщение: {e}")
     
     async def start_reveal_phase(self):
-        """Начинает фазу раскрытия информации"""
-        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-        
+        """Начинает поочерёдное раскрытие характеристик"""
         self.state = GameState.REVEALING
+        self.reveal_index = 0
         
-        for player in self.get_alive_players():
-            player.has_revealed_this_round = False
+        # Получаем живых игроков в случайном порядке
+        alive = self.get_alive_players()
+        random.shuffle(alive)
         
-        for player in self.players.values():
-            if not player.is_alive:
-                continue
-            
-            keyboard = self.get_reveal_keyboard(player)
-            
-            await self.bot.send_message(
-                player.user_id,
-                f"{E_MAGIC} <b>раунд {self.current_round + 1}</b> {E_MAGIC}\n\n"
-                f"<b>выбери 1 характеристику для раскрытия:</b>\n\n"
-                f"<i>выбери и нажми 'ГОТОВО' чтобы подтвердить</i>\n"
-                f"<i>у тебя 90 секунд!</i>",
-                parse_mode="HTML",
-                reply_markup=keyboard
-            )
+        if not alive:
+            return
         
-        asyncio.create_task(self.reveal_timer())
+        # Начинаем с первого
+        await self.next_reveal()
     
-    def get_reveal_keyboard(self, player: BunkerPlayer):
-        """Создаёт клавиатуру для выбора раскрытия (только 1 за раунд)"""
+    async def next_reveal(self):
+        """Переход к следующему игроку для раскрытия"""
+        alive = self.get_alive_players()
+        
+        if self.reveal_index >= len(alive):
+            # Все раскрыли - переходим к голосованию
+            await self.start_voting_phase()
+            return
+        
+        player = alive[self.reveal_index]
+        
+        # Отправляем уведомление в чат
+        await self.bot.send_message(
+            self.chat_id,
+            f"{E_MAGIC} @{player.username}, твой ход! Перейди в бота и выбери что раскрыть {E_HEART}",
+            parse_mode="HTML"
+        )
+        
+        # Отправляем игроку кнопки в ЛС
+        await self.send_reveal_menu(player)
+        
+        # Запускаем таймер на 90 секунд
+        asyncio.create_task(self.reveal_timer(player))
+    
+    async def send_reveal_menu(self, player: BunkerPlayer):
         from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
         
         buttons = []
@@ -280,34 +223,62 @@ class BunkerGame:
             ("🧠 психика", "mental_state"),
         ]
         
-        if player.has_revealed_this_round:
-            for label, key in options:
-                if key in player.revealed:
-                    buttons.append([InlineKeyboardButton(f"✅ {label}", callback_data=f"reveal_{key}")])
-                else:
-                    buttons.append([InlineKeyboardButton(f"🔒 {label}", callback_data="reveal_locked")])
-            buttons.append([InlineKeyboardButton("✅ ГОТОВО", callback_data="reveal_done")])
-        else:
-            for label, key in options:
-                if key in player.revealed:
-                    buttons.append([InlineKeyboardButton(f"✅ {label}", callback_data=f"reveal_{key}")])
-                else:
-                    buttons.append([InlineKeyboardButton(f"◻️ {label}", callback_data=f"reveal_{key}")])
-            buttons.append([InlineKeyboardButton("✅ ГОТОВО", callback_data="reveal_done")])
+        for label, key in options:
+            buttons.append([InlineKeyboardButton(label, callback_data=f"reveal_{key}_{player.user_id}")])
         
-        return InlineKeyboardMarkup(inline_keyboard=buttons)
+        keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+        
+        await self.bot.send_message(
+            player.user_id,
+            f"{E_MAGIC} <b>выбери что раскрыть о себе!</b>\n\n"
+            f"<i>у тебя 90 секунд!</i>",
+            parse_mode="HTML",
+            reply_markup=keyboard
+        )
     
-    async def reveal_timer(self):
+    async def reveal_timer(self, player: BunkerPlayer):
         """Таймер 90 секунд на раскрытие"""
         await asyncio.sleep(90)
         
-        if self.state == GameState.REVEALING:
+        if self.state != GameState.REVEALING:
+            return
+        
+        # Проверяем, раскрыл ли игрок что-то
+        if not player.revealed:
+            # Если не раскрыл - пропускаем
             await self.bot.send_message(
                 self.chat_id,
-                f"{E_CAT_SURPRISED} <b>ВРЕМЯ НА РАСКРЫТИЕ ЗАКОНЧИЛОСЬ!</b>\n\nначинаем голосование!",
+                f"{E_CAT_SURPRISED} @{player.username} не успел раскрыть характеристику! Пропускаем.",
                 parse_mode="HTML"
             )
-            await self.start_voting_phase()
+        
+        # Переход к следующему
+        self.reveal_index += 1
+        await self.next_reveal()
+    
+    async def process_reveal(self, user_id: int, key: str):
+        """Обрабатывает выбор характеристики для раскрытия"""
+        player = self.players.get(user_id)
+        if not player or not player.is_alive:
+            return
+        
+        if key not in player.revealed:
+            player.revealed.append(key)
+        
+        # Отправляем сообщение в чат
+        char = player.character
+        value = getattr(char, key, None)
+        
+        if value:
+            await self.bot.send_message(
+                self.chat_id,
+                f"📢 @{player.username} раскрыл: {value}",
+                parse_mode="HTML"
+            )
+        
+        # Переход к следующему игроку
+        self.reveal_index += 1
+        await self.next_reveal()
     
     async def start_voting_phase(self):
         """Начинает фазу голосования"""
@@ -328,10 +299,10 @@ class BunkerGame:
         for player in alive_players:
             await self.send_vote_menu(player)
         
+        # Запускаем таймер голосования
         asyncio.create_task(self.voting_timer())
     
     async def send_vote_menu(self, voter: BunkerPlayer):
-        """Отправляет меню голосования в ЛС"""
         from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
         
         alive_others = [p for p in self.get_alive_players() if p.user_id != voter.user_id]
@@ -342,10 +313,9 @@ class BunkerGame:
         
         buttons = []
         for target in alive_others:
-            # Показываем информацию о каждом игроке
             info = target.character.get_public_info(target.revealed)
-            label = f"❌ {target.username}\n{info}"
-            buttons.append([InlineKeyboardButton(label[:50], callback_data=f"vote_{target.user_id}")])
+            label = f"❌ {target.username}"
+            buttons.append([InlineKeyboardButton(label, callback_data=f"vote_{target.user_id}_{voter.user_id}")])
         
         buttons.append([InlineKeyboardButton("⏭️ ПРОПУСТИТЬ", callback_data="vote_skip")])
         
@@ -354,8 +324,8 @@ class BunkerGame:
         await self.bot.send_message(
             voter.user_id,
             f"{E_CROWN} <b>ГОЛОСОВАНИЕ!</b> {E_CROWN}\n\n"
-            f"<b>выбери кого выгнать из бункера:</b>\n\n"
-            f"<i>внимательно изучи информацию о других</i>",
+            f"выбери кого выгнать из бункера:\n\n"
+            f"<i>информация о других:</i>",
             parse_mode="HTML",
             reply_markup=keyboard
         )
@@ -368,13 +338,11 @@ class BunkerGame:
             await self.finish_voting()
     
     async def finish_voting(self):
-        """Завершает голосование и выгоняет игроков"""
         alive_players = self.get_alive_players()
         
         if not alive_players:
             return
         
-        # Сортируем по голосам
         alive_players.sort(key=lambda x: x.vote_count, reverse=True)
         to_eliminate = self.get_players_to_eliminate()
         eliminated = alive_players[:to_eliminate]
@@ -396,13 +364,24 @@ class BunkerGame:
             await self.start_reveal_phase()
     
     async def finish_game(self):
-        """Завершает игру с концовкой"""
         survivors = self.get_alive_players()
         
-        ending = await self.generate_ending(survivors)
+        endings = []
+        for player in survivors:
+            health = player.character.health
+            mental = player.character.mental_state
+            
+            if health in ["отличное", "хорошее"] and mental == "стабильная":
+                endings.append(f"👤 {player.username} - выжил и стал лидером! 💪")
+            elif health in ["слабое", "хронические проблемы"]:
+                endings.append(f"👤 {player.username} - выжил, но здоровье подвело... 🏥")
+            elif mental in ["депрессивная", "параноидальная"]:
+                endings.append(f"👤 {player.username} - выжил, но психика сломана... 🧠")
+            else:
+                endings.append(f"👤 {player.username} - выжил, несмотря ни на что! 🔥")
         
         result_text = f"{E_CROWN} 🧟 <b>ИГРА ЗАКОНЧЕНА!</b> 🧟 {E_CROWN}\n\n"
-        result_text += f"{ending}\n\n"
+        result_text += "\n".join(endings) + "\n\n"
         result_text += f"{E_CROWN} <b>ПОБЕДИТЕЛИ:</b> {E_CROWN}\n"
         
         for player in survivors:
@@ -412,46 +391,9 @@ class BunkerGame:
         await self.bot.send_message(self.chat_id, result_text, parse_mode="HTML")
         self.state = GameState.FINISHED
         
-        try:
-            await self.bot.unpin_chat_message(self.chat_id, self.pinned_message_id)
-        except:
-            pass
-        
         from bot import active_bunker_games
         if self.chat_id in active_bunker_games:
             del active_bunker_games[self.chat_id]
-    
-    async def generate_ending(self, survivors: List[BunkerPlayer]) -> str:
-        """Генерирует финальную концовку на основе состояния игроков"""
-        endings = []
-        
-        for player in survivors:
-            health = player.character.health
-            mental = player.character.mental_state
-            
-            if health in ["отличное", "хорошее"] and mental in ["стабильная"]:
-                endings.append(f"👤 {player.username} - выжил и стал лидером новой общины! 💪")
-            elif health in ["слабое", "хронические проблемы"] and mental in ["депрессивная", "параноидальная"]:
-                endings.append(f"👤 {player.username} - выжил, но здоровье и психика подвели... 😔")
-                await update_xp(player.username, -20)  # Штраф за плохое состояние
-            elif health in ["слабое", "хронические проблемы"]:
-                endings.append(f"👤 {player.username} - выжил, но здоровье подвело... 🏥")
-                await update_xp(player.username, -10)
-            elif mental in ["депрессивная", "параноидальная", "агрессивная"]:
-                endings.append(f"👤 {player.username} - выжил, но психика сломана... 🧠")
-                await update_xp(player.username, -10)
-            else:
-                endings.append(f"👤 {player.username} - выжил, несмотря ни на что! 🔥")
-        
-        random_ending = random.choice([
-            "Бункер выстоял! Зомби отступили! 🧟💀",
-            "Вы нашли выход из бункера и спаслись! 🚪✨",
-            "Сигнал о помощи был принят! Спасение близко! 📡🆘",
-            "В бункере началась новая жизнь... 🌱",
-            "Армия пришла на помощь! 🎖️"
-        ])
-        
-        return "\n".join(endings) + f"\n\n🔥 {random_ending} {E_HEART}"
     
     def get_alive_players(self) -> List[BunkerPlayer]:
         return [p for p in self.players.values() if p.is_alive]
