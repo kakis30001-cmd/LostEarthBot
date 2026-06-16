@@ -8,7 +8,7 @@ from collections import defaultdict, deque
 from dotenv import load_dotenv
 
 from database import save_andy_dialog, save_chat_message
-from prompts import get_system_prompt  # <-- БЕРЁМ ПРОМПТ ИЗ prompts.py
+from prompts import get_system_prompt
 
 load_dotenv()
 
@@ -352,13 +352,12 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         await save_andy_dialog(username, user_message, response)
         return response
     
-    # ========== AI ОТВЕТ (БЕРЁТ ПРОМПТ ИЗ prompts.py) ==========
+    # ========== AI ОТВЕТ ==========
     if OPENROUTER_API_KEY:
         try:
             context = get_user_context(username, limit=25)
             current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             
-            # БЕРЁМ ПРОМПТ ИЗ ФАЙЛА prompts.py
             system_prompt = get_system_prompt(
                 username=username,
                 current_time=current_time,
@@ -420,7 +419,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     # Fallback ответы
     last_bot = get_last_bot_response(username)
     
-    if "кубик" в last_bot or "сыграть" in last_bot:
+    if "кубик" in last_bot or "сыграть" in last_bot:
         response = f"{E_CAT_OK} понял, {username}. Если захочешь сыграть - пиши 'энди кубик 100' {E_HEART}"
     else:
         response = f"{E_CAT_DANCE} {username}, я тут. Что хочешь узнать? Напиши /games для списка команд {E_HEART}"
