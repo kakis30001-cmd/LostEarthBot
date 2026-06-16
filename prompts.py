@@ -647,4 +647,12 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     fallbacks = [
         f"чё, {username}? {E_HEART}",
         f"тут я, {username} {E_CAT_DANCE}",
-        f
+        f"телепортнулась, чё надо? {E_MAGIC}",
+        f"слушаю, {username} {E_CAT_OK}"
+    ]
+    response = random.choice(fallbacks)
+    add_to_memory(username, user_message, response)
+    save_to_log(username, response, is_bot=True)
+    await save_chat_message(username, response, is_bot=True)
+    await save_andy_dialog(username, user_message, response)
+    return response
