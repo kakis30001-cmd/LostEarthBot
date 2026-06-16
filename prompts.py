@@ -183,36 +183,33 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     if user_message.lower().strip() in ["энди бункер", "енди бункер", "энд бункер"]:
         return "BUNKER_CREATE_GAME"
     
-    # ========== ПРОВЕРКА НА МАТ (ПРОСТАЯ) ==========
+    # ========== ПРОВЕРКА НА МАТ (МАКСИМАЛЬНО ПРОСТАЯ) ==========
     user_lower = user_message.lower()
-    is_bad = False
     
-    if "нахуй" in user_lower or "на хую" in user_lower or "нахуц" in user_lower:
-        is_bad = True
-    elif "заебал" in user_lower or "заебала" in user_lower:
-        is_bad = True
-    elif "бля" in user_lower or "блядь" in user_lower:
-        is_bad = True
-    elif "хуй" in user_lower or "хуесос" in user_lower:
-        is_bad = True
-    elif "пизда" in user_lower or "пиздец" in user_lower:
-        is_bad = True
-    elif "сучка" in user_lower or "сука" in user_lower:
-        is_bad = True
-    elif "мудак" in user_lower or "шлюха" in user_lower:
-        is_bad = True
-    elif "идиот" in user_lower or "дебил" in user_lower:
-        is_bad = True
-    elif "лох" in user_lower or "урод" in user_lower:
-        is_bad = True
-    elif "тварь" in user_lower or "ублюдок" in user_lower:
-        is_bad = True
-    elif "чмо" in user_lower or "пидор" in user_lower:
-        is_bad = True
-    elif "долбаеб" in user_lower or "долбоёб" in user_lower:
-        is_bad = True
-    elif "ебать" in user_lower or "ёбаный" in user_lower:
-        is_bad = True
+    # Все матерные слова
+    bad_words = [
+        'нахуй', 'на хую', 'нахуц', 'нах',
+        'заебал', 'заебала', 'заебали',
+        'бля', 'блядь',
+        'хуй', 'хуесос', 'хуя', 'хуё',
+        'пизда', 'пиздец',
+        'сучка', 'сука',
+        'мудак', 'шлюха',
+        'идиот', 'дебил',
+        'лох', 'урод',
+        'тварь', 'чмо',
+        'пидор', 'долбаеб', 'долбоёб',
+        'ебать', 'ёбаный', 'ебаный',
+        'еблан', 'отвали', 'заткнись',
+        'ублюдок', 'выродок'
+    ]
+    
+    is_bad = False
+    for word in bad_words:
+        if word in user_lower:
+            is_bad = True
+            print(f"🔴 Найдено матерное слово: {word} в сообщении от {username}")
+            break
     
     if is_bad:
         user_insult_counter[username] += 1
@@ -225,7 +222,8 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
                 f"иди нахуй, {username} 🖕",
                 f"заебал уже, пошёл нахуй, {username}",
                 f"пошёл нахуй, я не терпила",
-                f"отвали, надоел уже, иди нахуй"
+                f"отвали, надоел уже, иди нахуй",
+                f"бля, ну ты и мудак, {username}"
             ])
             add_to_memory(username, user_message, response)
             await save_chat_message(username, response, is_bot=True)
@@ -234,7 +232,8 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         elif count == 2:
             response = random.choice([
                 f"не беси меня, {username}",
-                f"сам такой, {username} 🖕"
+                f"сам такой, {username} 🖕",
+                f"я конечно добрая, но не до такой степени"
             ])
             add_to_memory(username, user_message, response)
             await save_chat_message(username, response, is_bot=True)
@@ -251,6 +250,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
             await save_andy_dialog(username, user_message, response)
             return response
     
+    # Если не мат - сбрасываем счётчик
     user_insult_counter[username] = 0
     
     # ========== ОСТАЛЬНОЙ КОД ==========
@@ -316,7 +316,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         await save_andy_dialog(username, user_message, response)
         return response
     
-    # AI
+    # ========== AI ==========
     if OPENROUTER_API_KEY:
         try:
             current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -357,6 +357,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         except Exception as e:
             print(f"ошибка ии: {e}")
     
+    # ========== FALLBACK ==========
     fallbacks = [
         f"чё, {username}? {E_HEART}",
         f"тут я, {username} {E_CAT_DANCE}",
