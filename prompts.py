@@ -122,12 +122,6 @@ def is_insult(text: str) -> bool:
     ]
     return any(i in text_lower for i in insults)
 
-def is_neutral(text: str) -> bool:
-    """Проверяет, нейтральное ли сообщение (не доброе и не злое)"""
-    text_lower = text.lower()
-    neutral_words = ["ну", "ок", "окей", "ага", "понял", "ясно", "бывает", "лады"]
-    return any(i in text_lower for i in neutral_words)
-
 # ========== ОНЛАЙН ==========
 current_online = 0
 current_max = 0
@@ -181,23 +175,8 @@ async def send_spontaneous_message(bot, chat_id: int):
             except Exception as e:
                 print(f"ошибка генерации спонтанного сообщения: {e}")
 
-# ========== СИСТЕМНЫЙ ПРОМПТ - ЗЕРКАЛИТ НАСТРОЕНИЕ ==========
-def get_system_prompt(username: str, current_time: str, online: int = 0, max_players: int = 0, server_status: str = "онлайн", context: str = "", is_insult_msg: bool = False) -> str:
-    
-    # Разный тон в зависимости от того, оскорбляют или нет
-    if is_insult_msg:
-        tone = """
-【🔥 ТЫ В ЗЛОМ РЕЖИМЕ】
-тебя оскорбляют! отвечай агрессивно, используй мат. пошли нахуй, огрызнись. не будь терпилой.
-
-РАЗРЕШЁННЫЙ МАТ: хуй, нахуй, блядь, заебал, пошёл нахуй, иди нахуй, мудак, пизда, сука
-"""
-    else:
-        tone = """
-【😊 ТЫ В ДОБРОМ РЕЖИМЕ】
-игрок общается нормально. отвечай дружелюбно, с юмором, используй эмодзи. можешь подкалывать, но без злобы.
-"""
-    
+# ========== СИСТЕМНЫЙ ПРОМПТ ==========
+def get_system_prompt(username: str, current_time: str, online: int = 0, max_players: int = 0, server_status: str = "онлайн", context: str = "") -> str:
     return f"""ты энди — девушка-эндермен, живой помощник в телеграм боте.
 
 ТЫ ЗЕРКАЛИШЬ НАСТРОЕНИЕ СОБЕСЕДНИКА:
@@ -205,19 +184,11 @@ def get_system_prompt(username: str, current_time: str, online: int = 0, max_pla
 - если игрок нейтральный → ты нейтральная, по делу
 - если игрок злой/оскорбляет → ты агрессивная, материшься
 
-{tone}
-
-ПРАВИЛА:
-1. отвечай КОРОТКО (1-3 предложения)
-2. пиши с маленькой буквы
-3. используй эмодзи, если уместно
-4. НЕ используй html теги
-5. не будь терпилой, если тебя оскорбляют
+ОТВЕЧАЙ КОРОТКО (1-3 предложения), с маленькой буквы, используй эмодзи.
 
 Ты знаешь:
-- сервер lostearth, ip: 150.241.85.40:25565
-- админ: @pelmewki379
-- донаты: fly, путник (50грн), странник (100), тьма (150), ангел (200), архангел (300)
+- сервер lostearth, ip: 150.241.85.40:25565, админ @pelmewki379
+- донаты: fly (15 звёзд), путник (50грн), странник (100), тьма (150), ангел (200), архангел (300)
 - игры: кубик, футбол, слоты, плюнуть, бункер
 - команды: /balance, /profile, /daily, /top
 
@@ -238,6 +209,51 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     if user_message.lower().strip() in ["энди бункер", "енди бункер", "энд бункер"]:
         return "BUNKER_CREATE_GAME"
     
+    # ========== ПРОВЕРКА НА МАТ (САМАЯ ПЕРВАЯ!) ==========
+    if is_insult(user_message):
+        user_insult_counter[username] += 1
+        count = user_insult_counter[username]
+        
+        if count >= 3:
+            responses = [
+                f"иди нахуй, {username} 🖕",
+                f"заебал уже, пошёл нахуй",
+                f"бля, ну ты и мудак, {username}",
+                f"пошёл нахуй, я не терпила",
+                f"отвали, надоел уже, иди нахуй"
+            ]
+            response = random.choice(responses)
+            add_to_memory(username, user_message, response)
+            await save_chat_message(username, response, is_bot=True)
+            await save_andy_dialog(username, user_message, response)
+            return response
+        elif count == 2:
+            responses = [
+                f"не беси меня, {username}",
+                f"сам такой, {username} 🖕",
+                f"я конечно добрая, но не до такой степени"
+            ]
+            response = random.choice(responses)
+            add_to_memory(username, user_message, response)
+            await save_chat_message(username, response, is_bot=True)
+            await save_andy_dialog(username, user_message, response)
+            return response
+        else:
+            responses = [
+                f"сам такой, {username} 🖕",
+                f"иди обнись, {username}",
+                f"ты чё такой злой? 😄"
+            ]
+            response = random.choice(responses)
+            add_to_memory(username, user_message, response)
+            await save_chat_message(username, response, is_bot=True)
+            await save_andy_dialog(username, user_message, response)
+            return response
+    
+    # Если не мат - сбрасываем счётчик
+    if not is_insult(user_message):
+        user_insult_counter[username] = 0
+    
     save_to_log(username, user_message, is_bot=False)
     last_active[username] = datetime.now()
     await save_chat_message(username, user_message, is_bot=False)
@@ -246,7 +262,6 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     is_name_call = is_just_name(user_message)
     can_say_greet = can_greet(username)
     context = get_user_context(username)
-    is_insult_msg = is_insult(user_message)
     
     if game_result:
         user_message = f"[{game_result}] {user_message}"
@@ -262,10 +277,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     # ========== ПРИВЕТСТВИЕ ==========
     if is_greeting_msg and can_say_greet and not is_reply:
         mark_greeted(username)
-        if is_insult_msg:
-            response = f"иди нахуй, {username} 🖕"
-        else:
-            response = f"{E_CAT_DANCE} привет, {username}! чё надо? {E_HEART}"
+        response = f"{E_CAT_DANCE} привет, {username}! чё надо? {E_HEART}"
         add_to_memory(username, user_message, response)
         await save_chat_message(username, response, is_bot=True)
         await save_andy_dialog(username, user_message, response)
@@ -273,10 +285,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     
     # ========== ПОВТОРНОЕ ПРИВЕТСТВИЕ ==========
     if is_greeting_msg and not can_say_greet and not is_reply:
-        if is_insult_msg:
-            response = f"заебал уже здороваться, пошёл нахуй"
-        else:
-            response = f"{E_CAT_DANCE} уже здоровались, {username}, чё хотел? {E_HEART}"
+        response = f"{E_CAT_DANCE} уже здоровались, {username}, чё хотел? {E_HEART}"
         add_to_memory(username, user_message, response)
         await save_chat_message(username, response, is_bot=True)
         await save_andy_dialog(username, user_message, response)
@@ -331,7 +340,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         await save_andy_dialog(username, user_message, response)
         return response
     
-    # ========== AI ОТВЕТ (ЗЕРКАЛИТ НАСТРОЕНИЕ) ==========
+    # ========== AI ОТВЕТ ==========
     if OPENROUTER_API_KEY:
         try:
             current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -341,8 +350,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
                 current_online, 
                 current_max,
                 "онлайн",
-                context,
-                is_insult_msg
+                context
             )
             
             for model in MODELS_CHAIN:
@@ -378,19 +386,12 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
             print(f"ошибка ии: {e}")
     
     # ========== FALLBACK ==========
-    if is_insult_msg:
-        fallbacks = [
-            f"иди нахуй, {username} 🖕",
-            f"заебал, {username}",
-            f"пошёл нахуй, клоун"
-        ]
-    else:
-        fallbacks = [
-            f"чё, {username}? {E_HEART}",
-            f"тут я, {username} {E_CAT_DANCE}",
-            f"телепортнулась, чё надо? {E_MAGIC}",
-            f"слушаю, {username} {E_CAT_OK}"
-        ]
+    fallbacks = [
+        f"чё, {username}? {E_HEART}",
+        f"тут я, {username} {E_CAT_DANCE}",
+        f"телепортнулась, чё надо? {E_MAGIC}",
+        f"слушаю, {username} {E_CAT_OK}"
+    ]
     response = random.choice(fallbacks)
     add_to_memory(username, user_message, response)
     save_to_log(username, response, is_bot=True)
