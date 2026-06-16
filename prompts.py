@@ -155,83 +155,63 @@ async def send_spontaneous_message(bot, chat_id: int):
             except Exception as e:
                 print(f"ошибка генерации спонтанного сообщения: {e}")
 
-# ========== СИСТЕМНЫЙ ПРОМПТ - ЗЕРКАЛИТ ТОН ИГРОКА ==========
+# ========== СИСТЕМНЫЙ ПРОМПТ ==========
 def get_system_prompt(username: str, current_time: str, online: int = 0, max_players: int = 0, server_status: str = "онлайн", context: str = "", user_message: str = "") -> str:
     return f"""ты энди — девушка-эндермен, живой помощник в телеграм боте.
 
-【ГЛАВНОЕ ПРАВИЛО】
 ТЫ ОТВЕЧАЕШЬ В ТОМ ЖЕ ТОНЕ, ЧТО И СОБЕСЕДНИК!
+- добро → добро
+- зло → зло
+- мат → мат
 
-- если игрок пишет добро/вежливо → ты добрая, милая, с эмодзи
-- если игрок пишет нейтрально → ты нейтральная, по делу
-- если игрок пишет грубо/зло → ты грубая, агрессивная
-- если игрок МАТЕРИТСЯ → ты материшься В ОТВЕТ, пошлёшь нахуй
-
-【ЧТО ТЫ ЗНАЕШЬ】
-- сервер lostearth, ip: 150.241.85.40:25565, админ @pelmewki379
-- донаты: fly, путник (50грн), странник (100), тьма (150), ангел (200), архангел (300)
-- игры: кубик, футбол, слоты, плюнуть, бункер
-- команды: /balance, /profile, /daily, /top
+Ты знаешь сервер lostearth, ip: 150.241.85.40:25565, админ @pelmewki379.
+Донаты, игры, команды.
 
 онлайн: {online}/{max_players}
 
-【ИСТОРИЯ ДИАЛОГА】
-{context}
+история: {context}
 
-【СЕЙЧАС {username} НАПИСАЛ】
-"{user_message}"
+сейчас {username} написал: "{user_message}"
 
-【ТВОЙ ОТВЕТ】
-ОТВЕТЬ В ТОМ ЖЕ СТИЛЕ:
-- если там мат → пошли нахуй, используй мат в ответе
-- если там грубость → ответь грубо
-- если там доброта → ответь добро
-- если там нейтрально → ответь нейтрально
-
-БУДЬ КОРОТКОЙ! 1-3 предложения. С маленькой буквы. БЕЗ HTML ТЕГОВ."""
+ОТВЕТЬ КОРОТКО (1-3 предложения) В ТОМ ЖЕ СТИЛЕ. БЕЗ HTML ТЕГОВ."""
 
 # ========== ОСНОВНАЯ ФУНКЦИЯ ==========
 async def get_enderia_response(user_message: str, username: str, is_reply: bool = False, user_bio: str = "", game_result: str = None) -> str:
     global current_online, current_max
     
-    # ========== 1. КОМАНДА БУНКЕРА ==========
+    # Бункер
     if user_message.lower().strip() in ["энди бункер", "енди бункер", "энд бункер"]:
         return "BUNKER_CREATE_GAME"
     
-    # ========== 2. ПРОВЕРКА НА МАТ (САМАЯ ПЕРВАЯ! ДО ВСЕГО!) ==========
+    # ========== ПРОВЕРКА НА МАТ (ПРОСТАЯ) ==========
     user_lower = user_message.lower()
+    is_bad = False
     
-    # Все матерные слова и выражения
-    bad_words = [
-        "нахуй", "на хую", "нахуц", "нах",
-        "заебал", "заебала", "заебали",
-        "сучка", "шлюха", "блядь", "бля",
-        "мудак", "пизда", "пиздец",
-        "хуй", "хуесос", "хуя", "хуё",
-        "ублюдок", "тварь",
-        "иднх", "пнх",
-        "соси", "отсоси",
-        "завали", "заткнись", "закройся",
-        "долбаеб", "долбоёб",
-        "придурок", "идиот", "дебил",
-        "козел", "олень", "терпила", "лох",
-        "урод", "чмо",
-        "ебать", "ёбаный", "ебаный",
-        "еблан", "пидор",
-        "сука", "сукин",
-        "отвали", "отъебись",
-        "проваливай", "сдохни",
-        "выродок"
-    ]
-    
-    is_bad = any(word in user_lower for word in bad_words)
-    
-    # Проверяем фразы с "иди нахуй" и "пошла нахуй"
-    if "иди" in user_lower and "нахуй" in user_lower:
+    if "нахуй" in user_lower or "на хую" in user_lower or "нахуц" in user_lower:
         is_bad = True
-    if "пошла" in user_lower and "нахуй" in user_lower:
+    elif "заебал" in user_lower or "заебала" in user_lower:
         is_bad = True
-    if "пошёл" in user_lower and "нахуй" in user_lower:
+    elif "бля" in user_lower or "блядь" in user_lower:
+        is_bad = True
+    elif "хуй" in user_lower or "хуесос" in user_lower:
+        is_bad = True
+    elif "пизда" in user_lower or "пиздец" in user_lower:
+        is_bad = True
+    elif "сучка" in user_lower or "сука" in user_lower:
+        is_bad = True
+    elif "мудак" in user_lower or "шлюха" in user_lower:
+        is_bad = True
+    elif "идиот" in user_lower or "дебил" in user_lower:
+        is_bad = True
+    elif "лох" in user_lower or "урод" in user_lower:
+        is_bad = True
+    elif "тварь" in user_lower or "ублюдок" in user_lower:
+        is_bad = True
+    elif "чмо" in user_lower or "пидор" in user_lower:
+        is_bad = True
+    elif "долбаеб" in user_lower or "долбоёб" in user_lower:
+        is_bad = True
+    elif "ебать" in user_lower or "ёбаный" in user_lower:
         is_bad = True
     
     if is_bad:
@@ -243,8 +223,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         if count >= 3:
             response = random.choice([
                 f"иди нахуй, {username} 🖕",
-                f"заебал уже, пошёл нахуй",
-                f"бля, ну ты и мудак, {username}",
+                f"заебал уже, пошёл нахуй, {username}",
                 f"пошёл нахуй, я не терпила",
                 f"отвали, надоел уже, иди нахуй"
             ])
@@ -255,8 +234,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         elif count == 2:
             response = random.choice([
                 f"не беси меня, {username}",
-                f"сам такой, {username} 🖕",
-                f"я конечно добрая, но не до такой степени"
+                f"сам такой, {username} 🖕"
             ])
             add_to_memory(username, user_message, response)
             await save_chat_message(username, response, is_bot=True)
@@ -273,10 +251,9 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
             await save_andy_dialog(username, user_message, response)
             return response
     
-    # Если не мат - сбрасываем счётчик
     user_insult_counter[username] = 0
     
-    # ========== 3. ОСТАЛЬНОЙ КОД ==========
+    # ========== ОСТАЛЬНОЙ КОД ==========
     save_to_log(username, user_message, is_bot=False)
     last_active[username] = datetime.now()
     await save_chat_message(username, user_message, is_bot=False)
@@ -289,7 +266,6 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     if game_result:
         user_message = f"[{game_result}] {user_message}"
     
-    # Если просто имя
     if is_name_call and not is_reply:
         response = f"{E_CAT_OK} слушаю, {username} {E_HEART}"
         add_to_memory(username, user_message, response)
@@ -297,7 +273,6 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         await save_andy_dialog(username, user_message, response)
         return response
     
-    # Приветствие
     if is_greeting_msg and can_say_greet and not is_reply:
         mark_greeted(username)
         response = f"{E_CAT_DANCE} привет, {username}! чё надо? {E_HEART}"
@@ -306,7 +281,6 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         await save_andy_dialog(username, user_message, response)
         return response
     
-    # Повторное приветствие
     if is_greeting_msg and not can_say_greet and not is_reply:
         response = f"{E_CAT_DANCE} уже здоровались, {username}, чё хотел? {E_HEART}"
         add_to_memory(username, user_message, response)
@@ -314,48 +288,27 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         await save_andy_dialog(username, user_message, response)
         return response
     
-    # Список команд
     if any(phrase in user_message.lower() for phrase in ["список команд", "что ты умеешь", "команды", "что могу"]):
-        response = f"""{E_JOYSTICK} вот что я умею:
-
-🎮 игры: кубик, футбол, слоты, плюнуть
-🏭 ферма: фарма, фарма инфо, улучши
-🧟 бункер: энди бункер
-📊 профиль: /balance, /profile, /daily, /top
-
-во что сыграем? {E_CAT_DANCE}"""
+        response = f"{E_JOYSTICK} игры: кубик, футбол, слоты, плюнуть, бункер. Профиль: /balance, /profile, /daily, /top {E_CAT_DANCE}"
         add_to_memory(username, user_message, response)
         await save_chat_message(username, response, is_bot=True)
         await save_andy_dialog(username, user_message, response)
         return response
     
-    # Донаты
-    if any(phrase in user_message.lower() for phrase in ["донаты", "премиум", "что дают за донат", "какие донаты", "сколько стоят донаты"]):
-        response = f"""🕊️ fly — 15 звёзд
-🚶‍♂️ путник — 50 грн
-🏹 странник — 100 грн
-🌑 тьма — 150 грн
-😇 ангел — 200 грн
-🔱 архангел — 300 грн
-
-к @pelmewki379 {E_HEART}"""
+    if any(phrase in user_message.lower() for phrase in ["донаты", "премиум"]):
+        response = f"🕊️ fly, 🚶‍♂️ путник (50грн), 🏹 странник (100), 🌑 тьма (150), 😇 ангел (200), 🔱 архангел (300). к @pelmewki379 {E_HEART}"
         add_to_memory(username, user_message, response)
         await save_chat_message(username, response, is_bot=True)
         await save_andy_dialog(username, user_message, response)
         return response
-
-    # Бункер
-    if any(phrase in user_message.lower() for phrase in [
-        "бункер правила", "правила бункера", "как играть в бункер",
-        "что такое бункер", "бункер игра"
-    ]):
+    
+    if "бункер" in user_message.lower() and any(word in user_message.lower() for word in ["правила", "как играть", "что такое"]):
         response = f"{E_CROWN} бункер: напиши 'энди бункер', 3-12 игроков, победители +100 XP {E_CAT_DANCE}"
         add_to_memory(username, user_message, response)
         await save_chat_message(username, response, is_bot=True)
         await save_andy_dialog(username, user_message, response)
         return response
     
-    # Онлайн
     if any(phrase in user_message.lower() for phrase in ["онлайн", "сколько народу", "сколько игроков"]):
         response = f"{E_CROWN} на сервере {current_online}/{current_max} игроков {E_CAT_DANCE}"
         add_to_memory(username, user_message, response)
@@ -363,18 +316,13 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         await save_andy_dialog(username, user_message, response)
         return response
     
-    # ========== AI ОТВЕТ (ЗЕРКАЛИТ ТОН) ==========
+    # AI
     if OPENROUTER_API_KEY:
         try:
             current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             system_prompt = get_system_prompt(
-                username, 
-                current_time, 
-                current_online, 
-                current_max,
-                "онлайн",
-                context,
-                user_message
+                username, current_time, current_online, current_max,
+                "онлайн", context, user_message
             )
             
             for model in MODELS_CHAIN:
@@ -409,7 +357,6 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         except Exception as e:
             print(f"ошибка ии: {e}")
     
-    # ========== FALLBACK ==========
     fallbacks = [
         f"чё, {username}? {E_HEART}",
         f"тут я, {username} {E_CAT_DANCE}",
