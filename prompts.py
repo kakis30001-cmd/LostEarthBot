@@ -198,35 +198,41 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
     if user_message.lower().strip() in ["энди бункер", "енди бункер", "энд бункер"]:
         return "BUNKER_CREATE_GAME"
     
-    # ========== 2. ПРОВЕРКА НА МАТ (САМАЯ ПЕРВАЯ!) ==========
+    # ========== 2. ПРОВЕРКА НА МАТ (САМАЯ ПЕРВАЯ! ДО ВСЕГО!) ==========
     user_lower = user_message.lower()
-    is_bad = any([
-        "нахуй" in user_lower or "на хую" in user_lower,
-        "иди" in user_lower and "нахуй" in user_lower,
-        "пошла" in user_lower and "нахуй" in user_lower,
-        "пошёл" in user_lower and "нахуй" in user_lower,
-        "заебал" in user_lower, "заебала" in user_lower, "заебали" in user_lower,
-        "сучка" in user_lower, "шлюха" in user_lower,
-        "мудак" in user_lower, "пизда" in user_lower, "пиздец" in user_lower,
-        "блядь" in user_lower, "бля" in user_lower,
-        "хуй" in user_lower, "хуесос" in user_lower, "хуя" in user_lower,
-        "ублюдок" in user_lower, "тварь" in user_lower,
-        "нахуц" in user_lower, "нах" in user_lower,
-        "иднх" in user_lower, "пнх" in user_lower,
-        "соси" in user_lower, "отсоси" in user_lower,
-        "завали" in user_lower, "заткнись" in user_lower, "закройся" in user_lower,
-        "долбаеб" in user_lower, "долбоёб" in user_lower,
-        "придурок" in user_lower, "идиот" in user_lower, "дебил" in user_lower,
-        "козел" in user_lower, "олень" in user_lower,
-        "терпила" in user_lower, "лох" in user_lower,
-        "урод" in user_lower, "чмо" in user_lower,
-        "ебать" in user_lower, "ёбаный" in user_lower, "ебаный" in user_lower,
-        "еблан" in user_lower, "пидор" in user_lower,
-        "сука" in user_lower, "сукин" in user_lower,
-        "отвали" in user_lower, "отъебись" in user_lower,
-        "проваливай" in user_lower, "сдохни" in user_lower,
-        "тварь" in user_lower, "выродок" in user_lower,
-    ])
+    
+    # Все матерные слова и выражения
+    bad_words = [
+        "нахуй", "на хую", "нахуц", "нах",
+        "заебал", "заебала", "заебали",
+        "сучка", "шлюха", "блядь", "бля",
+        "мудак", "пизда", "пиздец",
+        "хуй", "хуесос", "хуя", "хуё",
+        "ублюдок", "тварь",
+        "иднх", "пнх",
+        "соси", "отсоси",
+        "завали", "заткнись", "закройся",
+        "долбаеб", "долбоёб",
+        "придурок", "идиот", "дебил",
+        "козел", "олень", "терпила", "лох",
+        "урод", "чмо",
+        "ебать", "ёбаный", "ебаный",
+        "еблан", "пидор",
+        "сука", "сукин",
+        "отвали", "отъебись",
+        "проваливай", "сдохни",
+        "выродок"
+    ]
+    
+    is_bad = any(word in user_lower for word in bad_words)
+    
+    # Проверяем фразы с "иди нахуй" и "пошла нахуй"
+    if "иди" in user_lower and "нахуй" in user_lower:
+        is_bad = True
+    if "пошла" in user_lower and "нахуй" in user_lower:
+        is_bad = True
+    if "пошёл" in user_lower and "нахуй" in user_lower:
+        is_bad = True
     
     if is_bad:
         user_insult_counter[username] += 1
@@ -268,8 +274,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
             return response
     
     # Если не мат - сбрасываем счётчик
-    if not is_bad:
-        user_insult_counter[username] = 0
+    user_insult_counter[username] = 0
     
     # ========== 3. ОСТАЛЬНОЙ КОД ==========
     save_to_log(username, user_message, is_bot=False)
@@ -369,7 +374,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
                 current_max,
                 "онлайн",
                 context,
-                user_message  # <-- ПЕРЕДАЁМ СООБЩЕНИЕ ИГРОКА
+                user_message
             )
             
             for model in MODELS_CHAIN:
