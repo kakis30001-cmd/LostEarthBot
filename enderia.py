@@ -62,6 +62,7 @@ E_JOYSTICK = emoji(ENDERIA_EMOJI["joystick"], "🎮")
 user_memory = defaultdict(lambda: deque(maxlen=350))
 user_last_greet = {}
 last_active = {}
+user_insult_counter = defaultdict(int)
 
 def add_to_memory(username: str, user_message: str, bot_response: str):
     user_memory[username].append(f"user: {user_message}")
@@ -189,14 +190,52 @@ async def send_spontaneous_message(bot, chat_id: int):
             msg = random.choice(spontaneous_messages_list)
             await bot.send_message(chat_id, f"{E_CAT_DANCE} {msg} {E_HEART}", parse_mode="HTML")
 
-# ========== ОСНОВНАЯ ФУНКЦИЯ (ОДНА, НЕ ДВЕ!) ==========
+# ========== ОСНОВНАЯ ФУНКЦИЯ ==========
 async def get_enderia_response(user_message: str, username: str, is_reply: bool = False, user_bio: str = "", game_result: str = None) -> str:
     global current_online, current_max
     
-    # ⚠️ ПЕРВАЯ ПРОВЕРКА - команда для создания игры в бункер
+    # ========== 1. БУНКЕР ==========
     if user_message.lower().strip() in ["энди бункер", "енди бункер", "энд бункер"]:
         return "BUNKER_CREATE_GAME"
     
+    # ========== 2. ПРОВЕРКА НА МАТ (САМАЯ ПЕРВАЯ!) ==========
+    user_lower = user_message.lower()
+    
+    # Все матерные слова
+    if "нахуй" in user_lower or "хуй" in user_lower or "заебал" in user_lower or "бля" in user_lower:
+        user_insult_counter[username] += 1
+        count = user_insult_counter[username]
+        
+        print(f"🔥 {username} оскорбил Энди {count} раз")
+        
+        if count >= 3:
+            response = random.choice([
+                f"иди нахуй, {username} 🖕",
+                f"заебал уже, пошёл нахуй, {username}",
+                f"пошёл нахуй, я не терпила",
+                f"отвали, надоел уже, иди нахуй"
+            ])
+        elif count == 2:
+            response = random.choice([
+                f"не беси меня, {username}",
+                f"сам такой, {username} 🖕"
+            ])
+        else:
+            response = random.choice([
+                f"сам такой, {username} 🖕",
+                f"иди обнись, {username}",
+                f"ты чё такой злой? 😄"
+            ])
+        
+        add_to_memory(username, user_message, response)
+        await save_chat_message(username, response, is_bot=True)
+        await save_andy_dialog(username, user_message, response)
+        return response
+    
+    # Если не мат - сбрасываем счётчик
+    user_insult_counter[username] = 0
+    
+    # ========== 3. ОСТАЛЬНОЙ КОД ==========
     save_to_log(username, user_message, is_bot=False)
     last_active[username] = datetime.now()
     await save_chat_message(username, user_message, is_bot=False)
@@ -229,11 +268,7 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         await save_andy_dialog(username, user_message, response)
         return response
     
-    user_lower = user_message.lower().strip()
-    
     # ========== ИНФОРМАЦИЯ О БУНКЕРЕ ==========
-    
-    # Вопрос "как играть в бункер"
     if "как играть" in user_lower and "бункер" in user_lower:
         response = f"""{E_MAGIC} <b>правила игры "бункер"</b> {E_MAGIC}
 
@@ -250,7 +285,6 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         await save_andy_dialog(username, user_message, response)
         return response
     
-    # Вопрос "что такое бункер"
     if ("бункер" in user_lower and "энди" not in user_lower) or user_lower == "что такое бункер":
         response = f"""{E_HOUSE} <b>бункер</b> - игра на выживание в зомби апокалипсисе! 🧟
 
@@ -263,7 +297,6 @@ async def get_enderia_response(user_message: str, username: str, is_reply: bool 
         await save_andy_dialog(username, user_message, response)
         return response
     
-    # Вопрос "правила бункера"
     if "правила бункера" in user_lower or "правило бункера" in user_lower:
         response = f"""{E_NOTE} <b>правила игры "бункер"</b> {E_NOTE}
 • не показывай свою роль другим!
