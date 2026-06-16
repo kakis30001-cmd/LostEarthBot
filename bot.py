@@ -118,7 +118,6 @@ def serve_apply():
 def serve_apply_html():
     return send_from_directory('static', 'apply.html')
 
-# ========== ДОБАВЛЯЕМ DONATE ==========
 @app.route('/donate')
 def serve_donate():
     return send_from_directory('static', 'donate.html')
@@ -294,6 +293,36 @@ async def start_cmd(message: Message):
     username = message.from_user.username or message.from_user.first_name
     await create_player(username)
     
+    # Проверяем, запущен ли бот через кнопку "ЗАЙТИ В БОТА"
+    if message.text and "bunker" in message.text:
+        user_id = message.from_user.id
+        
+        # Ищем активную игру для этого пользователя
+        for game in active_bunker_games.values():
+            if user_id in game.players and game.state == GameState.CHARACTERS_GENERATED:
+                await game.start_reveal_phase()
+                await message.answer(
+                    f"{E_MAGIC} <b>добро пожаловать в бункер!</b>\n\n"
+                    f"<i>выбери характеристику для раскрытия в этом раунде</i>",
+                    parse_mode="HTML"
+                )
+                return
+        
+        await message.answer(
+            f"{E_MAGIC} <b>привет, я энди</b> {E_MAGIC}\n\n"
+            f"{E_CAT_DANCE} я твой текстовый помощник!\n\n"
+            f"{E_HEART} <b>что я умею:</b>\n"
+            f"📝 рассказывать информацию о сервере\n"
+            f"🎮 играть с тобой в игры\n"
+            f"🏭 помогать с фермой\n"
+            f"📊 показывать профиль\n\n"
+            f"{E_CROWN} <b>стартовый баланс: 1000 xp</b>\n\n"
+            f"{E_CAT_DANCE} я всегда рядом, телепортнусь по первому зову! {E_HEART}",
+            parse_mode="HTML"
+        )
+        return
+    
+    # Обычный /start
     text = f"""{E_MAGIC} <b>привет, я энди</b> {E_MAGIC}
 
 {E_CAT_DANCE} я твой текстовый помощник!
@@ -731,7 +760,6 @@ async def bunker_reveal_callback(callback: CallbackQuery):
     user_id = callback.from_user.id
     key = callback.data.split("_")[1]
     
-    # Если кнопка заблокирована
     if key == "locked":
         await callback.answer("❌ ты уже раскрыл характеристику в этом раунде!", show_alert=True)
         return
@@ -756,23 +784,18 @@ async def bunker_reveal_callback(callback: CallbackQuery):
         await callback.answer("❌ ты выбыл", show_alert=True)
         return
     
-    # Если уже раскрыл в этом раунде
     if player.has_revealed_this_round:
         await callback.answer("❌ ты уже раскрыл характеристику в этом раунде!", show_alert=True)
         return
     
-    # Переключаем раскрытие (можно выбрать только 1)
     if key in player.revealed:
-        # Если уже раскрыто - убираем
         player.revealed.remove(key)
     else:
-        # Если выбрано что-то другое - убираем старое
         if player.revealed:
             old_key = player.revealed[0]
             player.revealed.remove(old_key)
         player.revealed.append(key)
     
-    # Обновляем клавиатуру
     keyboard = game.get_reveal_keyboard(player)
     
     try:
