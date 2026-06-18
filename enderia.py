@@ -1,4 +1,4 @@
-import osо
+import os
 import random
 import re
 import aiohttp
@@ -194,7 +194,7 @@ spontaneous_messages_list = [
     "эй, кто хочет сыграть в футбол? пиши 'энди футбол 100'",
 ]
 
-spontaneous_enabled = True
+spontaneous_enabled = false
 
 async def send_spontaneous_message(bot, chat_id: int):
     while True:
